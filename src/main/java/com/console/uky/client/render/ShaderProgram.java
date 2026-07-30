@@ -81,9 +81,36 @@ public final class ShaderProgram {
         }
     }
 
+    /**
+     * Reads a shader, from a resource pack if one supplies it and from the mod's own
+     * jar otherwise.
+     *
+     * The resource manager alone is not enough. It only serves a domain once FML has
+     * registered the owning jar as a resource pack and the manager has been reloaded,
+     * and before that every lookup for {@code uky} misses. In a development run that
+     * never shows, because the assets sit loose on the classpath where the default
+     * pack finds them at any time; from a built jar they exist only inside the jar,
+     * so an early load failed, burnt its retries and left the hole on the baked
+     * lensing tables for the rest of the session — which is why the release build had
+     * no photon ring while the development one did.
+     *
+     * <p>The classpath is where the file certainly is, so it is the backstop. The
+     * resource manager is still tried first, so a resource pack can still override
+     * the shader.
+     */
     private static String read(ResourceLocation location) throws Exception {
-        InputStream stream = Minecraft.getMinecraft().getResourceManager()
-                .getResource(location).getInputStream();
+        InputStream stream = null;
+        try {
+            stream = Minecraft.getMinecraft().getResourceManager()
+                    .getResource(location).getInputStream();
+        } catch (Exception fromPacks) {
+            String path = "/assets/" + location.getResourceDomain() + "/"
+                    + location.getResourcePath();
+            stream = ShaderProgram.class.getResourceAsStream(path);
+            if (stream == null) {
+                throw fromPacks;
+            }
+        }
         try {
             return IOUtils.toString(stream, Charset.forName("UTF-8"));
         } finally {

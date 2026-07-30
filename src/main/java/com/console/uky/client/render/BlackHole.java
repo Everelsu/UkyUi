@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL12;
 
 import java.nio.IntBuffer;
@@ -304,7 +305,19 @@ public final class BlackHole {
      * is asked for actually changes — re-creating it per frame, or on every window
      * focus change, is exactly the kind of thing that makes a menu hitch.
      */
-    private static final OffscreenTarget offscreen = new OffscreenTarget();
+    /**
+     * The two most recent traces.
+     *
+     * {@code offscreen} always holds the newest and {@code previous} the one before
+     * it, and the draw dissolves from one to the other over the gap between them.
+     * That is what buys the low trace rate: without it a 7Hz disk is a slideshow,
+     * and with it the motion is as smooth as the display, because what the eye
+     * follows is the dissolve rather than the traces themselves.
+     */
+    private static OffscreenTarget offscreen = new OffscreenTarget();
+    private static OffscreenTarget previous = new OffscreenTarget();
+    /** How far the dissolve from {@link #previous} to {@link #offscreen} has run. */
+    private static float blend = 1.0F;
 
     /**
      * Apparent shadow radius as a fraction of the field of view, in the shader's
@@ -340,6 +353,35 @@ public final class BlackHole {
      * on success.
      */
     private static int shaderAttemptsLeft = 3;
+
+    /** Mixes the two most recent traces; see dissolve.fsh. */
+    private static ShaderProgram dissolveShader;
+    private static boolean dissolveTried;
+
+    /**
+     * The crossfade program, or null if it could not be built.
+     *
+     * Without it the draw shows the newest complete trace outright. That steps at
+     * the trace rate, which is worse than a dissolve and better than the wrong one.
+     */
+    private static ShaderProgram dissolveProgram() {
+        if (!dissolveTried) {
+            dissolveTried = true;
+            try {
+                ShaderProgram program = new ShaderProgram(
+                        new ResourceLocation("uky", "shaders/dissolve.vsh"),
+                        new ResourceLocation("uky", "shaders/dissolve.fsh"));
+                dissolveShader = program.isUsable() ? program : null;
+            } catch (Throwable t) {
+                dissolveShader = null;
+            }
+            if (dissolveShader == null) {
+                UkyUI.LOGGER.info("Black hole: no crossfade shader; "
+                        + "traces will be shown as they land");
+            }
+        }
+        return dissolveShader;
+    }
 
     private static boolean useShader() {
         if (!shaderTried && shaderAttemptsLeft > 0) {
@@ -393,49 +435,98 @@ public final class BlackHole {
     // ---- trace rate ----------------------------------------------------------
 
     /**
-     * Shortest gap between two traces. The disk turns slowly enough that this is
-     * invisible, and it halves the cost on a 60fps display.
+     * Gap between traces on a settled menu.
+     *
+     * The trace is the whole cost of this effect — tens of milliseconds of it — so
+     * what governs the load is how often it runs, not how fast it is. Seven times a
+     * second is enough to carry the disk's drift once the dissolve is smoothing
+     * between them, and it is roughly a seventh of the work of tracing every frame.
      */
-    private static final long TRACE_INTERVAL_NANOS = 33_000_000L;
+    private static final long TRACE_INTERVAL_NANOS = 140_000_000L;
+
+    /**
+     * Gap while the camera is still easing to a new framing.
+     *
+     * A screen change swings the pose over a few hundred milliseconds. Dissolving
+     * across that at the idle rate reads as the hole lagging behind the screen, so
+     * the rate goes up for as long as the movement lasts and drops back after.
+     */
+    private static final long TRACE_INTERVAL_MOVING_NANOS = 50_000_000L;
+
+    /** Pose change per trace above which the camera counts as still moving. */
+    private static final float POSE_MOVING_EPSILON = 0.0015F;
 
     private static long lastTraceNanos;
     private static float lastTracePose = Float.NaN;
-    private static float lastTraceSpin = Float.NaN;
+    /**
+     * The interval the last trace was taken under.
+     *
+     * The dissolve has to run out over the gap it is actually covering. Dividing by
+     * the idle interval while the camera was moving — and so tracing at the faster
+     * rate — meant each new trace only ever reached a third of full strength before
+     * the next replaced it, leaving the hole permanently smeared across two poses
+     * for the whole of a screen change.
+     */
+    private static long lastTraceInterval = TRACE_INTERVAL_NANOS;
 
     /**
      * Whether the buffer needs re-tracing this frame.
      *
-     * The expensive part is the trace, not the blit, and the picture in the buffer
-     * only depends on the camera angle and the disk phase — not on where the quad is
-     * or how bright it is drawn, both of which are applied on the way out. So a frame
-     * that changes neither can reuse what is already there.
+     * The picture depends only on the camera angle and the disk phase — not on where
+     * the quad goes or how brightly it is drawn, both of which are applied on the way
+     * out — so this is purely a question of how stale the image is allowed to get.
      *
-     * <p>The angle is still checked as well as the clock: a screen change eases the
-     * camera over a few hundred milliseconds, and holding a stale trace through that
-     * would visibly step. Anything that moves the pose or the spin more than a hair
-     * re-traces immediately, so only a genuinely idle menu coasts.
+     * <p>It used to also re-trace whenever the disk phase had moved more than a
+     * hair, which sounded careful and meant the interval never applied at all: the
+     * phase advances by {@code SPIN_RATE / fps} every frame, fourteen times that
+     * threshold at 60fps, so the answer was always yes and the hole was traced on
+     * every single frame. That is where the idle menu's GPU load came from. The
+     * phase is now left to the clock, which is the only thing that was ever bounding
+     * it, and the dissolve covers the difference.
      */
     private boolean traceIsStale() {
         long now = System.nanoTime();
         float pose = LensLibrary.elevationAt(this.poseCurrent);
 
-        boolean moved = Float.isNaN(lastTracePose)
-                || Math.abs(pose - lastTracePose) > 0.0004F
-                || Math.abs(this.spin - lastTraceSpin) > 0.0015F;
-        boolean overdue = now - lastTraceNanos >= TRACE_INTERVAL_NANOS;
+        boolean moving = !Float.isNaN(lastTracePose)
+                && Math.abs(pose - lastTracePose) > POSE_MOVING_EPSILON;
+        long interval = moving ? TRACE_INTERVAL_MOVING_NANOS : TRACE_INTERVAL_NANOS;
 
-        if (moved || overdue) {
+        if (Float.isNaN(lastTracePose) || now - lastTraceNanos >= interval) {
             lastTraceNanos = now;
             lastTracePose = pose;
-            lastTraceSpin = this.spin;
+            lastTraceInterval = interval;
             return true;
         }
         return false;
     }
 
+    /** 0 at the moment of a trace, 1 by the time the next one is due. */
+    private static float blendProgress() {
+        long elapsed = System.nanoTime() - lastTraceNanos;
+        float t = elapsed / (float) lastTraceInterval;
+        return t <= 0.0F ? 0.0F : (t >= 1.0F ? 1.0F : t);
+    }
+
+
     /** Forces the next frame to re-trace, e.g. after the buffer was reallocated. */
     static void invalidateTrace() {
         lastTracePose = Float.NaN;
+        // Nothing worth dissolving from: the next trace should simply appear.
+        blend = 1.0F;
+    }
+
+    /**
+     * Makes the current trace the previous one.
+     *
+     * The two targets exchange roles rather than one being copied into the other —
+     * a full-resolution copy every trace would give back a good part of what the
+     * lower trace rate just bought.
+     */
+    private static void swapBuffers() {
+        OffscreenTarget spare = previous;
+        previous = offscreen;
+        offscreen = spare;
     }
 
     /**
@@ -471,6 +562,11 @@ public final class BlackHole {
         // is the single biggest saving available: the blit below still runs every
         // frame, so nothing about the compositing changes.
         if (traceIsStale() || !offscreen.hasContent()) {
+            // The trace that is about to be replaced becomes the one dissolved from,
+            // so the two buffers alternate rather than one being copied to the other.
+            if (offscreen.hasContent() && offscreen.matches(targetW, targetH)) {
+                swapBuffers();
+            }
             if (!offscreen.begin(targetW, targetH)) {
                 return false;
             }
@@ -516,10 +612,54 @@ public final class BlackHole {
         }
 
         // Stretch it over the real rect. Still premultiplied, so the same blend.
+        //
+        // Two passes when a dissolve is in flight: the older trace at full strength,
+        // then the newer one faded in on top of it. Drawn this way round there is no
+        // dip in the middle of the crossing — the older image is never scaled down,
+        // it is simply covered — and because consecutive traces are a seventh of a
+        // second apart they differ by very little, so what covers what is not
+        // something the eye can pick out.
+        blend = blendProgress();
+
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        offscreen.bindTexture();
-        GL11.glColor4f(intensity, intensity, intensity, intensity);
+
+        ShaderProgram dissolve = dissolveProgram();
+        boolean canDissolve = dissolve != null && blend < 0.999F && previous.hasContent()
+                && previous.matches(offscreen.getWidth(), offscreen.getHeight());
+
+        if (canDissolve) {
+            dissolve.bind();
+            dissolve.set("uMix", blend);
+            dissolve.set("uIntensity", intensity);
+            dissolve.set("uPrevious", 0);
+            dissolve.set("uCurrent", 1);
+
+            GL13.glActiveTexture(GL13.GL_TEXTURE1);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            offscreen.bindTexture();
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            previous.bindTexture();
+
+            blitQuad(cx, cy, halfW, halfH, 1.0F);
+
+            GL13.glActiveTexture(GL13.GL_TEXTURE1);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            ShaderProgram.unbind();
+        } else {
+            offscreen.bindTexture();
+            blitQuad(cx, cy, halfW, halfH, intensity);
+        }
+
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        return true;
+    }
+
+    /** Premultiplied quad covering the hole's rect. */
+    private static void blitQuad(float cx, float cy, float halfW, float halfH, float alpha) {
+        GL11.glColor4f(alpha, alpha, alpha, alpha);
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2f(0.0F, 1.0F);
         GL11.glVertex2f(cx - halfW, cy - halfH);
@@ -530,9 +670,6 @@ public final class BlackHole {
         GL11.glTexCoord2f(1.0F, 1.0F);
         GL11.glVertex2f(cx + halfW, cy - halfH);
         GL11.glEnd();
-
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
-        return true;
     }
 
     /** Sets every uniform the trace needs. Shared by both draw paths. */
