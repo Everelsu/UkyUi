@@ -159,7 +159,7 @@ public class GuiShareScreen extends MenuScreen {
 
             String label = I18n.format("selectWorld.gameMode." + MODES[i], new Object[0]);
             this.fontRendererObj.drawString(
-                    this.fontRendererObj.trimStringToWidth(label, width - 16),
+                    fit(label, width - 16),
                     x + 8, this.modeY + 8,
                     Draw.withAlpha(selected ? Theme.textHover : Theme.text, this.fadeAlpha));
 
@@ -167,7 +167,7 @@ public class GuiShareScreen extends MenuScreen {
                 String blurb = I18n.format("selectWorld.gameMode." + MODES[i] + ".line1",
                         new Object[0]);
                 this.fontRendererObj.drawString(
-                        this.fontRendererObj.trimStringToWidth(blurb, width - 16),
+                        fit(blurb, width - 16),
                         x + 8, this.modeY + 22,
                         Draw.withAlpha(Theme.textDim, 0.7F * this.fadeAlpha));
             }
@@ -240,7 +240,7 @@ public class GuiShareScreen extends MenuScreen {
     }
 
     private void centred(String text, int x, int width, int y, int colour) {
-        String trimmed = this.fontRendererObj.trimStringToWidth(text, width - 8);
+        String trimmed = fit(text, width - 8);
         int w = this.fontRendererObj.getStringWidth(trimmed);
         this.fontRendererObj.drawString(trimmed, x + (width - w) / 2, y, colour);
     }

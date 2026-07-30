@@ -26,3 +26,9 @@ uky.gamemode.hardcore.warning=One life. You die for good.
 
 
 uky.progress.search=Search...
+
+uky.controls.search=Search a binding or a key...
+uky.controls.press=Press a key
+uky.resourcePack.topWins=The top pack overrides the ones below it.
+uky.resourcePack.defaultOnly=Nothing selected. The default pack is always active underneath.
+uky.resourcePack.none=No packs found. Put them in the resourcepacks folder.

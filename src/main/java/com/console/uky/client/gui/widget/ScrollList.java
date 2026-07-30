@@ -147,6 +147,31 @@ public abstract class ScrollList {
 
     // ----------------------------------------------------------------- input --
 
+    /**
+     * Index of the row under the pointer, or -1 if outside the list.
+     *
+     * Split out from {@link #mouseClicked} so a screen can test what a click landed
+     * on before letting the list act on it — a row with its own controls inside needs
+     * to claim the click first.
+     */
+    public int rowIndexAt(int mouseX, int mouseY) {
+        if (mouseX < x || mouseX >= x + width || mouseY < y || mouseY >= y + height) {
+            return -1;
+        }
+        int index = (int) ((mouseY - y + scroll) / rowHeight);
+        return index >= 0 && index < rowCount() ? index : -1;
+    }
+
+    /** Right edge of a row, for placing controls inside one. */
+    public int rowRight() {
+        return x + width;
+    }
+
+    /** Screen y of a row's top edge, accounting for the current scroll. */
+    public int rowTop(int index) {
+        return (int) (y + index * rowHeight - scroll);
+    }
+
     public boolean mouseClicked(int mouseX, int mouseY) {
         if (mouseX < x || mouseX >= x + width || mouseY < y || mouseY >= y + height) {
             return false;

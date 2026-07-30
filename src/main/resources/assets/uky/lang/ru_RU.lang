@@ -21,3 +21,9 @@ uky.gamemode.hardcore.warning=Одна жизнь. Ты умрёшь навсе�
 
 
 uky.progress.search=Поиск...
+
+uky.controls.search=Поиск действия или клавиши...
+uky.controls.press=Нажмите клавишу
+uky.resourcePack.topWins=Верхний пакет перекрывает нижние.
+uky.resourcePack.defaultOnly=Ничего не выбрано. Стандартный пакет всегда активен.
+uky.resourcePack.none=Пакетов нет. Положите их в папку resourcepacks.

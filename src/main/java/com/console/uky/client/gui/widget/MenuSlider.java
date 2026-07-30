@@ -77,7 +77,8 @@ public class MenuSlider extends MenuButton {
         int labelColor = Draw.fade(Draw.mix(Theme.text, Theme.textHover, this.hover), alpha);
         // Text is 8 units tall; sit it just above the track with a unit to spare.
         float labelY = Math.max(y1 + 1.0F, trackY - 10.0F);
-        font.drawString(this.displayString, (int) (x1 + 10), (int) labelY, labelColor);
+        drawFittedCaption(font, this.displayString, (int) (x1 + 10), (int) labelY,
+                this.width - 20, labelColor, alpha);
 
         Draw.rect(trackX1, trackY, trackX2, trackY + trackH, Draw.fade(Theme.trackFill, alpha));
         float fillX = trackX1 + (trackX2 - trackX1) * this.normalized;
@@ -130,4 +131,40 @@ public class MenuSlider extends MenuButton {
     @Override
     public void func_146113_a(net.minecraft.client.audio.SoundHandler soundHandler) {
     }
+
+    /**
+     * Draws a "Label: Value" caption inside {@code available} units.
+     *
+     * The game hands sliders their caption as a single string with the value on the
+     * end, and a translated caption is routinely wider than the row it was laid out
+     * against — "Наибольшая частота кадров: 120 fps" ran clean out of its column and
+     * across the one beside it. Trimming the whole string would eat the value, which
+     * is the one part that changes, so the caption is split at its colon and the
+     * label alone gives up the space.
+     */
+    private void drawFittedCaption(FontRenderer font, String text, int x, int y,
+                                   int available, int colour, float alpha) {
+        if (available <= 0) {
+            return;
+        }
+        if (font.getStringWidth(text) <= available) {
+            font.drawString(text, x, y, colour);
+            return;
+        }
+
+        int split = text.lastIndexOf(": ");
+        if (split < 0) {
+            drawFitting(font, text, x, y, available, colour);
+            return;
+        }
+
+        String value = font.trimStringToWidth(text.substring(split + 2), available);
+        int valueWidth = font.getStringWidth(value);
+
+        drawFitting(font, text.substring(0, split + 1), x, y,
+                available - valueWidth - 6, colour);
+        font.drawString(value, x + available - valueWidth, y,
+                Draw.fade(Draw.mix(Theme.textDim, Theme.accent, this.hover), alpha));
+    }
+
 }

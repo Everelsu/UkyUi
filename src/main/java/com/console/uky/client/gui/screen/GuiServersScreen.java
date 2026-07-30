@@ -333,13 +333,13 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         Draw.gradientV(x, y2 - 34, x2, y2,
                 Draw.withAlpha(0x000000, 0.0F), Draw.withAlpha(0x000000, 0.88F * alpha));
 
-        String name = this.fontRendererObj.trimStringToWidth(data.serverName, this.tileWidth - 12);
+        String name = fit(data.serverName, this.tileWidth - 12);
         this.fontRendererObj.drawString(name, x + 6, (int) (y2 - 28),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
 
         String motd = data.serverMOTD == null ? "" : data.serverMOTD.replace('\n', ' ');
         this.fontRendererObj.drawString(
-                this.fontRendererObj.trimStringToWidth(motd, this.tileWidth - 12),
+                fit(motd, this.tileWidth - 12),
                 x + 6, (int) (y2 - 18), Draw.withAlpha(Theme.textDim, 0.85F * alpha));
 
         drawStatus(data, x + 6, (int) (y2 - 9), alpha);

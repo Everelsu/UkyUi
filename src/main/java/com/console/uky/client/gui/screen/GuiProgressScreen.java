@@ -362,11 +362,11 @@ public class GuiProgressScreen extends MenuScreen {
         // Unlocked reads normally, reachable-but-not-yet is dimmer, and everything
         // still gated behind a parent is dimmest — so the list shows a frontier.
         int nameColour = got ? Theme.textHover : (reachable ? Theme.text : Theme.textDisabled);
-        String name = this.fontRendererObj.trimStringToWidth(nameOf(achievement), rowWidth - 34);
+        String name = fit(nameOf(achievement), rowWidth - 34);
         this.fontRendererObj.drawString(name, rowX + 26, rowY + 3,
                 Draw.withAlpha(nameColour, alpha));
 
-        String description = this.fontRendererObj.trimStringToWidth(
+        String description = fit(
                 descriptionOf(achievement), rowWidth - 34);
         this.fontRendererObj.drawString(description, rowX + 26, rowY + 13,
                 Draw.withAlpha(Theme.textDim, (got ? 0.8F : 0.5F) * alpha));
@@ -413,7 +413,7 @@ public class GuiProgressScreen extends MenuScreen {
         }
 
         int valueWidth = this.fontRendererObj.getStringWidth(value);
-        String name = this.fontRendererObj.trimStringToWidth(nameOf(stat),
+        String name = fit(nameOf(stat),
                 rowWidth - valueWidth - 24);
         int textY = rowY + (rowHeight - 8) / 2;
 

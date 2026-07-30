@@ -289,10 +289,13 @@ public class GuiCreateWorldScreen extends MenuScreen {
                 0.05F, this.delta);
         int colour = Draw.withAlpha(Draw.mix(Theme.textDim, Theme.textHover, this.backHover),
                 this.fadeAlpha);
+        // Chevron first, label right-aligned against it. Fixed offsets worked for
+        // "Back" and ran the chevron through the last letter of "Отмена".
         int right = this.contentX + this.contentWidth;
-        Icons.back(right - 10, 30, 9, colour);
-        this.fontRendererObj.drawString(I18n.format("gui.cancel", new Object[0]),
-                right - 46, 26, colour);
+        Icons.back(right - 6, 30, 9, colour);
+        String cancel = I18n.format("gui.cancel", new Object[0]);
+        this.fontRendererObj.drawString(cancel,
+                right - 16 - this.fontRendererObj.getStringWidth(cancel), 26, colour);
     }
 
     private boolean isOverBack() {
@@ -370,7 +373,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
             }
 
             String label = I18n.format("selectWorld.gameMode." + MODES[i].id, new Object[0]);
-            this.fontRendererObj.drawString(label, (int) (x + 26), (int) (iconY - 4),
+            drawFitted(label, (int) (x + 26), (int) (iconY - 4), (int) (tileWidth - 32),
                     Draw.withAlpha(selected ? Theme.textHover : Theme.text, this.fadeAlpha));
 
             // Description wrapped into the tile instead of printed under the button
@@ -411,7 +414,12 @@ public class GuiCreateWorldScreen extends MenuScreen {
         for (int i = 0; i < lines.size() && i < room; i++) {
             String line = lines.get(i);
             if (i == room - 1 && lines.size() > room) {
-                line = this.fontRendererObj.trimStringToWidth(line, maxWidth - 8) + "...";
+                // The cut here is vertical — there are more lines than the tile can
+                // hold — so the ellipsis has to be forced on. fit() only marks a line
+                // that is too wide, and the last line that fits usually is not, which
+                // left blurbs ending on a bare comma as though the text were broken.
+                line = this.fontRendererObj.trimStringToWidth(line,
+                        maxWidth - this.fontRendererObj.getStringWidth("...")).trim() + "...";
             }
             this.fontRendererObj.drawString(line, x + 10, (int) y + i * 10, colour);
         }
@@ -448,7 +456,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
                 Icons.terrain(x + 13, cy, iconSize, tint);
             }
 
-            String label = this.fontRendererObj.trimStringToWidth(
+            String label = fit(
                     I18n.format(type.getTranslateName(), new Object[0]), tileWidth - 30);
             this.fontRendererObj.drawString(label, x + 24, (int) (cy - 4),
                     Draw.withAlpha(selected ? Theme.textHover : Theme.text, this.fadeAlpha));
@@ -496,7 +504,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
                         Draw.withAlpha(Theme.accent, alpha));
             }
 
-            String label = this.fontRendererObj.trimStringToWidth(toggleLabel(i),
+            String label = fit(toggleLabel(i),
                     tileWidth - (int) box - 14);
             this.fontRendererObj.drawString(label, (int) (bx + box + 6),
                     (int) (this.toggleY + this.toggleHeight / 2.0F - 4),
@@ -506,7 +514,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
         if (hardcore) {
             // Our own short line rather than half of vanilla's split sentence, which
             // arrived here as "...difficulty and only one life" with no beginning.
-            String note = this.fontRendererObj.trimStringToWidth(
+            String note = fit(
                     I18n.format("uky.gamemode.hardcore.warning", new Object[0]),
                     this.contentWidth);
             this.fontRendererObj.drawString(note,
@@ -572,7 +580,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
                     Draw.fade(Draw.mix(Theme.separator, Theme.accent, this.customizeHover),
                             this.fadeAlpha));
             String custom = I18n.format("selectWorld.customizeType", new Object[0]);
-            custom = this.fontRendererObj.trimStringToWidth(custom, customWidth - 12);
+            custom = fit(custom, customWidth - 12);
             int w = this.fontRendererObj.getStringWidth(custom);
             this.fontRendererObj.drawString(custom, customX + (customWidth - w) / 2,
                     this.actionY + 6, Draw.withAlpha(

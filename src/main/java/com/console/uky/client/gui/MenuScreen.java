@@ -10,6 +10,7 @@ import com.console.uky.client.render.Theme;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.MathHelper;
@@ -124,6 +125,25 @@ public abstract class MenuScreen extends GuiScreen {
      * Device pixels per unit of the space these screens lay out in, and the factor
      * that converts that space to the one the game's projection is set up for.
      */
+    /**
+     * Layout width the screens are designed against, in GUI units.
+     *
+     * Wide enough for two comfortable columns of translated labels, narrow enough
+     * that text stays a readable physical size on a 1080p display.
+     */
+    private static final int TARGET_UNIT_WIDTH = 620;
+
+    /**
+     * Vertical floor, in GUI units — vanilla's own minimum, which every screen here
+     * was laid out to clear. Setting it higher looks harmless and is not: a window
+     * a few units under the floor drops a whole scale step, and on a short window
+     * that step goes all the way to 1 and leaves the text half the size it should be.
+     */
+    private static final int MIN_UNIT_HEIGHT = 240;
+
+    /** Guards against a nonsense factor if the display size is ever reported wrong. */
+    private static final int MAX_SCALE_FACTOR = 8;
+
     private int uiScaleFactor = 1;
     // Per axis, because the two spaces round their dimensions up independently. A
     // single averaged factor left the last couple of pixels down one edge outside
@@ -175,17 +195,28 @@ public abstract class MenuScreen extends GuiScreen {
     }
 
     /** The scale factor {@code ScaledResolution} picks when GUI Scale is Auto. */
+    /**
+     * Picks the GUI scale by how much layout room it leaves, not by how big the
+     * window is.
+     *
+     * Vanilla's rule is "the largest factor that still leaves 320x240 units", which
+     * means the unit count lurches around as the window changes: a 1270-wide window
+     * lands on factor 2 and gets 635 units of width, while maximising to 1920 pushes
+     * it to factor 4 and *drops* it to 480. Every screen here is laid out in those
+     * units, so making the window bigger made the content narrower and the labels
+     * started truncating — the exact opposite of what enlarging a window should do.
+     *
+     * Targeting a unit width instead pins the layout: 1280, 1920, 2560 and 3840 all
+     * land within a few units of {@link #TARGET_UNIT_WIDTH}, so the interface looks
+     * the same at every size and only the physical pixel size of the text changes.
+     */
     private static int autoScaleFactor(Minecraft mc) {
-        int factor = 1;
-        while (factor < 1000
-                && mc.displayWidth / (factor + 1) >= 320
-                && mc.displayHeight / (factor + 1) >= 240) {
-            factor++;
-        }
-        // The unicode font is drawn at half-texel steps, so vanilla backs off to an
-        // even factor to keep glyphs on whole pixels. Matching that keeps text
-        // just as crisp here.
-        if (mc.func_152349_b() && factor % 2 != 0 && factor != 1) {
+        int factor = Math.round(mc.displayWidth / (float) TARGET_UNIT_WIDTH);
+        factor = Math.max(1, Math.min(MAX_SCALE_FACTOR, factor));
+
+        // Short windows get a smaller factor so the taller screens still have room
+        // for their content; width is the target, height is the constraint.
+        while (factor > 1 && mc.displayHeight / factor < MIN_UNIT_HEIGHT) {
             factor--;
         }
         return factor;
@@ -522,4 +553,67 @@ public abstract class MenuScreen extends GuiScreen {
     public void onGuiClosed() {
         super.onGuiClosed();
     }
+
+    // ------------------------------------------------------------------ text --
+
+    /**
+     * Draws text left-aligned at {@code x}, cut to {@code maxWidth} with an ellipsis.
+     *
+     * Every string in this interface that comes from outside it — a translation, a
+     * world name, a server MOTD, a resource pack description — can be any length at
+     * all, while the box it goes in is fixed by the layout. Drawn plainly it simply
+     * kept going, over the widget beside it and out of the panel. Anything variable
+     * goes through here or {@link #drawFittedRight} instead.
+     *
+     * @return the width actually drawn
+     */
+    public int drawFitted(String text, int x, int y, int maxWidth, int colour) {
+        if (text == null || maxWidth <= 0) {
+            return 0;
+        }
+        String fitted = fit(text, maxWidth);
+        this.fontRendererObj.drawString(fitted, x, y, colour);
+        return this.fontRendererObj.getStringWidth(fitted);
+    }
+
+    /** As {@link #drawFitted}, but the text ends at {@code right}. */
+    public int drawFittedRight(String text, int right, int y, int maxWidth, int colour) {
+        if (text == null || maxWidth <= 0) {
+            return 0;
+        }
+        String fitted = fit(text, maxWidth);
+        int width = this.fontRendererObj.getStringWidth(fitted);
+        this.fontRendererObj.drawString(fitted, right - width, y, colour);
+        return width;
+    }
+
+    /** As {@link #drawFitted}, but centred on {@code cx}. */
+    public int drawFittedCentred(String text, int cx, int y, int maxWidth, int colour) {
+        if (text == null || maxWidth <= 0) {
+            return 0;
+        }
+        String fitted = fit(text, maxWidth);
+        int width = this.fontRendererObj.getStringWidth(fitted);
+        this.fontRendererObj.drawString(fitted, cx - width / 2, y, colour);
+        return width;
+    }
+
+    /**
+     * Trims to fit, marking the cut with an ellipsis.
+     *
+     * The ellipsis matters: a silently chopped word reads as a typo, whereas a
+     * trailing "…" reads as "there is more here", which is the truth.
+     */
+    public String fit(String text, int maxWidth) {
+        FontRenderer font = this.fontRendererObj;
+        if (font.getStringWidth(text) <= maxWidth) {
+            return text;
+        }
+        int ellipsis = font.getStringWidth("...");
+        if (maxWidth <= ellipsis) {
+            return font.trimStringToWidth(text, maxWidth);
+        }
+        return font.trimStringToWidth(text, maxWidth - ellipsis).trim() + "...";
+    }
+
 }

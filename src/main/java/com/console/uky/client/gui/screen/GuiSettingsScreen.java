@@ -8,9 +8,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiControls;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiScreenResourcePacks;
 import net.minecraft.client.gui.GuiSnooper;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
@@ -380,7 +378,7 @@ public class GuiSettingsScreen extends MenuScreen {
 
         switch (button.id) {
             case ID_CONTROLS:
-                openSub(new GuiControls(this, this.settings));
+                openSub(new GuiControlsScreen(this, this.settings));
                 break;
             case ID_SOUNDS:
                 openSub(new GuiAudioScreen(this, this.settings, GuiAudioScreen.soundTab()));
@@ -392,7 +390,7 @@ public class GuiSettingsScreen extends MenuScreen {
                 openSub(new GuiLanguageScreen(this));
                 break;
             case ID_RESOURCE_PACKS:
-                openSub(new GuiScreenResourcePacks(this));
+                openSub(new GuiResourcePacksScreen(this));
                 break;
             case ID_SNOOPER:
                 openSub(new GuiSnooper(this, this.settings));

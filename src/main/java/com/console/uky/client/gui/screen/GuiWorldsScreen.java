@@ -416,7 +416,7 @@ public class GuiWorldsScreen extends MenuScreen {
         Draw.gradientV(x, y2 - 26, x2, y2,
                 Draw.withAlpha(0x000000, 0.0F), Draw.withAlpha(0x000000, 0.85F * alpha));
 
-        String name = this.fontRendererObj.trimStringToWidth(world.getDisplayName(),
+        String name = fit(world.getDisplayName(),
                 this.tileWidth - 12);
         this.fontRendererObj.drawString(name, x + 6, (int) (y2 - 20),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));

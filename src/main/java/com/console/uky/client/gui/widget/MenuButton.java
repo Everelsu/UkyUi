@@ -56,7 +56,12 @@ public class MenuButton extends GuiButton {
     /** Seconds to wait before this button plays its entrance animation. */
     private float entranceDelay;
 
+    /** Marquee speed, GUI units per second — a comfortable reading pace. */
+    private static final float SCROLL_UNITS_PER_SECOND = 26.0F;
+
     protected float hover;      // 0..1 smoothed hover
+    /** Seconds the pointer has rested on a label too long to fit; drives the marquee. */
+    private float scrollAge;
     protected float press;      // 0..1 smoothed press
     protected float entrance;   // 0..1 entrance progress
     protected float age;
@@ -141,6 +146,9 @@ public class MenuButton extends GuiButton {
 
         float t = (this.age - this.entranceDelay) / 0.35F;
         this.entrance = Ease.outQuint(t);
+        // The marquee only runs under the pointer, and rewinds the moment it leaves,
+        // so a list of long labels is not a wall of moving text.
+        this.scrollAge = this.hover > 0.6F ? this.scrollAge + deltaSeconds : 0.0F;
     }
 
     @Override
@@ -238,12 +246,28 @@ public class MenuButton extends GuiButton {
         int textY = (int) (y1 + (this.height - 8) / 2.0F);
 
         if (valueText != null) {
-            // label left, value right — the layout used by the options screen
+            // Label left, value right — the layout the options screens use.
+            //
+            // Both are budgeted rather than drawn at fixed positions. A translated
+            // label is frequently far longer than the English it was laid out
+            // against, and without a budget it ran under the value, past the end of
+            // its own row and into the next column. The value keeps what it needs up
+            // to a share of the row, the label takes the rest, and GAP guarantees
+            // they never touch.
             int padding = 10;
-            font.drawString(this.displayString, (int) (x1 + padding), textY, color);
+            int gap = 6;
+            int available = (int) (x2 - x1) - padding * 2;
+            if (available <= 0) {
+                return;
+            }
+            String value = font.trimStringToWidth(this.valueText,
+                    Math.max(0, available * 45 / 100));
+            int valueWidth = font.getStringWidth(value);
+
+            drawFitting(font, this.displayString, x1 + padding, textY,
+                    available - valueWidth - gap, color);
             int valueColor = Draw.fade(Draw.mix(Theme.textDim, accentColor(), this.hover), alpha);
-            int valueWidth = font.getStringWidth(valueText);
-            font.drawString(valueText, (int) (x2 - padding - valueWidth), textY, valueColor);
+            font.drawString(value, (int) (x2 - padding - valueWidth), textY, valueColor);
             return;
         }
 
@@ -283,7 +307,11 @@ public class MenuButton extends GuiButton {
                 return;
             }
 
-            font.drawString(this.displayString, (int) textX, textY, color);
+            // Budgeted against the row it sits in. Left unbounded, a long
+            // translation such as "Настройки сбора информации" ran straight out of
+            // the panel and over whatever was beside it.
+            drawFitting(font, this.displayString, textX, textY,
+                    x2 - trailingInset() - textX, color);
             if (this.hover > 0.02F && this.enabled) {
                 Draw.rect(x1, markY - 3.0F, x1 + 2.0F + this.hover * 2.0F, markY + 3.0F,
                         Draw.fade(accentColor(), this.hover * alpha));
@@ -293,7 +321,12 @@ public class MenuButton extends GuiButton {
 
         // Centred label drifts right a touch on hover, following the accent rail.
         float cx = (x1 + x2) / 2.0F + this.hover * 2.0F;
-        font.drawString(this.displayString, (int) (cx - labelWidth / 2.0F), textY, color);
+        float room = (x2 - x1) - 16.0F;
+        if (labelWidth <= room) {
+            font.drawString(this.displayString, (int) (cx - labelWidth / 2.0F), textY, color);
+        } else {
+            drawFitting(font, this.displayString, x1 + 8.0F, textY, room, color);
+        }
     }
 
     /**
@@ -337,4 +370,72 @@ public class MenuButton extends GuiButton {
         // Our own click, not the vanilla wooden thunk.
         UkySounds.play(UkySounds.BUTTON, 0.7F, 1.0F);
     }
+
+    /** Space at the right end of the row that the label must not run into. */
+    protected float trailingInset() {
+        return 10.0F;
+    }
+
+    /**
+     * Draws a label inside {@code room}, scrolling it under the pointer if it will
+     * not fit.
+     *
+     * Truncation alone loses whatever was on the end, and for options whose names
+     * differ only in their tail — several of the translated ones do — that makes the
+     * list unreadable. So a label that overflows is ellipsised at rest and marquees
+     * while hovered, which means every row can still be read in full without
+     * widening the layout to its worst case.
+     */
+    protected void drawFitting(FontRenderer font, String text, float x, float y, float room,
+                               int colour) {
+        if (text == null || room <= 0.0F) {
+            return;
+        }
+        int full = font.getStringWidth(text);
+        if (full <= room) {
+            font.drawString(text, (int) x, (int) y, colour);
+            return;
+        }
+
+        if (this.scrollAge <= 0.0F) {
+            font.drawString(ellipsised(font, text, (int) room), (int) x, (int) y, colour);
+            return;
+        }
+
+        // Out and back rather than wrapping around: a label is a phrase, and a phrase
+        // that loops mid-word is harder to read than one that simply returns.
+        float travel = full - room + 6.0F;
+        float pause = 0.9F;
+        float period = travel / SCROLL_UNITS_PER_SECOND;
+        float t = this.scrollAge - pause;
+        float offset;
+        if (t <= 0.0F) {
+            offset = 0.0F;
+        } else {
+            float cycle = (t % (period * 2.0F + pause * 2.0F));
+            if (cycle < period) {
+                offset = travel * (cycle / period);
+            } else if (cycle < period + pause) {
+                offset = travel;
+            } else if (cycle < period * 2.0F + pause) {
+                offset = travel * (1.0F - (cycle - period - pause) / period);
+            } else {
+                offset = 0.0F;
+            }
+        }
+
+        Draw.beginClip(x, y - 2.0F, room, 12.0F);
+        font.drawString(text, (int) (x - offset), (int) y, colour);
+        Draw.endClip();
+    }
+
+    /** Trims to width, marking the cut so it reads as "more here" and not as a typo. */
+    protected static String ellipsised(FontRenderer font, String text, int room) {
+        int dots = font.getStringWidth("...");
+        if (room <= dots) {
+            return font.trimStringToWidth(text, room);
+        }
+        return font.trimStringToWidth(text, room - dots).trim() + "...";
+    }
+
 }

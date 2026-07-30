@@ -180,6 +180,30 @@ public final class Icons {
                 cx + h * 0.55F + pip * 0.5F, cy + h * 0.55F + pip * 0.5F, colour);
     }
 
+    /** Right-pointing chevron, the mirror of {@link #back}. */
+    public static void forward(float cx, float cy, float size, int colour) {
+        float h = size * 0.5F;
+        Draw.triangle(cx - h * 0.4F, cy - h,
+                      cx - h * 0.4F, cy + h,
+                      cx + h * 0.6F, cy, colour);
+    }
+
+    /** Upward chevron, for moving a row up an ordered list. */
+    public static void arrowUp(float cx, float cy, float size, int colour) {
+        float h = size * 0.5F;
+        Draw.triangle(cx - h, cy + h * 0.4F,
+                      cx + h, cy + h * 0.4F,
+                      cx, cy - h * 0.6F, colour);
+    }
+
+    /** Downward chevron. */
+    public static void arrowDown(float cx, float cy, float size, int colour) {
+        float h = size * 0.5F;
+        Draw.triangle(cx - h, cy - h * 0.4F,
+                      cx + h, cy - h * 0.4F,
+                      cx, cy + h * 0.6F, colour);
+    }
+
     /** Circular arrow, for "refresh". */
     public static void refresh(float cx, float cy, float size, int colour) {
         float r = size * 0.42F;

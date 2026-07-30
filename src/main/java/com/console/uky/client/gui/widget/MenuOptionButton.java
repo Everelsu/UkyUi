@@ -16,6 +16,9 @@ import net.minecraft.client.settings.GameSettings;
  */
 public class MenuOptionButton extends MenuButton {
 
+    /** Track width of the pill switch; the label is budgeted around it. */
+    private static final float SWITCH_WIDTH = 22.0F;
+
     private final GameSettings.Options option;
     private final boolean isToggle;
     private float switchPos;
@@ -92,13 +95,26 @@ public class MenuOptionButton extends MenuButton {
 
         FontRenderer font = mc.fontRenderer;
         int labelColor = Draw.fade(Draw.mix(Theme.text, Theme.textHover, this.hover), alpha);
-        font.drawString(this.displayString, (int) (x1 + 10), (int) (y1 + (this.height - 8) / 2.0F), labelColor);
 
-        drawSwitch(x2 - 10 - 22, (y1 + y2) / 2.0F, alpha);
+        // The switch owns the right end of the row, so the label gets whatever is
+        // left of it and no more. Drawn at a fixed position it ran underneath the
+        // switch and out the far side — "Инверсия мыши" and "Полноэкранный режим"
+        // both did, since the English they were laid out against is shorter.
+        float switchX = x2 - trailingInset();
+        drawFitting(font, this.displayString, x1 + 10.0F,
+                y1 + (this.height - 8) / 2.0F, switchX - 6.0F - (x1 + 10.0F), labelColor);
+
+        drawSwitch(switchX, (y1 + y2) / 2.0F, alpha);
+    }
+
+    /** The switch owns the right end of the row; the label stops short of it. */
+    @Override
+    protected float trailingInset() {
+        return 10.0F + SWITCH_WIDTH;
     }
 
     private void drawSwitch(float x, float cy, float alpha) {
-        float w = 22.0F;
+        float w = SWITCH_WIDTH;
         float h = 10.0F;
         float y1 = cy - h / 2.0F;
         float y2 = cy + h / 2.0F;

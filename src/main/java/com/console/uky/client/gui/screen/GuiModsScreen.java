@@ -136,19 +136,21 @@ public class GuiModsScreen extends MenuScreen {
         int y = this.panelY1 + 34;
         int maxWidth = this.panelX2 - 14 - x;
 
-        this.fontRendererObj.drawString(mod.getName(), x, y,
-                Draw.withAlpha(Theme.text, this.fadeAlpha));
+        // Mod metadata is written by whoever made the mod, so none of these have a
+        // length this layout can rely on — a long author list used to run off the
+        // right of the panel.
+        drawFitted(mod.getName(), x, y, maxWidth, Draw.withAlpha(Theme.text, this.fadeAlpha));
         y += 12;
-        this.fontRendererObj.drawString(mod.getVersion(), x, y,
+        drawFitted(mod.getVersion(), x, y, maxWidth,
                 Draw.withAlpha(Theme.accent, 0.9F * this.fadeAlpha));
         y += 11;
-        this.fontRendererObj.drawString(mod.getModId(), x, y,
+        drawFitted(mod.getModId(), x, y, maxWidth,
                 Draw.withAlpha(Theme.textDim, 0.7F * this.fadeAlpha));
         y += 11;
 
         String authors = authorsOf(mod);
         if (!authors.isEmpty()) {
-            this.fontRendererObj.drawString(authors, x, y,
+            drawFitted(authors, x, y, maxWidth,
                     Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
             y += 11;
         }
@@ -233,7 +235,7 @@ public class GuiModsScreen extends MenuScreen {
             if (GuiModsScreen.this.fontRendererObj.getStringWidth(text) <= maxWidth) {
                 return text;
             }
-            return GuiModsScreen.this.fontRendererObj.trimStringToWidth(text, maxWidth - 6) + "...";
+            return GuiModsScreen.this.fit(text, maxWidth - 6);
         }
     }
 

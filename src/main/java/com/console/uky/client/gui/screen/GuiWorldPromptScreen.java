@@ -172,7 +172,7 @@ public class GuiWorldPromptScreen extends MenuScreen {
 
         Draw.gradientV(this.cardX, y2 - 20, x2, y2,
                 Draw.withAlpha(0x000000, 0.0F), Draw.withAlpha(0x000000, 0.88F * this.fadeAlpha));
-        String name = this.fontRendererObj.trimStringToWidth(this.worldName, this.cardWidth - 12);
+        String name = fit(this.worldName, this.cardWidth - 12);
         this.fontRendererObj.drawString(name, this.cardX + 6, (int) (y2 - 14),
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
@@ -263,7 +263,7 @@ public class GuiWorldPromptScreen extends MenuScreen {
     }
 
     private void centred(String text, int x, int width, int y, int colour) {
-        String trimmed = this.fontRendererObj.trimStringToWidth(text, width - 8);
+        String trimmed = fit(text, width - 8);
         int w = this.fontRendererObj.getStringWidth(trimmed);
         this.fontRendererObj.drawString(trimmed, x + (width - w) / 2, y, colour);
     }

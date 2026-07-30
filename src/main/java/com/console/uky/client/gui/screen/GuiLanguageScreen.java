@@ -275,7 +275,7 @@ public class GuiLanguageScreen extends MenuScreen {
             // Name on top; region and code together underneath. Splitting them puts
             // the word you are actually looking for at the front of the row instead of
             // buried in "Name (Region)".
-            String name = screen.fontRendererObj.trimStringToWidth(nameOf(language),
+            String name = screen.fit(nameOf(language),
                     rowWidth - 16);
             screen.fontRendererObj.drawString(name, rowX + 8, rowY + 4,
                     Draw.withAlpha(color, alpha));
@@ -285,7 +285,7 @@ public class GuiLanguageScreen extends MenuScreen {
                     ? language.getLanguageCode()
                     : region + "  ·  " + language.getLanguageCode();
             screen.fontRendererObj.drawString(
-                    screen.fontRendererObj.trimStringToWidth(sub, rowWidth - 16),
+                    screen.fit(sub, rowWidth - 16),
                     rowX + 8, rowY + 13, Draw.withAlpha(Theme.textDim, 0.65F * alpha));
 
             // The pinned row is the current language shown out of order, so it says so

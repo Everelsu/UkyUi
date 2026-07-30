@@ -234,16 +234,17 @@ public class GuiServerEditScreen extends MenuScreen {
         Draw.rect(x1, y, x1 + 2, y + 18,
                 Draw.withAlpha(Theme.accent, (0.7F + this.resourceHover * 0.3F) * this.fadeAlpha));
 
-        String label = I18n.format("addServer.resourcePack", new Object[0]);
-        this.fontRendererObj.drawString(label, x1 + 8, y + 5,
-                Draw.withAlpha(Theme.text, this.fadeAlpha));
-
         // The enum carries its own translated label, so there is no key to rebuild.
         String value = this.draft.func_152586_b().func_152589_a().getUnformattedText();
-        int valueWidth = this.fontRendererObj.getStringWidth(value);
-        this.fontRendererObj.drawString(value, x2 - 8 - valueWidth, y + 5,
+        // Value first: it is the part that changes, so it keeps the width it needs
+        // and the caption beside it takes whatever is left.
+        int valueWidth = drawFittedRight(value, x2 - 8, y + 5, (x2 - x1) / 2,
                 Draw.withAlpha(Draw.mix(Theme.textDim, Theme.accent, this.resourceHover),
                         this.fadeAlpha));
+
+        String label = I18n.format("addServer.resourcePack", new Object[0]);
+        drawFitted(label, x1 + 8, y + 5, x2 - 8 - valueWidth - 6 - (x1 + 8),
+                Draw.withAlpha(Theme.text, this.fadeAlpha));
     }
 
     private void drawButtons() {
@@ -289,7 +290,7 @@ public class GuiServerEditScreen extends MenuScreen {
     }
 
     private void centred(String text, int x, int width, int y, int colour) {
-        String trimmed = this.fontRendererObj.trimStringToWidth(text, width - 8);
+        String trimmed = fit(text, width - 8);
         int w = this.fontRendererObj.getStringWidth(trimmed);
         this.fontRendererObj.drawString(trimmed, x + (width - w) / 2, y, colour);
     }
