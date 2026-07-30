@@ -127,6 +127,9 @@ public final class BlackHole {
     static final float NOISE_RADIAL_FREQ = 11.0F;
 
     /** Disk rotation phase and an independent turbulence phase. */
+    /** Texture unit the baked turbulence is bound to. */
+    private static final int NOISE_UNIT = 4;
+
     private float spin;
     private float churn;
     private float drift;
@@ -544,6 +547,17 @@ public final class BlackHole {
         shader.set("uIntensity", intensity);
         shader.set("uGain", DISK_GAIN * SHADER_GAIN_TRIM);
         shader.set("uSteps", UiConfig.blackHoleQuality);
+
+        // The turbulence field is a constant, so it is baked once and sampled rather
+        // than recomputed at every step of every ray. If the upload failed the shader
+        // still has the analytic version to fall back on.
+        int noise = NoiseVolume.ensureUploaded();
+        shader.set("uHasNoise", noise != 0 ? 1 : 0);
+        if (noise != 0) {
+            shader.set("uNoisePeriod", NoiseVolume.PERIOD);
+            shader.set("uNoise", NOISE_UNIT);
+            NoiseVolume.bind(NOISE_UNIT);
+        }
         setColour("uHot", 0xFFF3E4);
         setColour("uMid", Theme.accent);
         setColour("uCold", Theme.accentAlt);

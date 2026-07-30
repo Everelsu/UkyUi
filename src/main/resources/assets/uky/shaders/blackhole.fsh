@@ -27,6 +27,9 @@ uniform vec3  uHot;         // inner disk colour
 uniform vec3  uMid;
 uniform vec3  uCold;        // outer disk colour
 uniform int   uSteps;       // integration budget, lowered on weak hardware
+uniform sampler3D uNoise;   // baked turbulence, see NoiseVolume
+uniform float uNoisePeriod; // world units the volume spans before it repeats
+uniform bool  uHasNoise;    // false if the volume could not be uploaded
 
 // Units: G = c = M = 1. Horizon at 2, photon sphere at 3, ISCO at 6.
 const float HORIZON       = 2.02;
@@ -69,7 +72,18 @@ float vnoise(vec3 x) {
                    mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
 
+/**
+ * Three octaves of value noise.
+ *
+ * Normally a single fetch from the baked volume: the field is constant, and
+ * evaluating it here meant recomputing about 240 operations per sample, hundreds of
+ * times over for every pixel that crosses the disk. The analytic branch is kept for
+ * hardware that would not take the 3D texture, where a slow disk still beats none.
+ */
 float fbm(vec3 p) {
+    if (uHasNoise) {
+        return texture3D(uNoise, p / uNoisePeriod).r;
+    }
     return vnoise(p) * 0.5 + vnoise(p * 2.13) * 0.25 + vnoise(p * 4.31) * 0.125;
 }
 
