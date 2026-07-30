@@ -1,0 +1,23 @@
+# UltraKill Yourself UI localization
+uky.menu.mods=Моды
+uky.menu.modOptions=Настройки модов
+
+uky.settings.general=Общие
+uky.settings.video=Графика
+uky.settings.audio=Звук и чат
+uky.settings.other=Прочее
+
+uky.mods.loaded=загружено
+uky.mods.config=Настроить
+
+uky.language.search=Поиск языка...
+uky.mods.by=Автор:
+
+uky.worlds.noPreview=нет снимка
+
+uky.gamemode.hardcore.line1=Одна жизнь, сложность не выбрать.
+uky.gamemode.hardcore.line2=Умрёшь — мир умрёт вместе с тобой.
+uky.gamemode.hardcore.warning=Одна жизнь. Ты умрёшь навсегда.
+
+
+uky.progress.search=Поиск...

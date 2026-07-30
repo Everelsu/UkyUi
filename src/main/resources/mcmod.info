@@ -1,0 +1,16 @@
+[
+{
+  "modid": "uky",
+  "name": "UltraKill Yourself UI",
+  "description": "Custom main menu, loading screen and general UI overhaul.",
+  "version": "${modVersion}",
+  "mcversion": "1.7.10",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["Relsev"],
+  "credits": "",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]

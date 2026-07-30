@@ -1,0 +1,20 @@
+{
+  "intro_impact": {
+    "category": "master",
+    "sounds": [
+      { "name": "low", "stream": false }
+    ]
+  },
+  "menu_music": {
+    "category": "music",
+    "sounds": [
+      { "name": "music", "stream": true }
+    ]
+  },
+  "button": {
+    "category": "master",
+    "sounds": [
+      { "name": "button_sound", "stream": false }
+    ]
+  }
+}

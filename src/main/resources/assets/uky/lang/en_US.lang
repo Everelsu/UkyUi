@@ -1,0 +1,28 @@
+# UltraKill Yourself UI localization
+# Vanilla keys (menu.singleplayer, options.title, ...) are reused where they exist;
+# only strings that 1.7.10 hardcodes, or that are ours, need an entry here.
+uky.menu.mods=Mods
+uky.menu.modOptions=Mod Options
+
+uky.settings.general=General
+uky.settings.video=Video
+uky.settings.audio=Sound & Chat
+uky.settings.other=Other
+
+uky.mods.loaded=loaded
+uky.mods.config=Configure
+
+uky.language.search=Search languages...
+uky.mods.by=by
+
+uky.worlds.noPreview=no picture yet
+
+# Vanilla splits its hardcore blurb across two keys written to wrap inside a narrow
+# button, so either half reads as a dangling fragment on its own. Ours is written to
+# be read whole.
+uky.gamemode.hardcore.line1=One life, and no difficulty setting.
+uky.gamemode.hardcore.line2=When you die, the world dies with you.
+uky.gamemode.hardcore.warning=One life. You die for good.
+
+
+uky.progress.search=Search...

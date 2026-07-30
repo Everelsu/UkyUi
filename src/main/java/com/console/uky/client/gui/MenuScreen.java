@@ -1,0 +1,525 @@
+package com.console.uky.client.gui;
+
+import com.console.uky.client.gui.widget.MenuButton;
+import com.console.uky.client.render.AmbientParticles;
+import com.console.uky.client.render.BlackHole;
+import com.console.uky.client.render.Draw;
+import com.console.uky.client.render.LensLibrary;
+import com.console.uky.client.render.Ease;
+import com.console.uky.client.render.Theme;
+import com.console.uky.config.UiConfig;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.util.MathHelper;
+import net.minecraft.util.ResourceLocation;
+import org.lwjgl.opengl.GL11;
+
+import java.util.List;
+import java.util.Random;
+
+/**
+ * Shared base for every UKY screen: wall-clock timing, an entrance fade, and
+ * the layered ambient backdrop (artwork, particles, vignette, grain, scanlines).
+ *
+ * Subclasses override {@link #drawContent} instead of {@code drawScreen} so the
+ * backdrop, the widget pass and the overlay pass always happen in the right
+ * order.
+ */
+public abstract class MenuScreen extends GuiScreen {
+
+    protected static final ResourceLocation BACKGROUND =
+            new ResourceLocation("uky", "textures/gui/background.png");
+    /** Native size of {@link #BACKGROUND}; used to letterbox-cover it correctly. */
+    protected static final int BACKGROUND_W = 1920;
+    protected static final int BACKGROUND_H = 1080;
+
+    private static final float FADE_IN_SECONDS = 0.45F;
+
+    private final AmbientParticles particles = new AmbientParticles();
+    private final Random grainRandom = new Random();
+    /** Shared so the starfield keeps its position when moving between screens. */
+    protected static final BlackHole blackHole = new BlackHole();
+
+    // Smoothed camera on the hole. Static because it has to survive the screen
+    // swap: that is precisely what makes moving between screens read as one
+    // continuous shot rather than a cut.
+    protected static float cameraX;
+    protected static float cameraY;
+    protected static float cameraRadius;
+    private static int cameraWidth;
+    private static int cameraHeight;
+    /** False until the first menu of the session has placed the camera. */
+    private static boolean cameraPlaced;
+
+    private long lastFrameNanos;
+    /** Seconds since this screen was opened. */
+    protected float elapsed;
+    /** Seconds since the previous frame, clamped so alt-tab does not teleport animations. */
+    protected float delta;
+    /** Entrance fade, 0..1. */
+    protected float fadeAlpha;
+
+    // ---- closing animation ----
+    /**
+     * What to show once the exit animation finishes, or null while the screen is
+     * simply open. Screens that opt in call {@link #closeWith} instead of displaying
+     * the next screen directly.
+     */
+    private Runnable pendingClose;
+    private float closing;
+    private static final float CLOSE_SECONDS = 0.16F;
+
+    /**
+     * Plays the entrance in reverse, then runs {@code action}.
+     *
+     * Screens animated in and then vanished on a frame boundary, which read as the
+     * menu being torn away rather than dismissed — most obviously on the pause menu,
+     * where the world is still visible behind it the whole time. Short on purpose:
+     * this is in the way of what the player asked for, so it has to be felt rather
+     * than waited for.
+     */
+    protected void closeWith(Runnable action) {
+        if (this.pendingClose != null) {
+            return;
+        }
+        this.pendingClose = action;
+        this.closing = 0.0F;
+    }
+
+    protected boolean isClosing() {
+        return this.pendingClose != null;
+    }
+
+    /**
+     * Drives the exit and fires the pending action when it is done.
+     *
+     * @return the opacity everything on this screen should be drawn at
+     */
+    private float advanceClose() {
+        if (this.pendingClose == null) {
+            return 1.0F;
+        }
+        this.closing += this.delta / CLOSE_SECONDS;
+        if (this.closing >= 1.0F) {
+            Runnable action = this.pendingClose;
+            this.pendingClose = null;
+            action.run();
+            return 0.0F;
+        }
+        return 1.0F - Ease.inCubic(this.closing);
+    }
+
+    /** Parent to return to; may be null (then Escape closes to the world/main menu). */
+    protected final GuiScreen parent;
+
+    protected MenuScreen(GuiScreen parent) {
+        this.parent = parent;
+    }
+
+    // ----------------------------------------------------------- own scaling --
+
+    /**
+     * Device pixels per unit of the space these screens lay out in, and the factor
+     * that converts that space to the one the game's projection is set up for.
+     */
+    private int uiScaleFactor = 1;
+    // Per axis, because the two spaces round their dimensions up independently. A
+    // single averaged factor left the last couple of pixels down one edge outside
+    // everything this screen drew, showing whatever was behind the GUI.
+    private float uiScaleX = 1.0F;
+    private float uiScaleY = 1.0F;
+
+    /**
+     * Lays this screen out in its own coordinate space, independent of the GUI
+     * Scale setting.
+     *
+     * That setting exists for the HUD and for players who want bigger text in game,
+     * and it should keep working — but it hands a screen anywhere from 320 to 1920
+     * units of width depending on where the slider is, and no single layout is
+     * honest across that range. So these menus always use the size Auto would give,
+     * which stays within roughly 320-570 by 240-270 on any monitor, and a matching
+     * transform is applied at draw time. Mouse input needs no special handling:
+     * {@code handleMouseInput} derives its coordinates from {@code width} and
+     * {@code height}, which are now ours.
+     */
+    @Override
+    public void setWorldAndResolution(Minecraft mc, int width, int height) {
+        // The width and height handed in are deliberately ignored. During a resize
+        // they can still describe the old window while mc.displayWidth already
+        // describes the new one, and deriving the transform from a mismatched pair
+        // drew the whole interface into one corner of the screen with last frame's
+        // image left showing around it. Both spaces come off the framebuffer below,
+        // which cannot disagree with itself.
+        this.uiScaleFactor = autoScaleFactor(mc);
+        int ownWidth = MathHelper.ceiling_double_int((double) mc.displayWidth / this.uiScaleFactor);
+        int ownHeight = MathHelper.ceiling_double_int((double) mc.displayHeight / this.uiScaleFactor);
+        super.setWorldAndResolution(mc, ownWidth, ownHeight);
+    }
+
+    /**
+     * Recomputes the transform between our units and the game's.
+     *
+     * Done every frame rather than cached at layout time. The projection is set up
+     * from a fresh {@code ScaledResolution} on the frame it is drawn, so anything
+     * cached one resize earlier is a frame out of date — and one frame of a wrong
+     * scale is exactly the glitch that shows.
+     */
+    private void syncScale() {
+        Minecraft mc = this.mc;
+        this.uiScaleFactor = autoScaleFactor(mc);
+        ScaledResolution game = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+        this.uiScaleX = this.width <= 0 ? 1.0F : (float) game.getScaledWidth() / this.width;
+        this.uiScaleY = this.height <= 0 ? 1.0F : (float) game.getScaledHeight() / this.height;
+    }
+
+    /** The scale factor {@code ScaledResolution} picks when GUI Scale is Auto. */
+    private static int autoScaleFactor(Minecraft mc) {
+        int factor = 1;
+        while (factor < 1000
+                && mc.displayWidth / (factor + 1) >= 320
+                && mc.displayHeight / (factor + 1) >= 240) {
+            factor++;
+        }
+        // The unicode font is drawn at half-texel steps, so vanilla backs off to an
+        // even factor to keep glyphs on whole pixels. Matching that keeps text
+        // just as crisp here.
+        if (mc.func_152349_b() && factor % 2 != 0 && factor != 1) {
+            factor--;
+        }
+        return factor;
+    }
+
+    // ------------------------------------------------------------- lifecycle --
+
+    @Override
+    public void initGui() {
+        this.buttonList.clear();
+        this.lastFrameNanos = System.nanoTime();
+        this.elapsed = 0.0F;
+        this.delta = 0.0F;
+        this.fadeAlpha = 0.0F;
+        this.particles.resize(this.width, this.height);
+        blackHole.resize(this.width, this.height);
+        buildLayout();
+
+        // The very first menu of the session starts on its own angle rather than
+        // swinging in from wherever the camera happened to be initialised.
+        if (!cameraPlaced) {
+            cameraPlaced = true;
+            blackHole.snapTo(blackHolePose());
+        }
+    }
+
+    /** Register buttons and compute layout here; called from {@link #initGui()}. */
+    protected abstract void buildLayout();
+
+    /**
+     * Rebuilds the controls in place, without restarting the entrance animation.
+     *
+     * For anything that changes the layout while the screen stays open — switching a
+     * settings tab, filtering a list. Calling {@code initGui} for that reset the
+     * fade to zero, so every tab click blinked the whole screen through black.
+     */
+    protected void relayout() {
+        this.buttonList.clear();
+        buildLayout();
+    }
+
+    /** Draw screen-specific content. Widgets are drawn afterwards. */
+    protected abstract void drawContent(int mouseX, int mouseY);
+
+    /**
+     * Opacity applied to every widget. Defaults to the entrance fade; screens with
+     * their own intro can hold the controls back until it finishes.
+     */
+    protected float widgetFade() {
+        return this.fadeAlpha;
+    }
+
+    /**
+     * Multiplied into everything this screen draws. 1 normally, easing to 0 while
+     * closing — {@link #fadeAlpha} is the entrance and must not be rewound.
+     */
+    protected float closeFade() {
+        return this.closeFade;
+    }
+
+    private float closeFade = 1.0F;
+
+    @Override
+    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        tickTiming();
+        syncScale();
+
+        // Folded into fadeAlpha so every existing call site dims on the way out
+        // without each screen having to know about closing at all.
+        this.closeFade = advanceClose();
+        if (this.pendingClose == null && this.closeFade <= 0.0F) {
+            // The action just ran and swapped the screen; nothing left to draw.
+            return;
+        }
+        this.fadeAlpha *= this.closeFade;
+
+        // These coordinates arrive in the game's units; everything below works in
+        // ours. Scissor rects go straight to GL in device pixels, so Draw is told
+        // the conversion too.
+        int localX = (int) (mouseX / this.uiScaleX);
+        int localY = (int) (mouseY / this.uiScaleY);
+        Draw.setClipScale(this.uiScaleFactor);
+        GL11.glPushMatrix();
+        GL11.glScalef(this.uiScaleX, this.uiScaleY, 1.0F);
+        try {
+            drawBackdrop();
+            drawContent(localX, localY);
+
+            // Buttons animate off `delta`, so hand it to them before they draw.
+            float widgetFade = widgetFade();
+            List<?> buttons = this.buttonList;
+            for (int i = 0; i < buttons.size(); i++) {
+                Object o = buttons.get(i);
+                if (o instanceof MenuButton) {
+                    MenuButton button = (MenuButton) o;
+                    button.advance(this.delta, widgetFade);
+                    // Fully faded-out widgets must not swallow clicks.
+                    button.visible = widgetFade > 0.02F;
+                }
+            }
+            super.drawScreen(localX, localY, partialTicks);
+
+            drawOverlay();
+        } finally {
+            GL11.glPopMatrix();
+            Draw.clearClipScale();
+        }
+    }
+
+    private void tickTiming() {
+        long now = System.nanoTime();
+        float dt = (now - lastFrameNanos) / 1_000_000_000.0F;
+        lastFrameNanos = now;
+        // A stall (alt-tab, world load) must not fast-forward every animation.
+        this.delta = Math.min(dt, 0.1F);
+        this.elapsed += this.delta;
+        Transitions.update(this.delta);
+        this.fadeAlpha = Ease.outCubic(this.elapsed / FADE_IN_SECONDS);
+
+        particles.update(this.delta);
+    }
+
+    // -------------------------------------------------------------- backdrop --
+
+    /** Artwork + tint + particles. Override to change the artwork layer only. */
+    protected void drawBackdrop() {
+        // Deliberately overdrawn well past the screen. Our units and the game's do
+        // not always land on exactly the same rectangle — rounding, or a resize
+        // caught mid-frame — and a base fill that stops at our own edge leaves a
+        // strip of whatever was in the buffer before. Overdrawing costs nothing and
+        // cannot be got wrong.
+        Draw.rect(-this.width, -this.height, this.width * 2, this.height * 2, Theme.background);
+        if (isVoid()) {
+            // Past the horizon. Nothing to draw but the dark.
+            return;
+        }
+        // The overdrawn base fill above is opaque, so anything drawn over it is safe.
+        drawBackgroundArt();
+        drawBackgroundTint();
+        // Dust drifting up from the floor makes sense in a room, not in space —
+        // the black hole supplies its own moving matter.
+        if (!isBlackHoleBackground()) {
+            particles.render(this.fadeAlpha * 0.85F);
+        }
+    }
+
+    protected void drawBackgroundArt() {
+        if (isBlackHoleBackground()) {
+            blackHole.update(this.delta);
+            advanceCamera(blackHoleCenterX(), blackHoleCenterY(), blackHoleRadius());
+            blackHole.lookFrom(blackHolePose());
+            blackHole.render(cameraX, cameraY, cameraRadius,
+                    this.fadeAlpha * blackHoleIntensity(), 1.0F);
+            return;
+        }
+        // "image" mode needs artwork the pack supplies; nothing ships by default,
+        // so a missing file degrades to the solid backdrop instead of the
+        // missing-texture checkerboard.
+        if ("solid".equals(UiConfig.background) || !hasBackgroundImage()) {
+            return;
+        }
+        float zoom = 1.06F;
+        float panX = 0.0F;
+        float panY = 0.0F;
+        if (UiConfig.backgroundDrift) {
+            // Two prime-ish periods keep the loop from feeling metronomic.
+            zoom = 1.06F + (float) Math.sin(this.elapsed * 0.07F) * 0.035F;
+            panX = (float) Math.sin(this.elapsed * 0.043F) * 0.6F;
+            panY = (float) Math.cos(this.elapsed * 0.031F) * 0.4F;
+        }
+        Draw.textureCover(BACKGROUND, 0, 0, this.width, this.height,
+                BACKGROUND_W, BACKGROUND_H, zoom, panX, panY,
+                Draw.withAlpha(0xFFFFFF, this.fadeAlpha));
+    }
+
+    /**
+     * Eases the hole toward this screen's framing.
+     *
+     * Opening the options screen therefore pulls the camera back and re-centres it
+     * instead of cutting; going back pushes in again. On a resize the camera snaps,
+     * because gliding across a window that just changed size looks like a glitch
+     * rather than a move.
+     */
+    protected void advanceCamera(float targetX, float targetY, float targetRadius) {
+        if (cameraWidth != this.width || cameraHeight != this.height || cameraRadius <= 0.0F) {
+            cameraWidth = this.width;
+            cameraHeight = this.height;
+            cameraX = targetX;
+            cameraY = targetY;
+            cameraRadius = targetRadius;
+            return;
+        }
+        cameraX = Ease.approach(cameraX, targetX, 0.20F, this.delta);
+        cameraY = Ease.approach(cameraY, targetY, 0.20F, this.delta);
+        cameraRadius = Ease.approach(cameraRadius, targetRadius, 0.20F, this.delta);
+    }
+
+    /**
+     * Screens on the far side of the dive. They sit on plain black — the hole is
+     * what was fallen into, so it is not also in the room.
+     */
+    protected boolean isVoid() {
+        return false;
+    }
+
+    protected boolean isBlackHoleBackground() {
+        return "blackhole".equals(UiConfig.background);
+    }
+
+    /** Cached across screens: probing the resource manager every frame is wasteful. */
+    private static Boolean backgroundImagePresent;
+
+    protected boolean hasBackgroundImage() {
+        if (backgroundImagePresent == null) {
+            try {
+                this.mc.getResourceManager().getResource(BACKGROUND);
+                backgroundImagePresent = Boolean.TRUE;
+            } catch (java.io.IOException e) {
+                backgroundImagePresent = Boolean.FALSE;
+            }
+        }
+        return backgroundImagePresent.booleanValue();
+    }
+
+    protected float blackHoleCenterX() {
+        return this.width * 0.5F;
+    }
+
+    protected float blackHoleCenterY() {
+        return this.height * 0.42F;
+    }
+
+    protected float blackHoleRadius() {
+        return Math.min(this.width, this.height) * 0.085F;
+    }
+
+    /**
+     * How present the hole is on this screen. The title screen shows it in full;
+     * everywhere else it is set decoration behind a panel and must not compete
+     * with the controls on top of it.
+     */
+    protected float blackHoleIntensity() {
+        return 0.45F;
+    }
+
+    /**
+     * Which rung of {@link LensLibrary}'s pose ladder this screen is seen from.
+     * Different screens picking different rungs is what gives the hole something
+     * to turn between; the renderer eases from wherever it currently is.
+     */
+    protected int blackHolePose() {
+        return LensLibrary.POSE_EDGE_ON;
+    }
+
+    /** Darkens the artwork top and bottom so text stays legible over any image. */
+    protected void drawBackgroundTint() {
+        // The black hole is already mostly black and its own light is the subject —
+        // washing it out with a scrim would defeat the point.
+        float strength = isBlackHoleBackground() ? 0.35F : 1.0F;
+        int top = Draw.withAlpha(Theme.background, 0.75F * strength * this.fadeAlpha);
+        int mid = Draw.withAlpha(Theme.background, 0.25F * strength * this.fadeAlpha);
+        int bottom = Draw.withAlpha(Theme.background, 0.85F * strength * this.fadeAlpha);
+        Draw.gradientV(0, 0, this.width, this.height * 0.45F, top, mid);
+        Draw.gradientV(0, this.height * 0.45F, this.width, this.height, mid, bottom);
+    }
+
+    // --------------------------------------------------------------- overlay --
+
+    /** Post-processing drawn over everything, widgets included. */
+    protected void drawOverlay() {
+        if (UiConfig.vignette) {
+            Draw.vignette(this.width, this.height, 0.85F * this.fadeAlpha, 0xFF000000);
+        }
+        // Grain over the starfield just turns it to mush — the black hole already
+        // supplies all the texture the backdrop needs.
+        if (UiConfig.filmGrain && !isBlackHoleBackground()) {
+            drawFilmGrain();
+        }
+        if (UiConfig.scanlines) {
+            Draw.scanlines(this.width, this.height, 3.0F, Draw.withAlpha(0x000000, 0.10F * this.fadeAlpha));
+        }
+
+        // The dive covers everything, including the widgets.
+        float blackout = Transitions.blackout();
+        if (blackout > 0.002F) {
+            Draw.rect(0, 0, this.width, this.height, Draw.withAlpha(0x000000, blackout));
+        }
+    }
+
+    private void drawFilmGrain() {
+        int specks = Math.max(40, (this.width * this.height) / 900);
+        for (int i = 0; i < specks; i++) {
+            int gx = grainRandom.nextInt(this.width);
+            int gy = grainRandom.nextInt(this.height);
+            float a = (0.02F + grainRandom.nextFloat() * 0.05F) * this.fadeAlpha;
+            Draw.rect(gx, gy, gx + 1, gy + 1, Draw.withAlpha(0xFFFFFF, a));
+        }
+    }
+
+    // ---------------------------------------------------------------- pieces --
+
+    /** Section heading with an accent rule underneath. */
+    protected void drawHeading(String title, int centerX, int y) {
+        int color = Draw.withAlpha(Theme.text, this.fadeAlpha);
+        this.drawCenteredString(this.fontRendererObj, title, centerX, y, color);
+
+        float ruleWidth = Math.max(60, this.fontRendererObj.getStringWidth(title) * 0.7F);
+        float ruleY = y + 13;
+        Draw.gradientH(centerX - ruleWidth / 2, ruleY, centerX, ruleY + 1,
+                Draw.withAlpha(Theme.accent, 0.0F), Draw.withAlpha(Theme.accent, 0.8F * this.fadeAlpha));
+        Draw.gradientH(centerX, ruleY, centerX + ruleWidth / 2, ruleY + 1,
+                Draw.withAlpha(Theme.accent, 0.8F * this.fadeAlpha), Draw.withAlpha(Theme.accent, 0.0F));
+    }
+
+    /** Small dim text, left-aligned. */
+    protected void drawHint(String text, int x, int y) {
+        this.fontRendererObj.drawString(text, x, y, Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
+    }
+
+    // ----------------------------------------------------------------- input --
+
+    @Override
+    protected void actionPerformed(GuiButton button) {
+        if (!button.enabled) {
+            return;
+        }
+        onAction(button);
+    }
+
+    /** Handle a button press. */
+    protected abstract void onAction(GuiButton button);
+
+    @Override
+    public void onGuiClosed() {
+        super.onGuiClosed();
+    }
+}

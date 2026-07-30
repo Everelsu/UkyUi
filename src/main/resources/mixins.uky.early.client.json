@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_8",
+  "package": "com.console.uky.mixins",
+  "target": "@env(DEFAULT)",
+  "mixins": [],
+  "client": [
+    "MixinSplashProgress"
+  ],
+  "server": []
+}
