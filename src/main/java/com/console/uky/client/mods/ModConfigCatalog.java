@@ -77,7 +77,17 @@ public final class ModConfigCatalog {
     /** Every mod with a settings screen, by display name. Built once. */
     public static List<Entry> entries() {
         if (entries == null) {
-            entries = discover();
+            // Never throws. This is called while the settings screen is being built,
+            // so anything escaping here takes the whole screen down with it — and the
+            // input is ninety third-party jars, every one of which is free to do
+            // something unexpected when asked about its config. An empty catalogue
+            // costs one missing row; an exception costs the settings menu.
+            try {
+                entries = discover();
+            } catch (Throwable t) {
+                UkyUI.LOGGER.error("Could not build the mod settings catalogue", t);
+                entries = new ArrayList<Entry>();
+            }
         }
         return entries;
     }
