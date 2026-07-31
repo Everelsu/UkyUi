@@ -9,6 +9,7 @@ import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.world.UkyLoadingScreen;
 import com.console.uky.client.world.WorldEntryFade;
+import com.console.uky.client.world.TileShatter;
 import com.console.uky.client.world.WorldPreviews;
 import cpw.mods.fml.client.FMLClientHandler;
 import net.minecraft.client.gui.GuiButton;
@@ -16,6 +17,7 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiSelectWorld;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.storage.ISaveFormat;
 import net.minecraft.world.storage.SaveFormatComparator;
 
 import java.text.SimpleDateFormat;
@@ -55,6 +57,21 @@ public class GuiWorldsScreen extends MenuScreen {
     private float createHover;
 
     private int columns;
+    /**
+     * Seconds the bin must be held before a world is destroyed.
+     *
+     * Long enough that it cannot happen by accident and short enough that it does not
+     * feel like a punishment. Releasing early runs it back rather than freezing it, so
+     * letting go really is cancelling.
+     */
+    private static final float DELETE_HOLD_SECONDS = 1.05F;
+
+    /** Card whose bin is being held, or -1. */
+    private int holdCard = -1;
+    private float holdProgress;
+    /** Plays after the world is gone; holds nothing but pixels. */
+    private TileShatter shatter;
+
     private int tileWidth;
     private int tileHeight;
     private int gridX;
@@ -227,6 +244,7 @@ public class GuiWorldsScreen extends MenuScreen {
 
         drawHeader();
         updateHover(mouseX, mouseY);
+        updateHold();
 
         Draw.beginClip(this.gridX, this.gridY, this.gridWidth, this.gridHeight);
         drawCreateCard(0);
@@ -235,6 +253,7 @@ public class GuiWorldsScreen extends MenuScreen {
         }
         Draw.endClip();
 
+        drawShatter();
         drawScrollHint();
     }
 
@@ -435,6 +454,24 @@ public class GuiWorldsScreen extends MenuScreen {
         }
     }
 
+    /**
+     * The shards, drawn over everything and outside the grid's clip.
+     *
+     * Deliberately unclipped: a tile bursting apart should be allowed to throw pieces
+     * past the edge of the list rather than have them vanish at a boundary the player
+     * cannot see.
+     */
+    private void drawShatter() {
+        if (this.shatter == null) {
+            return;
+        }
+        this.shatter.advance(this.delta);
+        this.shatter.draw(this.fadeAlpha);
+        if (this.shatter.isFinished()) {
+            this.shatter = null;
+        }
+    }
+
     private void drawCardActions(int index, int x, float y, float hover, float alpha) {
         float box = iconBox();
         float a = hover * alpha;
@@ -452,8 +489,39 @@ public class GuiWorldsScreen extends MenuScreen {
 
         drawIconButton(x + this.tileWidth - box * 2 - 8, y + 4, box, a,
                 this.hoveredAction == HIT_RENAME && this.hoveredCard == index, false);
-        drawIconButton(x + this.tileWidth - box - 4, y + 4, box, a,
+        float binX = x + this.tileWidth - box - 4;
+        drawIconButton(binX, y + 4, box, a,
                 this.hoveredAction == HIT_DELETE && this.hoveredCard == index, true);
+        if (this.holdCard == index && this.holdProgress > 0.0F) {
+            drawHoldProgress(binX, y + 4, box, alpha);
+        }
+    }
+
+    /**
+     * The hold filling the bin button up.
+     *
+     * It was a ring drawn around the button, which was wrong twice over: a circle in a
+     * square button is the same clash that got the round toggles replaced, and putting
+     * it outside meant the mark grew over the picture instead of staying with the
+     * control being held.
+     *
+     * <p>Filling the button itself from the bottom reads as charging, keeps every
+     * pixel of the effect inside the thing under the pointer, and needs no shape the
+     * rest of the interface does not already use.
+     */
+    private void drawHoldProgress(float x, float y, float box, float alpha) {
+        float sweep = Ease.clamp01(this.holdProgress);
+
+        Draw.rect(x, y + box * (1.0F - sweep), x + box, y + box,
+                Draw.withAlpha(Theme.danger, 0.55F * alpha));
+        // A brighter line riding the top of the fill, so the movement is legible even
+        // over the last few percent when the fill itself has stopped growing much.
+        float edge = y + box * (1.0F - sweep);
+        Draw.rect(x, edge, x + box, edge + 1.0F, Draw.withAlpha(Theme.danger, alpha));
+        Draw.border(x, y, x + box, y + box, 1.0F, Draw.withAlpha(Theme.danger, alpha));
+
+        Icons.trash(x + box / 2.0F, y + box / 2.0F, box * 0.58F,
+                Draw.withAlpha(Draw.mix(Theme.danger, 0xFFFFFF, sweep), alpha));
     }
 
     private void drawIconButton(float x, float y, float box, float alpha, boolean hot,
@@ -490,6 +558,75 @@ public class GuiWorldsScreen extends MenuScreen {
 
     // ----------------------------------------------------------------- input --
 
+    /**
+     * Advances or unwinds the hold on the bin.
+     *
+     * Driven from the button being physically down rather than from a click, because
+     * the gesture is the confirmation: there is no dialogue to agree with, so the only
+     * thing that can mean "yes" is continuing to hold. Moving off the bin unwinds it
+     * too, which makes sliding away the natural cancel.
+     */
+    private void updateHold() {
+        boolean holding = org.lwjgl.input.Mouse.isButtonDown(0)
+                && this.hoveredAction == HIT_DELETE
+                && this.hoveredCard >= 0
+                && this.hoveredCard < this.worlds.size()
+                && (this.holdCard == -1 || this.holdCard == this.hoveredCard);
+
+        if (holding) {
+            this.holdCard = this.hoveredCard;
+            this.holdProgress += this.delta / DELETE_HOLD_SECONDS;
+            if (this.holdProgress >= 1.0F) {
+                destroyHeldWorld();
+            }
+            return;
+        }
+
+        // Unwound about twice as fast as it fills: a cancel should feel immediate,
+        // while the commit should feel deliberate.
+        this.holdProgress -= this.delta / DELETE_HOLD_SECONDS * 2.0F;
+        if (this.holdProgress <= 0.0F) {
+            this.holdProgress = 0.0F;
+            this.holdCard = -1;
+        }
+    }
+
+    /**
+     * Deletes the held world, then breaks its tile apart where it stood.
+     *
+     * In that order deliberately. The animation is decoration and the deletion is
+     * not, so the deletion happens first and the shards are cut from a picture of
+     * something that is already gone. Nothing about the animation can decide whether
+     * the world survived.
+     */
+    private void destroyHeldWorld() {
+        int index = this.holdCard;
+        this.holdCard = -1;
+        this.holdProgress = 0.0F;
+        if (index < 0 || index >= this.worlds.size()) {
+            return;
+        }
+
+        SaveFormatComparator world = this.worlds.get(index);
+        String folder = world.getFileName();
+        float x = slotX(index + 1);
+        float y = slotY(index + 1);
+        ResourceLocation preview = WorldPreviews.texture(folder);
+
+        try {
+            ISaveFormat saveFormat = this.mc.getSaveLoader();
+            // flushCache first: the save format keeps the directory open, and on
+            // Windows an open handle makes the delete fail silently.
+            saveFormat.flushCache();
+            saveFormat.deleteWorldDirectory(folder);
+        } catch (Throwable t) {
+            UkyUI.LOGGER.warn("Could not delete world {}", folder, t);
+        }
+
+        this.shatter = new TileShatter(preview, x, y, this.tileWidth, this.tileHeight);
+        loadWorlds();
+    }
+
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
         if (Transitions.isBusy() || isZooming()) {
@@ -511,8 +648,8 @@ public class GuiWorldsScreen extends MenuScreen {
                             GuiWorldPromptScreen.Mode.RENAME, world.getFileName()));
                     return;
                 case HIT_DELETE:
-                    this.mc.displayGuiScreen(new GuiWorldPromptScreen(this,
-                            GuiWorldPromptScreen.Mode.DELETE, world.getFileName()));
+                    // Nothing on click. The bin is a hold, and a dialogue on top of a
+                    // hold would be two confirmations for one action.
                     return;
                 default:
                     // Grows the tile to fill the screen first; play() runs when it

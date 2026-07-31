@@ -286,6 +286,42 @@ public final class Draw {
      * Draws a whole texture stretched into the given rect, tinted by {@code argb}.
      * Unlike Gui.drawTexturedModalRect this does not assume a 256x256 sheet.
      */
+    /**
+     * A textured quad taking its pixels from an arbitrary part of the texture, drawn
+     * rotated about its own centre.
+     *
+     * This exists for the shards a tile breaks into. Cutting the world's own preview
+     * into a grid and giving each piece its own corner of it is what makes the tile
+     * shatter into that world rather than into an anonymous rectangle, and each piece
+     * has to be able to tumble independently.
+     */
+    public static void textureShard(ResourceLocation tex, float cx, float cy,
+                                    float halfW, float halfH, float degrees,
+                                    float u1, float v1, float u2, float v2, int argb) {
+        Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        color(argb);
+
+        GL11.glPushMatrix();
+        GL11.glTranslatef(cx, cy, 0.0F);
+        GL11.glRotatef(degrees, 0.0F, 0.0F, 1.0F);
+
+        Tessellator t = Tessellator.instance;
+        t.startDrawingQuads();
+        t.addVertexWithUV(-halfW, halfH, 0.0D, u1, v2);
+        t.addVertexWithUV(halfW, halfH, 0.0D, u2, v2);
+        t.addVertexWithUV(halfW, -halfH, 0.0D, u2, v1);
+        t.addVertexWithUV(-halfW, -halfH, 0.0D, u1, v1);
+        t.draw();
+
+        GL11.glPopMatrix();
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
     public static void texture(ResourceLocation tex, float x, float y, float w, float h, int argb) {
         Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
