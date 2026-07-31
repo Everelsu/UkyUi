@@ -2,6 +2,7 @@ package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.mods.ModConfigCatalog;
+import com.console.uky.client.mods.VideoSettingsTakeover;
 import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.gui.widget.MenuOptionButton;
 import com.console.uky.client.gui.widget.MenuSlider;
@@ -227,6 +228,10 @@ public class GuiSettingsScreen extends MenuScreen {
                 y = pair(y, index, GameSettings.Options.GAMMA, GameSettings.Options.MIPMAP_LEVELS);
                 index += 2;
                 y = pair(y, index, GameSettings.Options.ANISOTROPIC_FILTERING, GameSettings.Options.FBO_ENABLE);
+                if (VideoSettingsTakeover.isClaimed()) {
+                    y += this.rowHeight + this.rowGap;
+                    addLink(ID_VIDEO, this.leftColumn, y, "uky.settings.videoTakeover", index++);
+                }
                 break;
             case 2:
                 addLink(ID_SOUNDS, this.leftColumn, y, "options.sounds", index++);
@@ -257,6 +262,7 @@ public class GuiSettingsScreen extends MenuScreen {
 
     private static final int ID_MODS = 107;
     private static final int ID_MOD_SETTINGS = 108;
+    private static final int ID_VIDEO = 109;
 
     /** Lays two options side by side and returns the next row's y. */
     private int pair(int y, int index, GameSettings.Options left, GameSettings.Options right) {
@@ -415,6 +421,9 @@ public class GuiSettingsScreen extends MenuScreen {
                 break;
             case ID_MOD_SETTINGS:
                 openSub(new GuiModSettingsScreen(this));
+                break;
+            case ID_VIDEO:
+                openSub(VideoSettingsTakeover.open(this, this.settings));
                 break;
             case ID_DONE:
                 this.settings.saveOptions();

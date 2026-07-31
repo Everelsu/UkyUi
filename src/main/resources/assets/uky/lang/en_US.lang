@@ -38,3 +38,4 @@ uky.modSettings.none=No mod in this pack has a settings screen.
 uky.modSettings.noMatch=No mod matches that.
 uky.modSettings.defaults=Reset section
 uky.modSettings.list=list
+uky.settings.videoTakeover=Renderer settings...
