@@ -1,6 +1,7 @@
 package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.gui.MenuScreen;
+import com.console.uky.client.mods.ModConfigCatalog;
 import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.gui.widget.MenuOptionButton;
 import com.console.uky.client.gui.widget.MenuSlider;
@@ -235,6 +236,12 @@ public class GuiSettingsScreen extends MenuScreen {
                 addLink(ID_SNOOPER, this.rightColumn, y, "options.snooper.view", index++);
                 y += this.rowHeight + this.rowGap;
                 addLink(ID_MODS, this.leftColumn, y, "uky.menu.mods", index++);
+                // Only offered when something in the pack actually has settings, which
+                // on a bare install is nothing at all.
+                if (!ModConfigCatalog.entries().isEmpty()) {
+                    addLink(ID_MOD_SETTINGS, this.rightColumn, y, "uky.modSettings.title",
+                            index++);
+                }
                 y += this.rowHeight + this.rowGap;
                 y = pair(y, index, GameSettings.Options.FORCE_UNICODE_FONT, GameSettings.Options.SNOOPER_ENABLED);
                 break;
@@ -242,6 +249,7 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     private static final int ID_MODS = 107;
+    private static final int ID_MOD_SETTINGS = 108;
 
     /** Lays two options side by side and returns the next row's y. */
     private int pair(int y, int index, GameSettings.Options left, GameSettings.Options right) {
@@ -397,6 +405,9 @@ public class GuiSettingsScreen extends MenuScreen {
                 break;
             case ID_MODS:
                 openSub(new GuiModsScreen(this));
+                break;
+            case ID_MOD_SETTINGS:
+                openSub(new GuiModSettingsScreen(this));
                 break;
             case ID_DONE:
                 this.settings.saveOptions();
