@@ -5,6 +5,7 @@ import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.BufferUtils;
+import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL12;
@@ -485,6 +486,20 @@ public final class BlackHole {
      * it, and the dissolve covers the difference.
      */
     private boolean traceIsStale() {
+        // Nothing behind another window is worth re-tracing. The picture is held on
+        // the last one taken and picks up again on the way back, which nobody can see
+        // happen because they were not looking at it.
+        //
+        // This is also a guard rather than only a saving. The trace rate here is
+        // wall-clock gated and so does not follow the frame rate — measured at a
+        // steady 6 traces a second whether the window was focused, covered by a
+        // full-screen window, or not — but a background window is exactly where the
+        // game's own frame limiter and the driver's presentation stop agreeing with
+        // each other, and this puts the hole's cost at zero there either way.
+        if (offscreen.hasContent() && !Display.isActive()) {
+            return false;
+        }
+
         long now = System.nanoTime();
         float pose = LensLibrary.elevationAt(this.poseCurrent);
 
