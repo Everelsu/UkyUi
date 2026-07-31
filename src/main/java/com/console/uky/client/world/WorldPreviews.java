@@ -34,9 +34,21 @@ import java.util.Set;
 public final class WorldPreviews {
 
     private static final String FILE_NAME = "uky_preview.png";
-    /** Stored small: it is only ever shown as a tile or a stretched backdrop. */
-    private static final int WIDTH = 480;
-    private static final int HEIGHT = 270;
+    /**
+     * Stored at 960x540.
+     *
+     * It was half this, on the reasoning that a tile is small. A tile is not small:
+     * four across a 1080p window makes each one roughly six hundred pixels wide, so
+     * 480 was being stretched past its own resolution and read as soft — and the same
+     * image is used full-screen as the loading backdrop, where 480 is very soft
+     * indeed. At 960 the tile is a downscale rather than an upscale on any ordinary
+     * window, which is the side of 1:1 to be on.
+     *
+     * Four times the pixels, and still only a couple of hundred kilobytes of PNG per
+     * world, written once when you leave.
+     */
+    private static final int WIDTH = 960;
+    private static final int HEIGHT = 540;
 
     private static final Map<String, ResourceLocation> TEXTURES =
             new HashMap<String, ResourceLocation>();
