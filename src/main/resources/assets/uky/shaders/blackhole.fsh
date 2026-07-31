@@ -53,8 +53,6 @@ const float ESCAPE         = 110.0;
  * misses the disk outright or grazes it on an almost straight line.
  */
 const float FAR_FIELD      = 42.0;
-// Inside this radius a ray is still being bent hard enough to be worth finishing.
-const float STRONG_FIELD   = 8.0;
 /** How far before closest approach the integration actually starts. */
 const float RUN_IN         = 45.0;
 
@@ -194,33 +192,29 @@ void main() {
     // Rays that stay far out need far fewer steps to resolve.
     int budget = impact > FAR_FIELD ? uSteps / 3 : uSteps;
 
-    // A ray still deep in the field when its budget runs out is mid-orbit, and it is
-    // the only kind that makes the photon ring: the ring is light that wound most of
-    // the way round and came back out across the disk. At the photon sphere a step is
-    // about 0.11 long and the circuit is about 19, so one turn alone costs some 165
-    // steps — more than the whole budget at the lower quality settings. Those rays
-    // were cut off mid-turn and the ring simply never formed, which is what a config
-    // carrying blackHoleQuality=140 looked like: disk present, ring absent.
-    //
-    // So the limit is soft. A ray outside the strong field stops at its budget as
-    // before; one still inside may run on to finish what it started. It costs almost
-    // nothing on average because the rays that qualify are a thin annulus of the
-    // picture, and everything else is untouched.
-    int hardCap = budget * 5 / 2;
 
     vec3 colour = vec3(0.0);
     float transmission = 1.0;
     bool captured = false;
 
     for (int i = 0; i < 512; i++) {
+        // A hard limit, deliberately. Letting rays still deep in the field run on to
+        // finish their orbit does bring the ring back at low budgets, and it brings
+        // it back speckled: the number of turns a ray completes is chaotic in its
+        // impact parameter, so neighbouring pixels end up with different counts and
+        // the ring breaks into dots. Cutting every ray at the same point is what
+        // keeps neighbours agreeing with each other. The budget therefore has to be
+        // large enough for the orbit outright, which is what the floor on
+        // blackHoleQuality is for.
+        if (i >= budget) {
+            break;
+        }
         float r = length(p);
         if (r < HORIZON) {
             captured = true;
             break;
         }
-        if (i >= budget && (r > STRONG_FIELD || i >= hardCap)) {
-            break;
-        }
+
         if (r > ESCAPE || transmission < 0.01) {
             break;
         }

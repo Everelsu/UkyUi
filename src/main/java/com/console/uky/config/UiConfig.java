@@ -1,6 +1,7 @@
 package com.console.uky.config;
 
 import net.minecraftforge.common.config.Configuration;
+import net.minecraftforge.common.config.Property;
 
 import java.io.File;
 
@@ -150,11 +151,21 @@ public final class UiConfig {
         background = str(CAT_EFFECTS, "background", "blackhole",
                 "Menu backdrop: 'blackhole' (rendered in code), 'image' "
                         + "(assets/uky/textures/gui/background.png) or 'solid'.");
-        blackHoleQuality = clampInt(CAT_EFFECTS, "blackHoleQuality", 200, 40, 420,
+        // The floor is 200 and not lower on purpose. Near the photon sphere a step is
+        // about 0.11 long and the circuit about 19, so one turn costs some 165 steps,
+        // and the photon ring is made of light that went most of the way round and
+        // came back out across the disk. Below roughly 200 those rays are cut off
+        // mid-turn and the ring does not form at all — the hole comes out as a plain
+        // dark blob with no rim, which is what a config carrying 140 looked like. It
+        // reads as a broken render rather than a cheaper one, so the setting no longer
+        // offers it. Existing configs below the floor are raised to it on load.
+        blackHoleQuality = clampInt(CAT_EFFECTS, "blackHoleQuality", 200, 200, 420,
                 "Light-path steps per pixel for the black hole. This is what it costs "
-                        + "to draw: halve it if the menu runs badly, raise it if the "
-                        + "photon ring looks ragged. 40 is very cheap, 320 is reference "
-                        + "quality.");
+                        + "to draw. 200 is the least that still completes the orbits "
+                        + "the photon ring is made of; below that the ring disappears "
+                        + "entirely, so the range starts there. 320 is reference "
+                        + "quality. If the menu runs badly, lower blackHoleResolution "
+                        + "instead — it costs roughly the square of its value.");
         blackHoleResolution = clampInt(CAT_EFFECTS, "blackHoleResolution", 150, 50, 200,
                 "Resolution the black hole is traced at, as a percentage of the "
                         + "window. 100 is native. 150-200 supersamples and averages "
@@ -232,7 +243,18 @@ public final class UiConfig {
     }
 
     private static int clampInt(String cat, String key, int def, int min, int max, String comment) {
-        return config.getInt(key, cat, def, min, max, comment);
+        int value = config.getInt(key, cat, def, min, max, comment);
+
+        // getInt clamps what it hands back but leaves the stored property alone, so a
+        // file carrying an out-of-range value goes on displaying it while the game
+        // quietly uses something else. Anyone who then went looking for why the black
+        // hole ignored their setting would find the old number sitting there. Write
+        // the effective value back instead.
+        Property property = config.get(cat, key, def);
+        if (property.getInt(def) != value) {
+            property.set(value);
+        }
+        return value;
     }
 
     private static double dbl(String cat, String key, double def, double min, double max, String comment) {
