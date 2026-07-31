@@ -7,6 +7,7 @@ import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.gui.widget.MenuOptionButton;
 import com.console.uky.client.gui.widget.MenuSlider;
 import com.console.uky.client.render.Draw;
+import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.gui.GuiButton;
@@ -60,6 +61,23 @@ public class GuiSettingsScreen extends MenuScreen {
     private int panelY1;
     private int panelX2;
     private int panelY2;
+    /**
+     * Rows belonging to the current tab, as opposed to the tabs and Done.
+     *
+     * Kept apart from {@code buttonList} because only these scroll. The chrome has to
+     * stay where it is or the header would slide away with the content.
+     */
+    private final java.util.List<MenuButton> contentRows =
+            new java.util.ArrayList<MenuButton>();
+
+    /** Each row's laid-out y, so the offset never compounds across frames. */
+    private int[] rowNominalY = new int[0];
+
+    private float scroll;
+    private float scrollTarget;
+    /** Height the rows actually need, which may exceed the space available. */
+    private int contentExtent;
+
     private int contentTop;
     private int columnWidth;
     private int leftColumn;
@@ -102,8 +120,14 @@ public class GuiSettingsScreen extends MenuScreen {
         int doneY = this.panelY2 - (cramped ? 10 : PADDING) - doneHeight;
         this.footerRuleY = doneY - (cramped ? 8 : 16);
 
+        this.contentRows.clear();
+
+        // Rows are sized for comfort now rather than squeezed to fit the tab that has
+        // the most of them. Anything that does not fit scrolls, which is the whole
+        // point of the change: a tab is free to be longer than the panel.
         int rows = TAB_ROWS[Math.min(activeTab, TAB_ROWS.length - 1)];
-        int slot = Math.max(17, (this.footerRuleY - (cramped ? 8 : 12) - this.contentTop) / rows);
+        int available = this.footerRuleY - (cramped ? 8 : 12) - this.contentTop;
+        int slot = Math.max(22, available / Math.min(rows, 6));
         // Roughly a 3:2 split between the control and the air under it. The upper
         // clamps stop a tall window producing absurdly fat rows; the lower ones are
         // the smallest that still reads, and the gap yields before the row does.
@@ -112,6 +136,7 @@ public class GuiSettingsScreen extends MenuScreen {
 
         buildTabs();
         buildContent();
+        measureContent();
 
         // Full content width and centred. On the right under one column it sat
         // outside the reading path entirely and simply went unnoticed.
@@ -279,6 +304,85 @@ public class GuiSettingsScreen extends MenuScreen {
                 : new MenuOptionButton(option.returnEnumOrdinal(), x, y, this.columnWidth, this.rowHeight, option);
         widget.entrance(0.06F + index * 0.02F);
         this.buttonList.add(widget);
+        this.contentRows.add(widget);
+    }
+
+    /**
+     * How far the rows reach past the bottom of the visible area.
+     *
+     * Taken from the rows themselves rather than from a count, because the tabs lay
+     * their content out differently and a formula would have to be kept in step with
+     * every one of them.
+     */
+    private void measureContent() {
+        int bottom = this.contentTop;
+        for (MenuButton row : this.contentRows) {
+            bottom = Math.max(bottom, row.yPosition + row.height);
+        }
+        this.contentExtent = bottom - this.contentTop;
+
+        this.rowNominalY = new int[this.contentRows.size()];
+        for (int i = 0; i < this.contentRows.size(); i++) {
+            this.rowNominalY[i] = this.contentRows.get(i).yPosition;
+        }
+
+        int visible = viewportHeight();
+        float max = Math.max(0.0F, this.contentExtent - visible);
+        if (this.scrollTarget > max) {
+            this.scrollTarget = max;
+        }
+        if (this.scroll > max) {
+            this.scroll = max;
+        }
+    }
+
+    private int viewportHeight() {
+        return Math.max(20, this.footerRuleY - 6 - this.contentTop);
+    }
+
+    private float maxScroll() {
+        return Math.max(0.0F, this.contentExtent - viewportHeight());
+    }
+
+    /**
+     * Moves the rows to where the scroll says they are.
+     *
+     * The buttons are genuinely moved rather than drawn offset, so hit testing,
+     * hovering and the marquee all follow without any of them needing to know that
+     * scrolling exists. The nominal position is remembered on the first pass so the
+     * offset is always applied to the layout rather than compounding.
+     */
+    private void applyScroll() {
+        this.scroll = Ease.approach(this.scroll, this.scrollTarget, 0.05F, this.delta);
+        int offset = Math.round(this.scroll);
+        for (int i = 0; i < this.contentRows.size(); i++) {
+            MenuButton row = this.contentRows.get(i);
+            int nominal = this.rowNominalY[i];
+            row.yPosition = nominal - offset;
+            // A row scrolled out of the viewport is hidden outright: half a button
+            // poking past the rule reads as a mistake, and an invisible one must not
+            // stay clickable.
+            row.visible = row.yPosition + row.height > this.contentTop
+                    && row.yPosition < this.footerRuleY - 4;
+        }
+    }
+
+    /** The scrollbar, shown only when there is something to scroll. */
+    private void drawScrollbar(float alpha) {
+        float max = maxScroll();
+        if (max <= 0.5F) {
+            return;
+        }
+        int visible = viewportHeight();
+        float trackX = this.panelX2 - PADDING + 6;
+        float thumbHeight = Math.max(18.0F, visible * visible / (float) this.contentExtent);
+        float travel = visible - thumbHeight;
+        float thumbY = this.contentTop + travel * (this.scroll / max);
+
+        Draw.rect(trackX, this.contentTop, trackX + 2, this.contentTop + visible,
+                Draw.withAlpha(Theme.separator, 0.35F * alpha));
+        Draw.rect(trackX, thumbY, trackX + 2, thumbY + thumbHeight,
+                Draw.withAlpha(Theme.accent, 0.8F * alpha));
     }
 
     private void addLink(int id, int x, int y, String langKey, int index) {
@@ -289,6 +393,7 @@ public class GuiSettingsScreen extends MenuScreen {
         link.align(MenuButton.Align.LEFT);
         link.entrance(0.06F + index * 0.02F);
         this.buttonList.add(link);
+        this.contentRows.add(link);
     }
 
     // --------------------------------------------------------------- drawing --
@@ -329,6 +434,7 @@ public class GuiSettingsScreen extends MenuScreen {
     @Override
     protected void drawContent(int mouseX, int mouseY) {
         drawGlassPanel();
+        applyScroll();
 
         this.fontRendererObj.drawString(I18n.format("options.title", new Object[0]),
                 panelX1 + PADDING, panelY1 + 14, Draw.withAlpha(Theme.text, this.fadeAlpha));
@@ -348,6 +454,8 @@ public class GuiSettingsScreen extends MenuScreen {
                 this.footerRuleY + 1,
                 Draw.withAlpha(Theme.accent, 0.35F * this.fadeAlpha),
                 Draw.withAlpha(Theme.accent, 0.0F));
+
+        drawScrollbar(this.fadeAlpha);
     }
 
     /**
@@ -382,6 +490,16 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     // ----------------------------------------------------------------- input --
+
+    @Override
+    public void handleMouseInput() {
+        super.handleMouseInput();
+        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        if (wheel != 0 && maxScroll() > 0.0F) {
+            this.scrollTarget -= (wheel > 0 ? 1 : -1) * (this.rowHeight + this.rowGap) * 1.5F;
+            this.scrollTarget = Math.max(0.0F, Math.min(maxScroll(), this.scrollTarget));
+        }
+    }
 
     @Override
     protected void onAction(GuiButton button) {
