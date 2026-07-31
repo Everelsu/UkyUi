@@ -625,21 +625,30 @@ public final class BlackHole {
         GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
         ShaderProgram dissolve = dissolveProgram();
-        boolean canDissolve = dissolve != null && blend < 0.999F && previous.hasContent()
+        boolean fading = blend < 0.999F && previous.hasContent()
                 && previous.matches(offscreen.getWidth(), offscreen.getHeight());
+        if (!fading) {
+            blend = 1.0F;
+        }
 
-        if (canDissolve) {
+        if (dissolve != null) {
+            // Everything goes through the program, dissolving or not: it is also what
+            // keeps the photon ring wide enough to see on a small window, and that has
+            // to hold between dissolves as much as during one.
             dissolve.bind();
             dissolve.set("uMix", blend);
             dissolve.set("uIntensity", intensity);
             dissolve.set("uPrevious", 0);
             dissolve.set("uCurrent", 1);
+            dissolve.set("uTap", 1.0F / Math.max(1, mc.displayWidth),
+                    1.0F / Math.max(1, mc.displayHeight));
+            dissolve.set("uRingLift", ringLift(mc.displayWidth));
 
             GL13.glActiveTexture(GL13.GL_TEXTURE1);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             offscreen.bindTexture();
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
-            previous.bindTexture();
+            (fading ? previous : offscreen).bindTexture();
 
             blitQuad(cx, cy, halfW, halfH, 1.0F);
 
@@ -655,6 +664,20 @@ public final class BlackHole {
 
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
         return true;
+    }
+
+    /**
+     * Width past which the photon ring is wide enough to read on its own.
+     *
+     * Measured, not guessed: across the shadow's edge a 1296-wide window put the ring
+     * over three or four pixels and an 870-wide one over exactly one.
+     */
+    private static final float RING_COMFORTABLE_WIDTH = 1280.0F;
+
+    /** How hard to widen thin highlights, from none at all on a large window. */
+    private static float ringLift(int displayWidth) {
+        float shortfall = (RING_COMFORTABLE_WIDTH - displayWidth) / RING_COMFORTABLE_WIDTH;
+        return shortfall <= 0.0F ? 0.0F : (shortfall >= 1.0F ? 1.0F : shortfall);
     }
 
     /** Premultiplied quad covering the hole's rect. */

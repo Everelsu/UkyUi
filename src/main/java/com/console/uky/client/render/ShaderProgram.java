@@ -160,6 +160,10 @@ public final class ShaderProgram {
         GL20.glUniform1i(location(name), value);
     }
 
+    public void set(String name, float x, float y) {
+        GL20.glUniform2f(location(name), x, y);
+    }
+
     public void set(String name, float r, float g, float b) {
         GL20.glUniform3f(location(name), r, g, b);
     }
