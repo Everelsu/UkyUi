@@ -359,11 +359,12 @@ public class GuiSettingsScreen extends MenuScreen {
             MenuButton row = this.contentRows.get(i);
             int nominal = this.rowNominalY[i];
             row.yPosition = nominal - offset;
-            // A row scrolled out of the viewport is hidden outright: half a button
-            // poking past the rule reads as a mistake, and an invisible one must not
-            // stay clickable.
-            row.visible = row.yPosition + row.height > this.contentTop
-                    && row.yPosition < this.footerRuleY - 4;
+            // Shown only when the row is *entirely* inside the viewport. Allowing a
+            // partial one meant its visible half was still drawn, and with no clip
+            // around the button pass it landed on top of the tab strip and the title.
+            // Whole rows only is the version that needs no clipping to be correct.
+            row.visible = row.yPosition >= this.contentTop
+                    && row.yPosition + row.height <= this.footerRuleY - 4;
         }
     }
 
