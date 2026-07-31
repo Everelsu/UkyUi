@@ -90,7 +90,7 @@ public class GuiSettingsScreen extends MenuScreen {
         this.columnWidth = (panelWidth - PADDING * 2 - COLUMN_GAP) / 2;
         this.leftColumn = this.panelX1 + PADDING;
         this.rightColumn = this.leftColumn + this.columnWidth + COLUMN_GAP;
-        this.contentTop = this.panelY1 + TAB_RULE_OFFSET + 22;
+        this.contentTop = this.panelY1 + TAB_RULE_OFFSET + 16;
 
         // The footer is reserved first, then the rows share what is left. Sizing in
         // that order is what stops a tall tab from running over the Done button.
@@ -126,7 +126,14 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     /** Distance from the panel's top edge down to the rule beneath the tabs. */
-    private static final int TAB_RULE_OFFSET = 56;
+    /**
+     * Distance from the panel's top to the rule under the tabs.
+     *
+     * Was 56, which left a band of empty panel above the first row of options taller
+     * than the options themselves. The title sits at 14, the tabs at 26, and a tab is
+     * 18 tall, so the rule only needs to clear 44.
+     */
+    private static final int TAB_RULE_OFFSET = 48;
 
     /** Left edge and width of each tab, in screen units. Filled by {@link #buildTabs}. */
     private final int[] tabX = new int[TABS.length];
@@ -173,13 +180,13 @@ public class GuiSettingsScreen extends MenuScreen {
         int x = this.panelX1 + PADDING;
         for (int i = 0; i < TABS.length; i++) {
             this.tabX[i] = x;
-            MenuButton tab = new MenuButton(ID_TAB_BASE + i, x, this.panelY1 + 32,
+            MenuButton tab = new MenuButton(ID_TAB_BASE + i, x, this.panelY1 + 26,
                     this.tabWidth[i], 18,
                     I18n.format(TABS[i], new Object[0]), MenuButton.Style.GHOST);
             // The rule below the row and the marker on it already say which tab is
             // active; the ghost style's own connector and underline only added
             // clutter to every single one.
-            tab.align(MenuButton.Align.LEFT).plain();
+            tab.align(MenuButton.Align.LEFT).plain().steady();
             tab.entrance(0.02F + i * 0.03F);
             if (i == activeTab) {
                 tab.selected();

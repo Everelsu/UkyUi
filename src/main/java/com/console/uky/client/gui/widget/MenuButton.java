@@ -52,6 +52,8 @@ public class MenuButton extends GuiButton {
      * lines.
      */
     private boolean plain;
+    /** Pins the label's x, for buttons laid out in a row rather than a column. */
+    private boolean steady;
 
     /** Seconds to wait before this button plays its entrance animation. */
     private float entranceDelay;
@@ -89,6 +91,20 @@ public class MenuButton extends GuiButton {
 
     public MenuButton align(Align align) {
         this.align = align;
+        return this;
+    }
+
+    /**
+     * Stops the label drifting sideways under the pointer.
+     *
+     * The nudge reads well in a vertical menu, where it is the only thing moving and
+     * it leads the eye along the row. In a horizontal strip it does the opposite: the
+     * neighbours stay put while one item slides, so the whole row looks loose — and a
+     * tab held selected keeps its nudge permanently, which is why the selected tab sat
+     * offset from the rest even when nothing was being hovered.
+     */
+    public MenuButton steady() {
+        this.steady = true;
         return this;
     }
 
@@ -273,7 +289,7 @@ public class MenuButton extends GuiButton {
 
         int labelWidth = font.getStringWidth(this.displayString);
         if (this.align == Align.LEFT) {
-            float padding = 12.0F + this.hover * 6.0F;
+            float padding = this.steady ? 12.0F : 12.0F + this.hover * 6.0F;
             float textX = x1 + padding;
             float markY = (y1 + y2) / 2.0F;
 
