@@ -117,6 +117,13 @@ public final class BlackHole {
      * as they sweep round and wind up against the slower outer material.
      */
     private static final float SPIN_RATE = 1.25F;
+
+    /**
+     * Phase at which the accumulator restarts, chosen for arithmetic rather than
+     * looks: it is the largest value that still leaves a float enough fractional
+     * precision for the angles derived from it. Roughly twenty-seven minutes.
+     */
+    private static final float SPIN_WRAP = 2000.0F;
     static final float CONTRAST_FLOOR = 0.30F;
     static final float CONTRAST_RANGE = 1.45F;
 
@@ -212,6 +219,23 @@ public final class BlackHole {
         // camera swinging round, not snapping.
         this.poseCurrent = Ease.approach(this.poseCurrent, this.poseTarget, 0.16F, deltaSeconds);
         this.spin += deltaSeconds * SPIN_RATE;
+        // Kept bounded, or the disk goes smooth after a while.
+        //
+        // The phase only ever grew. The shader turns it into a per-radius angle,
+        // omega = spin * 12 / r^1.5, and takes its cosine — and a float carries about
+        // seven digits in total, so once the phase is in the tens of thousands there
+        // is almost nothing left below the decimal point. The angle then quantises,
+        // neighbouring radii stop differing smoothly, and the disk's banding degrades
+        // into noise finer than a pixel, which averages to a flat wash. It looked like
+        // the detail slowly fading out over an hour, and it came back on restart.
+        //
+        // Wrapping cannot be seamless — the pattern is not periodic in the phase, by
+        // design, since the inner disk laps the outer. But at a seventh of a second
+        // per trace the dissolve carries the wrap as a soft morph rather than a jump,
+        // and once every twenty-odd minutes at that.
+        if (this.spin > SPIN_WRAP) {
+            this.spin -= SPIN_WRAP;
+        }
         this.churn += deltaSeconds * 0.35F;
         this.drift += deltaSeconds * 0.006F;
         updateInfall(deltaSeconds);

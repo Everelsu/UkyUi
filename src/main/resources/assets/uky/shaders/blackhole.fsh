@@ -124,7 +124,9 @@ void sampleDisk(vec3 p, vec3 dir, out vec3 emission, out float density) {
     // Keplerian shear: the pattern winds up because the inner disk laps the outer.
     // The sample point is rotated directly rather than going through atan() and
     // back out through cos/sin — the components of the angle are already in p.
-    float omega = uSpin * invSqrtL / l * 12.0;
+    // Reduced before the trigonometry: cosine and sine are periodic, so this changes
+    // nothing about the result and keeps their argument small enough to stay accurate.
+    float omega = mod(uSpin * invSqrtL / l * 12.0, 6.28318530718);
     float cw = cos(omega);
     float sw = sin(omega);
     float turbulence = fbm(vec3((p.x * cw - p.y * sw) * 0.35,
