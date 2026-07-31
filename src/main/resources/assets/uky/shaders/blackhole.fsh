@@ -27,9 +27,6 @@ uniform vec3  uHot;         // inner disk colour
 uniform vec3  uMid;
 uniform vec3  uCold;        // outer disk colour
 uniform int   uSteps;       // integration budget, lowered on weak hardware
-uniform sampler3D uNoise;   // baked turbulence, see NoiseVolume
-uniform float uNoisePeriod; // world units the volume spans before it repeats
-uniform bool  uHasNoise;    // false if the volume could not be uploaded
 
 // Units: G = c = M = 1. Horizon at 2, photon sphere at 3, ISCO at 6.
 const float HORIZON       = 2.02;
@@ -73,17 +70,21 @@ float vnoise(vec3 x) {
 }
 
 /**
- * Three octaves of value noise.
+ * Three octaves of value noise, evaluated rather than looked up.
  *
- * Normally a single fetch from the baked volume: the field is constant, and
- * evaluating it here meant recomputing about 240 operations per sample, hundreds of
- * times over for every pixel that crosses the disk. The analytic branch is kept for
- * hardware that would not take the 3D texture, where a slow disk still beats none.
+ * This was briefly a fetch from a baked 128^3 volume, on the reasoning that the
+ * field is constant and recomputing it per sample is waste. The reasoning was sound
+ * and the resolution was not: sixteen world units across 128 texels is eight texels
+ * per unit, while the finest octave here has features a quarter of a unit wide. That
+ * is exactly Nyquist, and trilinear filtering finishes off what sampling at the limit
+ * leaves — the top octave disappeared and the disk's banding went smooth. It was
+ * reported as broken rings from the first second, which is precisely what it was.
+ *
+ * The lookup measured 19% off the trace. The trace is now a quarter of what it was,
+ * so that 19% is worth about five percent of a frame — nothing like enough to pay for
+ * the detail it was quietly eating.
  */
 float fbm(vec3 p) {
-    if (uHasNoise) {
-        return texture3D(uNoise, p / uNoisePeriod).r;
-    }
     return vnoise(p) * 0.5 + vnoise(p * 2.13) * 0.25 + vnoise(p * 4.31) * 0.125;
 }
 
