@@ -1,25 +1,72 @@
-# Gradle
-.gradle/
+```gitignore
+# Compiled and binary files
+*.class
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+
+# Dependencies
+lib/
+libs/
+dependency/
+dependencies/
+
+# Build artifacts
+target/
 build/
-
-# RetroFuturaGradle unpacks and decompiles Minecraft into these — hundreds of
-# megabytes, all of it regenerable from the build script.
-run/
-!run/mods/.gitkeep
-
-# IDE
-.idea/
-*.iml
-*.ipr
-*.iws
-.vscode/
+dist/
 out/
 
-# OS
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Coverage and testing
+coverage/
+htmlcov/
+.coverage
+
+# System files
 .DS_Store
 Thumbs.db
 
-# Local overrides. gradle.properties is tracked because it pins the toolchain, but
-# a machine-specific copy should not be.
-gradle-local.properties
-local.properties
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+```
