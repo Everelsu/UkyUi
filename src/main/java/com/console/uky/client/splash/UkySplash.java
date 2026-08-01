@@ -76,11 +76,6 @@ public final class UkySplash {
             if (!UiConfig.customSplash) {
                 return false;
             }
-            if (hasStateManager()) {
-                log("a GL state manager is installed; leaving the loading screen to FML."
-                        + " See UkySplash.hasStateManager for why.", null);
-                return false;
-            }
             displayMutex = findDisplayMutex();
 
             drawable = new SharedDrawable(Display.getDrawable());
@@ -175,42 +170,6 @@ public final class UkySplash {
         } catch (Exception e) {
             log("could not reach FML's display mutex; window events may stutter", e);
             return null;
-        }
-    }
-
-    /**
-     * Whether something is shadowing the GL state, in which case this screen must not run.
-     *
-     * Angelica rewrites every {@code GL11} call in every mod class into its own
-     * {@code GLStateManager}, which keeps a Java-side copy of the driver's state and,
-     * for immediate mode, records the vertices between a begin and an end. That copy is
-     * one global thing belonging to the render thread. This screen is a second thread
-     * drawing immediate-mode geometry on a shared context — so its begin/end pairs land
-     * in that recorder from a thread it does not expect, and leave the count unbalanced.
-     * The main thread then builds the sky in {@code RenderGlobal}'s constructor, and the
-     * first {@code Tessellator.draw} after us dies with "glEnd called without glBegin".
-     * On a pack that loads for thirty seconds we draw hundreds of frames into it, which
-     * is why a small development instance survives and a real modpack does not.
-     *
-     * <p>FML's own splash does the same thing and is fine, because Angelica knows about
-     * it: it ships a list of mods whose classes it stops rewriting — Xaeros, which also
-     * renders off-thread, is on it. The list is Angelica's, not something a mod can add
-     * itself to, so there is no version of this screen that coexists with it. Falling
-     * back is the whole fix.
-     *
-     * <p>Looked up as a resource rather than by loading the class. Loading another mod's
-     * class this early runs its static initialiser at a moment nothing has agreed to,
-     * and the only question here is whether the file exists.
-     */
-    private static boolean hasStateManager() {
-        try {
-            ClassLoader loader = UkySplash.class.getClassLoader();
-            return loader != null
-                    && (loader.getResource("com/gtnewhorizons/angelica/glsm/GLStateManager.class") != null
-                        || loader.getResource("com/mitchej123/glsm/GLStateManagerService.class") != null);
-        } catch (Throwable t) {
-            // Unanswerable, so assume not: the loading screen is worth one attempt.
-            return false;
         }
     }
 
