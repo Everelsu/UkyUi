@@ -109,8 +109,7 @@ public final class WorldPreviews {
                 MISSING.add(folderName);
                 return null;
             }
-            ResourceLocation location = new ResourceLocation("uky",
-                    "worldpreview/" + folderName.toLowerCase().replaceAll("[^a-z0-9_-]", "_"));
+            ResourceLocation location = new ResourceLocation("uky", texturePath(folderName));
             Minecraft.getMinecraft().getTextureManager()
                     .loadTexture(location, new DynamicTexture(image));
             TEXTURES.put(folderName, location);
@@ -120,6 +119,23 @@ public final class WorldPreviews {
             MISSING.add(folderName);
             return null;
         }
+    }
+
+    /**
+     * A texture path belonging to this folder and no other.
+     *
+     * A {@link ResourceLocation} accepts only {@code [a-z0-9_./-]}, so the folder name
+     * has to be scrubbed — and scrubbing on its own is not enough, which is the bug
+     * this exists to fix. A world named in any script but Latin reduces to nothing but
+     * underscores, so every Cyrillic-named world produced the same path, and the second
+     * one loaded got handed the first one's picture: create a world and the loading
+     * screen showed the world you had just left. The hash is what makes the path the
+     * folder's own; it is allowed to be negative, and hex of a negative int is still
+     * only characters a path may contain.
+     */
+    private static String texturePath(String folderName) {
+        return "worldpreview/" + folderName.toLowerCase().replaceAll("[^a-z0-9_-]", "_")
+                + "_" + Integer.toHexString(folderName.hashCode());
     }
 
     /** Drops the cached texture so the next read picks up a freshly written file. */

@@ -306,15 +306,19 @@ public abstract class MenuScreen extends GuiScreen {
             drawContent(localX, localY);
 
             // Buttons animate off `delta`, so hand it to them before they draw.
+            //
+            // Deliberately not touching `visible` here. It used to be set from the fade
+            // on this line, to stop a faded-out widget swallowing clicks — but a screen
+            // that scrolls its rows sets the same flag from its scroll a moment earlier
+            // in drawContent, and the assignment here landed on top of it and undid it
+            // every frame. One flag cannot have two owners, so the fade now refuses
+            // input in MenuButton itself and `visible` belongs to the screen alone.
             float widgetFade = widgetFade();
             List<?> buttons = this.buttonList;
             for (int i = 0; i < buttons.size(); i++) {
                 Object o = buttons.get(i);
                 if (o instanceof MenuButton) {
-                    MenuButton button = (MenuButton) o;
-                    button.advance(this.delta, widgetFade);
-                    // Fully faded-out widgets must not swallow clicks.
-                    button.visible = widgetFade > 0.02F;
+                    ((MenuButton) o).advance(this.delta, widgetFade);
                 }
             }
             super.drawScreen(localX, localY, partialTicks);

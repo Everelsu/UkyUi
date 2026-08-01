@@ -112,6 +112,10 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
         this.preview = null;
         this.headline = "";
         this.detail = "";
+        // Both callers mean "a world is changing": one runs just before entering, the
+        // other just after leaving. Either way a dissolve left over from the previous
+        // world is now a photograph of somewhere else.
+        WorldEntryFade.cancel();
     }
 
     /**

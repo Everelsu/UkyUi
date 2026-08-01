@@ -1,6 +1,7 @@
 package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.gui.MenuScreen;
+import com.console.uky.client.mods.AngelicaOptions;
 import com.console.uky.client.mods.ModConfigCatalog;
 import com.console.uky.client.mods.VideoSettingsTakeover;
 import com.console.uky.client.gui.widget.MenuButton;
@@ -8,6 +9,7 @@ import com.console.uky.client.gui.widget.MenuOptionButton;
 import com.console.uky.client.gui.widget.MenuSlider;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
+import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.gui.GuiButton;
@@ -73,6 +75,80 @@ public class GuiSettingsScreen extends MenuScreen {
     /** Each row's laid-out y, so the offset never compounds across frames. */
     private int[] rowNominalY = new int[0];
 
+    /**
+     * A heading laid out among the rows, naming the group of settings under it.
+     *
+     * Not a widget: it is text and a rule, with nothing to click. It still has to scroll
+     * and clip exactly as the rows do, though, or a heading would sit still while its
+     * own settings slid out from under it.
+     */
+    private static final class Heading {
+
+        final String label;
+        /** Where the layout put it, so scrolling never compounds. */
+        final int nominalY;
+        /** Whether clicking it folds the section away. Only the renderer's are. */
+        final boolean collapsible;
+        final boolean collapsed;
+        int y;
+        boolean visible;
+
+        Heading(String label, int nominalY, boolean collapsible, boolean collapsed) {
+            this.label = label;
+            this.nominalY = nominalY;
+            this.collapsible = collapsible;
+            this.collapsed = collapsed;
+            this.y = nominalY;
+        }
+    }
+
+    /** Height of a heading's own line, excluding the air the layout leaves above it. */
+    private static final int HEADING_HEIGHT = 10;
+
+    private final java.util.List<Heading> headings = new java.util.ArrayList<Heading>();
+
+    /**
+     * Angelica's settings, read once for the life of this screen.
+     *
+     * Once, because the options carry the player's pending edits until they are applied
+     * — rebuilding them on a tab switch or a window resize would quietly throw those
+     * away. Null until the Graphics tab is first laid out, so a session that never opens
+     * it never touches Angelica at all.
+     */
+    private java.util.List<AngelicaOptions.Section> angelica;
+
+    /**
+     * Renderer sections the player has opened, by name.
+     *
+     * Opened rather than folded, so that folded is what a section is by default: there
+     * are seven of them and fifty-odd rows between them, and a tab that arrives with
+     * all of it unrolled is a wall to scroll past rather than a list to read. Closed,
+     * the whole renderer is seven lines and you open the one you came for.
+     *
+     * <p>Static, so it survives leaving and reopening the screen the way the active tab
+     * does — a section opened once should still be open when you come back to it.
+     */
+    private static final java.util.Set<String> expanded = new java.util.HashSet<String>();
+
+    /** Every renderer option's name, for spotting the vanilla rows it duplicates. */
+    private java.util.Set<String> rendererLabels;
+
+    /**
+     * Columns the current tab lays its rows out in.
+     *
+     * Two for a tab of short vanilla labels, one where the renderer's are involved:
+     * "Использовать отсечение граней блоков" and its value do not go in half a panel,
+     * and at that width every second row was an ellipsis.
+     */
+    private int columns = 2;
+
+    /** Position in the entrance stagger, so no caller has to count rows itself. */
+    private int rowIndex;
+
+    /** Pointer position, kept for hit-testing the section headings. */
+    private int mouseX;
+    private int mouseY;
+
     private float scroll;
     private float scrollTarget;
     /** Height the rows actually need, which may exceed the space available. */
@@ -121,6 +197,7 @@ public class GuiSettingsScreen extends MenuScreen {
         this.footerRuleY = doneY - (cramped ? 8 : 16);
 
         this.contentRows.clear();
+        this.headings.clear();
 
         // Rows are sized for comfort now rather than squeezed to fit the tab that has
         // the most of them. Anything that does not fit scrolls, which is the whole
@@ -224,87 +301,336 @@ public class GuiSettingsScreen extends MenuScreen {
 
     private void buildContent() {
         int y = this.contentTop;
-        int index = 0;
+        this.rowIndex = 0;
+        // One column wherever the renderer's settings are in play; its labels are
+        // sentences, not words, and half a panel truncated most of them.
+        this.columns = activeTab == 1 && !angelica().isEmpty() ? 1 : 2;
+
         switch (activeTab) {
             case 0:
                 // GUI Scale is back, and it now only affects the game's own HUD and
                 // vanilla screens — these menus lay themselves out independently of
                 // it. See MenuScreen.setWorldAndResolution.
-                y = pair(y, index, GameSettings.Options.FOV, GameSettings.Options.DIFFICULTY);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.SENSITIVITY, GameSettings.Options.GUI_SCALE);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.INVERT_MOUSE, GameSettings.Options.VIEW_BOBBING);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.TOUCHSCREEN, GameSettings.Options.SHOW_CAPE);
-                index += 2;
-                addLink(ID_CONTROLS, this.leftColumn, y, "options.controls", index++);
-                addLink(ID_LANGUAGE, this.rightColumn, y, "options.language", index);
+                y = flow(y,
+                        GameSettings.Options.FOV, GameSettings.Options.DIFFICULTY,
+                        GameSettings.Options.SENSITIVITY, GameSettings.Options.GUI_SCALE,
+                        GameSettings.Options.INVERT_MOUSE, GameSettings.Options.VIEW_BOBBING,
+                        GameSettings.Options.TOUCHSCREEN, GameSettings.Options.SHOW_CAPE);
+                addLink(ID_CONTROLS, this.leftColumn, y, "options.controls");
+                addLink(ID_LANGUAGE, this.rightColumn, y, "options.language");
                 break;
             case 1:
-                y = pair(y, index, GameSettings.Options.GRAPHICS, GameSettings.Options.RENDER_DISTANCE);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.FRAMERATE_LIMIT, GameSettings.Options.AMBIENT_OCCLUSION);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.RENDER_CLOUDS, GameSettings.Options.PARTICLES);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.USE_FULLSCREEN, GameSettings.Options.ENABLE_VSYNC);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.GAMMA, GameSettings.Options.MIPMAP_LEVELS);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.ANISOTROPIC_FILTERING, GameSettings.Options.FBO_ENABLE);
-                if (VideoSettingsTakeover.isClaimed()) {
-                    y += this.rowHeight + this.rowGap;
-                    addLink(ID_VIDEO, this.leftColumn, y, "uky.settings.videoTakeover", index++);
-                }
+                y = flow(y,
+                        GameSettings.Options.GRAPHICS, GameSettings.Options.RENDER_DISTANCE,
+                        GameSettings.Options.FRAMERATE_LIMIT, GameSettings.Options.AMBIENT_OCCLUSION,
+                        GameSettings.Options.RENDER_CLOUDS, GameSettings.Options.PARTICLES,
+                        GameSettings.Options.USE_FULLSCREEN, GameSettings.Options.ENABLE_VSYNC,
+                        GameSettings.Options.GAMMA, GameSettings.Options.MIPMAP_LEVELS,
+                        GameSettings.Options.ANISOTROPIC_FILTERING);
+                // FBO_ENABLE is deliberately absent. Everything this mod draws goes
+                // through the framebuffer — the menus, the loading screen, the world
+                // preview that is read back out of it — so turning it off does not read
+                // as a rendering option being switched, it reads as the interface
+                // breaking. A player would find the setting, try it, and reasonably
+                // conclude the UI was at fault. It is still reachable in options.txt
+                // for anyone who genuinely needs it.
+                buildRendererContent(y);
                 break;
             case 2:
-                addLink(ID_SOUNDS, this.leftColumn, y, "options.sounds", index++);
-                addLink(ID_CHAT, this.rightColumn, y, "options.chat.title", index++);
+                addLink(ID_SOUNDS, this.leftColumn, y, "options.sounds");
+                addLink(ID_CHAT, this.rightColumn, y, "options.chat.title");
                 y += this.rowHeight + this.rowGap;
-                y = pair(y, index, GameSettings.Options.CHAT_SCALE, GameSettings.Options.CHAT_OPACITY);
-                index += 2;
-                y = pair(y, index, GameSettings.Options.CHAT_VISIBILITY, GameSettings.Options.CHAT_COLOR);
-                index += 2;
-                pair(y, index, GameSettings.Options.CHAT_LINKS, GameSettings.Options.CHAT_WIDTH);
+                flow(y,
+                        GameSettings.Options.CHAT_SCALE, GameSettings.Options.CHAT_OPACITY,
+                        GameSettings.Options.CHAT_VISIBILITY, GameSettings.Options.CHAT_COLOR,
+                        GameSettings.Options.CHAT_LINKS, GameSettings.Options.CHAT_WIDTH);
                 break;
             default:
-                addLink(ID_RESOURCE_PACKS, this.leftColumn, y, "options.resourcepack", index++);
-                addLink(ID_SNOOPER, this.rightColumn, y, "options.snooper.view", index++);
+                addLink(ID_RESOURCE_PACKS, this.leftColumn, y, "options.resourcepack");
+                addLink(ID_SNOOPER, this.rightColumn, y, "options.snooper.view");
                 y += this.rowHeight + this.rowGap;
-                addLink(ID_MODS, this.leftColumn, y, "uky.menu.mods", index++);
+                addLink(ID_MODS, this.leftColumn, y, "uky.menu.mods");
                 // Only offered when something in the pack actually has settings, which
                 // on a bare install is nothing at all.
                 if (!ModConfigCatalog.entries().isEmpty()) {
-                    addLink(ID_MOD_SETTINGS, this.rightColumn, y, "uky.modSettings.title",
-                            index++);
+                    addLink(ID_MOD_SETTINGS, this.rightColumn, y, "uky.modSettings.title");
                 }
                 y += this.rowHeight + this.rowGap;
-                y = pair(y, index, GameSettings.Options.FORCE_UNICODE_FONT, GameSettings.Options.SNOOPER_ENABLED);
+                flow(y, GameSettings.Options.FORCE_UNICODE_FONT,
+                        GameSettings.Options.SNOOPER_ENABLED);
                 break;
         }
+    }
+
+    /**
+     * Lays options out across the tab's columns, and returns the next free y.
+     *
+     * A flow rather than fixed pairs, because rows can now drop out: an option the
+     * renderer already offers is not drawn twice, and with pairs its partner would have
+     * been left sitting beside a hole.
+     */
+    private int flow(int y, GameSettings.Options... options) {
+        int column = 0;
+        for (GameSettings.Options option : options) {
+            if (isRendererOwned(option)) {
+                continue;
+            }
+            addOption(option, columnX(column), y);
+            if (++column == this.columns) {
+                column = 0;
+                y += this.rowHeight + this.rowGap;
+            }
+        }
+        return column == 0 ? y : y + this.rowHeight + this.rowGap;
+    }
+
+    private int columnX(int column) {
+        return column == 0 ? this.leftColumn : this.rightColumn;
+    }
+
+    /** Width of one row in the current column count. */
+    private int rowWidth() {
+        return this.columns == 1
+                ? this.panelX2 - PADDING - this.leftColumn
+                : this.columnWidth;
+    }
+
+    /**
+     * Whether the renderer already offers this vanilla option, and so we should not.
+     *
+     * Most of Sodium's settings are its own, but a dozen of them read and write
+     * vanilla's — render distance, brightness, v-sync — and it names those with
+     * vanilla's own translation key. So the two labels are the same string in every
+     * language, and matching on the label is enough to spot the pair. That is
+     * deliberately not a list of which options Angelica happens to cover: such a list
+     * is a second thing to keep in step with somebody else's mod, and when it fell
+     * behind it would hide a setting that no longer exists anywhere. Matching can only
+     * fail the other way, leaving a visible duplicate, which is the harmless direction.
+     */
+    private boolean isRendererOwned(GameSettings.Options option) {
+        if (option == null) {
+            return true;
+        }
+        if (angelica().isEmpty()) {
+            return false;
+        }
+        // The one exception, and the reason it needs one: Sodium gives anisotropic
+        // filtering a key of its own rather than vanilla's, so outside English the two
+        // labels are different strings for the same setting and nothing above can see it.
+        if (option == GameSettings.Options.ANISOTROPIC_FILTERING) {
+            return true;
+        }
+        if (this.rendererLabels == null) {
+            this.rendererLabels = new java.util.HashSet<String>();
+            for (AngelicaOptions.Section section : angelica()) {
+                for (AngelicaOptions.Entry entry : section.options()) {
+                    this.rendererLabels.add(normalise(entry.name()));
+                }
+            }
+        }
+        return this.rendererLabels.contains(
+                normalise(I18n.format(option.getEnumString(), new Object[0])));
+    }
+
+    /** Case and punctuation carry no meaning here and the two mods differ on both. */
+    private static String normalise(String text) {
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = Character.toLowerCase(text.charAt(i));
+            if (Character.isLetterOrDigit(c)) {
+                out.append(c);
+            }
+        }
+        return out.toString();
     }
 
     private static final int ID_MODS = 107;
     private static final int ID_MOD_SETTINGS = 108;
     private static final int ID_VIDEO = 109;
+    private static final int ID_SHADER_PACKS = 110;
+    /**
+     * Every renderer option shares one id.
+     *
+     * They are told apart by their type, not their number: a cycling one is handled by
+     * the {@code MenuOptionButton} branch above the switch, and a slider acts on its own
+     * drag and wants nothing from the switch at all. Numbering them would mean carrying
+     * a parallel list solely to look up what a number meant.
+     */
+    private static final int ID_RENDERER_OPTION = 400;
 
-    /** Lays two options side by side and returns the next row's y. */
-    private int pair(int y, int index, GameSettings.Options left, GameSettings.Options right) {
-        addOption(left, this.leftColumn, y, index);
-        if (right != null) {
-            addOption(right, this.rightColumn, y, index + 1);
+    /**
+     * The renderer's own settings, below the vanilla ones they belong with.
+     *
+     * Angelica replaces most of what the video settings mean, and it describes its
+     * options rather than only drawing them — so its pages become headed sections of
+     * this list instead of a second settings screen in a second style. See
+     * {@link AngelicaOptions}.
+     */
+    private void buildRendererContent(int y) {
+        java.util.List<AngelicaOptions.Section> sections = angelica();
+
+        if (!sections.isEmpty() && AngelicaOptions.hasShaderPacks()) {
+            // First, above the sections. Shader packs are the one thing here that
+            // changes how the game looks all at once, and it is what anyone opening
+            // this part of the settings is most often after; behind seven folded
+            // sections it was the last thing they would find. It is also the one part
+            // that is a screen and not a model — Sodium itself lists it as a page with
+            // no options, purely to have somewhere to put the link — so it stays a link
+            // to the one its author wrote.
+            y = heading(shaderPacksLabel(), y, false, false);
+            addLink(ID_SHADER_PACKS, this.leftColumn, y, "uky.settings.shaderPacks.open");
+            y += this.rowHeight + this.rowGap;
         }
-        return y + this.rowHeight + this.rowGap;
+
+        for (AngelicaOptions.Section section : sections) {
+            boolean open = expanded.contains(section.name());
+            y = heading(section.name(), y, true, !open);
+            if (!open) {
+                continue;
+            }
+            // One to a row, in the order the mod lists them, so a player who knows
+            // Angelica's own screen finds its settings where they left them.
+            for (AngelicaOptions.Entry entry : section.options()) {
+                addRendererOption(entry, this.leftColumn, y);
+                y += this.rowHeight + this.rowGap;
+            }
+        }
+
+        if (!sections.isEmpty()) {
+            return;
+        }
+
+        // Nothing was read, yet something out there owns the video settings. Rather than
+        // leave the player with no way at all to reach the renderer's options — which is
+        // the state this whole section exists to fix — hand back the door to its own
+        // screen. Covers Angelica changing shape under us, and equally a claimant that
+        // was never one of Sodium's to begin with.
+        if (VideoSettingsTakeover.isClaimed()) {
+            y = heading(I18n.format("uky.settings.renderer", new Object[0]), y, false, false);
+            addLink(ID_VIDEO, this.leftColumn, y, "uky.settings.videoTakeover");
+        }
     }
 
-    private void addOption(GameSettings.Options option, int x, int y, int index) {
-        MenuButton widget = option.getEnumFloat()
-                ? new MenuSlider(option.returnEnumOrdinal(), x, y, this.columnWidth, this.rowHeight, option)
-                : new MenuOptionButton(option.returnEnumOrdinal(), x, y, this.columnWidth, this.rowHeight, option);
-        widget.entrance(0.06F + index * 0.02F);
+    /** Iris names this section itself; our own wording is only the fallback. */
+    private static String shaderPacksLabel() {
+        String translated = I18n.format("options.iris.shaderPackSelection", new Object[0]);
+        return "options.iris.shaderPackSelection".equals(translated)
+                ? I18n.format("uky.settings.shaderPacks", new Object[0])
+                : translated;
+    }
+
+    /**
+     * Places a section heading and returns the y the rows under it start at.
+     *
+     * The air above is doubled and the air below is not: a heading belongs to what
+     * follows it, and spacing it evenly between the two made it read as though it
+     * belonged to neither.
+     */
+    private int heading(String label, int y, boolean collapsible, boolean folded) {
+        int top = this.headings.isEmpty() && this.contentRows.isEmpty()
+                ? y
+                : y + this.rowGap * 2;
+        this.headings.add(new Heading(label, top, collapsible, folded));
+        return top + HEADING_HEIGHT + this.rowGap;
+    }
+
+    private void addRendererOption(final AngelicaOptions.Entry entry, int x, int y) {
+        MenuButton widget;
+        if (entry.kind() == AngelicaOptions.Kind.SLIDER) {
+            widget = new MenuSlider(ID_RENDERER_OPTION, x, y, rowWidth(), this.rowHeight,
+                    new MenuSlider.Source() {
+                        @Override
+                        public String caption() {
+                            // The game captions its own sliders this way, and these sit
+                            // in the same column as those.
+                            return entry.name() + ": " + entry.formattedValue();
+                        }
+
+                        @Override
+                        public float normalized() {
+                            return entry.normalized();
+                        }
+
+                        @Override
+                        public void setNormalized(float t) {
+                            entry.setNormalized(t);
+                        }
+
+                        @Override
+                        public boolean available() {
+                            return entry.isEnabled();
+                        }
+                    });
+        } else {
+            widget = new MenuOptionButton(ID_RENDERER_OPTION, x, y, rowWidth(),
+                    this.rowHeight, new MenuOptionButton.Source() {
+                        @Override
+                        public String label() {
+                            return entry.name();
+                        }
+
+                        @Override
+                        public String value() {
+                            return entry.valueLabel();
+                        }
+
+                        @Override
+                        public boolean toggle() {
+                            return entry.kind() == AngelicaOptions.Kind.TOGGLE;
+                        }
+
+                        @Override
+                        public boolean on() {
+                            return entry.isOn();
+                        }
+
+                        @Override
+                        public void cycle() {
+                            entry.cycle();
+                        }
+
+                        @Override
+                        public boolean available() {
+                            return entry.isEnabled();
+                        }
+                    });
+        }
+        widget.entrance(stagger());
         this.buttonList.add(widget);
         this.contentRows.add(widget);
+    }
+
+    /**
+     * Entrance delay for the next row, advancing the stagger as it goes.
+     *
+     * Capped, because the renderer contributes upwards of fifty rows and an uncapped
+     * stagger turned opening the tab into a second and a half of things still arriving.
+     */
+    private float stagger() {
+        return 0.06F + Math.min(this.rowIndex++, 14) * 0.02F;
+    }
+
+    private void addOption(GameSettings.Options option, int x, int y) {
+        int width = rowWidth();
+        MenuButton widget = option.getEnumFloat()
+                ? new MenuSlider(option.returnEnumOrdinal(), x, y, width, this.rowHeight, option)
+                : new MenuOptionButton(option.returnEnumOrdinal(), x, y, width, this.rowHeight, option);
+        widget.entrance(stagger());
+        this.buttonList.add(widget);
+        this.contentRows.add(widget);
+    }
+
+    /**
+     * Angelica's pages, read on the first layout of this screen and kept after.
+     *
+     * Read whichever tab is open, not only the Graphics one, because the General tab
+     * has to know what the renderer already offers in order not to offer it twice.
+     */
+    private java.util.List<AngelicaOptions.Section> angelica() {
+        if (this.angelica == null) {
+            this.angelica = AngelicaOptions.read();
+        }
+        return this.angelica;
     }
 
     /**
@@ -318,6 +644,11 @@ public class GuiSettingsScreen extends MenuScreen {
         int bottom = this.contentTop;
         for (MenuButton row : this.contentRows) {
             bottom = Math.max(bottom, row.yPosition + row.height);
+        }
+        // Headings count too. A tab could end on one — an empty section would — and
+        // measuring only the rows would then let the last heading scroll out of reach.
+        for (Heading heading : this.headings) {
+            bottom = Math.max(bottom, heading.nominalY + HEADING_HEIGHT);
         }
         this.contentExtent = bottom - this.contentTop;
 
@@ -366,6 +697,11 @@ public class GuiSettingsScreen extends MenuScreen {
             row.visible = row.yPosition >= this.contentTop
                     && row.yPosition + row.height <= this.footerRuleY - 4;
         }
+        for (Heading heading : this.headings) {
+            heading.y = heading.nominalY - offset;
+            heading.visible = heading.y >= this.contentTop
+                    && heading.y + HEADING_HEIGHT <= this.footerRuleY - 4;
+        }
     }
 
     /** The scrollbar, shown only when there is something to scroll. */
@@ -386,13 +722,13 @@ public class GuiSettingsScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, 0.8F * alpha));
     }
 
-    private void addLink(int id, int x, int y, String langKey, int index) {
-        MenuButton link = new MenuButton(id, x, y, this.columnWidth, this.rowHeight,
+    private void addLink(int id, int x, int y, String langKey) {
+        MenuButton link = new MenuButton(id, x, y, rowWidth(), this.rowHeight,
                 I18n.format(langKey, new Object[0]), MenuButton.Style.NORMAL);
         // Left-aligned like every option row. Centred, they broke the line the
         // accent rails set up down the column.
         link.align(MenuButton.Align.LEFT);
-        link.entrance(0.06F + index * 0.02F);
+        link.entrance(stagger());
         this.buttonList.add(link);
         this.contentRows.add(link);
     }
@@ -434,6 +770,8 @@ public class GuiSettingsScreen extends MenuScreen {
 
     @Override
     protected void drawContent(int mouseX, int mouseY) {
+        this.mouseX = mouseX;
+        this.mouseY = mouseY;
         drawGlassPanel();
         applyScroll();
 
@@ -456,7 +794,86 @@ public class GuiSettingsScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, 0.35F * this.fadeAlpha),
                 Draw.withAlpha(Theme.accent, 0.0F));
 
+        drawHeadings();
         drawScrollbar(this.fadeAlpha);
+    }
+
+    /**
+     * The section headings, drawn the way the key bindings screen draws its categories.
+     *
+     * Same mark for the same idea: these rows belong together and here is what they are.
+     * The rule runs from the end of the label out to the right edge, which groups without
+     * putting a heavy band behind every heading.
+     */
+    private void drawHeadings() {
+        for (Heading heading : this.headings) {
+            if (!heading.visible) {
+                continue;
+            }
+            boolean hot = heading.collapsible && isOverHeading(heading);
+            int right = this.panelX2 - PADDING;
+            // A collapsible heading gives up the last of its width to the marker, so a
+            // long section name can never run underneath it.
+            int markerRoom = heading.collapsible ? 14 : 0;
+
+            String label = heading.label.toUpperCase();
+            int width = drawFitted(label, this.leftColumn, heading.y,
+                    right - markerRoom - this.leftColumn,
+                    Draw.withAlpha(hot ? Theme.textHover : Theme.accent,
+                            (hot ? 1.0F : 0.85F) * this.fadeAlpha));
+
+            // Rule running from the label to the right edge, so the grouping reads
+            // without a heavy band behind it.
+            int ruleFrom = this.leftColumn + width + 6;
+            int ruleTo = right - markerRoom;
+            if (ruleTo > ruleFrom) {
+                Draw.gradientH(ruleFrom, heading.y + 3, ruleTo, heading.y + 4,
+                        Draw.withAlpha(Theme.accent, 0.35F * this.fadeAlpha),
+                        Draw.withAlpha(Theme.accent, 0.0F));
+            }
+
+            if (heading.collapsible) {
+                // Pointing down when the section is open and along when it is folded,
+                // which is the one convention every disclosure control shares.
+                float cx = right - 5.0F;
+                float cy = heading.y + 4.0F;
+                int colour = Draw.withAlpha(hot ? Theme.textHover : Theme.accent,
+                        (hot ? 1.0F : 0.7F) * this.fadeAlpha);
+                if (heading.collapsed) {
+                    Icons.forward(cx, cy, 7, colour);
+                } else {
+                    Icons.arrowDown(cx, cy, 7, colour);
+                }
+            }
+        }
+    }
+
+    /** Hit box of a heading: the whole line, so the target is not a seven-unit arrow. */
+    private boolean isOverHeading(Heading heading) {
+        return this.mouseX >= this.leftColumn && this.mouseX <= this.panelX2 - PADDING
+                && this.mouseY >= heading.y - 2 && this.mouseY <= heading.y + HEADING_HEIGHT;
+    }
+
+    /**
+     * Folds a section away, or opens it again.
+     *
+     * @return true if the click landed on a heading and nothing else should see it
+     */
+    private boolean toggleHeadingAt(int mouseX, int mouseY) {
+        this.mouseX = mouseX;
+        this.mouseY = mouseY;
+        for (Heading heading : this.headings) {
+            if (!heading.visible || !heading.collapsible || !isOverHeading(heading)) {
+                continue;
+            }
+            if (!expanded.remove(heading.label)) {
+                expanded.add(heading.label);
+            }
+            // The rows below have just appeared or gone; everything under them moves.
+            relayout();
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -491,6 +908,16 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     // ----------------------------------------------------------------- input --
+
+    @Override
+    protected void mouseClicked(int mouseX, int mouseY, int button) {
+        // Headings are drawn, not widgets, so they have to claim the click before the
+        // button list gets it — and a fold rebuilds the rows the list is about to test.
+        if (toggleHeadingAt(mouseX, mouseY)) {
+            return;
+        }
+        super.mouseClicked(mouseX, mouseY, button);
+    }
 
     @Override
     public void handleMouseInput() {
@@ -544,8 +971,14 @@ public class GuiSettingsScreen extends MenuScreen {
             case ID_VIDEO:
                 openSub(VideoSettingsTakeover.open(this, this.settings));
                 break;
+            case ID_SHADER_PACKS:
+                GuiScreen shaders = AngelicaOptions.shaderPackScreen(this);
+                if (shaders != null) {
+                    openSub(shaders);
+                }
+                break;
             case ID_DONE:
-                this.settings.saveOptions();
+                save();
                 this.mc.displayGuiScreen(this.parent);
                 break;
             default:
@@ -556,14 +989,29 @@ public class GuiSettingsScreen extends MenuScreen {
     private void openSub(GuiScreen screen) {
         // Vanilla saves before every sub-screen; matching that keeps behaviour
         // identical if the player alt-F4s from inside one.
-        this.settings.saveOptions();
+        save();
         this.mc.displayGuiScreen(screen);
+    }
+
+    /**
+     * Writes out everything this screen edits, wherever it lives.
+     *
+     * Vanilla's options write through as they are changed and only need flushing; the
+     * renderer's are staged on their own option objects until applied, which is that
+     * mod's contract rather than a choice made here. Both are settled at the same
+     * moments, so leaving by any route leaves nothing behind.
+     */
+    private void save() {
+        this.settings.saveOptions();
+        if (this.angelica != null) {
+            AngelicaOptions.apply(this.angelica);
+        }
     }
 
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) { // Escape
-            this.settings.saveOptions();
+            save();
             this.mc.displayGuiScreen(this.parent);
             return;
         }

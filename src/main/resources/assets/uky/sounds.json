@@ -16,5 +16,17 @@
     "sounds": [
       { "name": "button_sound", "stream": false }
     ]
+  },
+  "delete_hold": {
+    "category": "master",
+    "sounds": [
+      { "name": "delete_hold", "stream": false }
+    ]
+  },
+  "delete_break": {
+    "category": "master",
+    "sounds": [
+      { "name": "delete_break", "stream": false }
+    ]
   }
 }

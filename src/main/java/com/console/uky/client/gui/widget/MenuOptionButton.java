@@ -9,58 +9,89 @@ import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
 
 /**
- * Themed replacement for {@code GuiOptionButton}. Cycles a
- * {@link GameSettings} option on click; boolean options additionally render an
- * animated pill switch instead of the "ON"/"OFF" word, which reads much faster
- * in a long options list.
+ * Themed replacement for {@code GuiOptionButton}. Cycles an option on click;
+ * boolean options additionally render an animated pill switch instead of the
+ * "ON"/"OFF" word, which reads much faster in a long options list.
+ *
+ * <p>What it is cycling is behind {@link Source}. Vanilla's {@link GameSettings}
+ * options are one implementation and the one this was written for, but a settings
+ * screen that gathers other mods' options into itself has to drive values it cannot
+ * name at compile time — see {@code AngelicaOptions} — and those are the same control
+ * as far as the player is concerned, so they are the same widget here.
  */
 public class MenuOptionButton extends MenuButton {
 
     /** Track width of the pill switch; the label is budgeted around it. */
     private static final float SWITCH_WIDTH = 22.0F;
 
-    private final GameSettings.Options option;
+    /**
+     * Where a row's label, value and behaviour come from.
+     *
+     * Read every frame rather than cached, because an option's text and its
+     * availability can both depend on what other options are set to.
+     */
+    public interface Source {
+
+        /** Left-hand text: what the setting is called. */
+        String label();
+
+        /** Right-hand text: what it is currently set to. Unused by a toggle. */
+        String value();
+
+        /** True to draw the pill switch rather than a value. */
+        boolean toggle();
+
+        /** State of the switch. Only asked of a toggle. */
+        boolean on();
+
+        /** Advance to the next value. */
+        void cycle();
+
+        /** False greys the row out and stops it being clicked. */
+        boolean available();
+    }
+
+    private final Source source;
     private final boolean isToggle;
     private float switchPos;
 
     public MenuOptionButton(int id, int x, int y, int width, int height, GameSettings.Options option) {
+        this(id, x, y, width, height, new VanillaSource(option));
+    }
+
+    public MenuOptionButton(int id, int x, int y, int width, int height, Source source) {
         super(id, x, y, width, height, "", Style.NORMAL);
-        this.option = option;
-        this.isToggle = option.getEnumBoolean();
+        this.source = source;
+        this.isToggle = source.toggle();
         refresh();
         // Start the switch where it belongs so it does not slide on first draw.
         this.switchPos = isOn() ? 1.0F : 0.0F;
     }
 
-    public GameSettings.Options getOption() {
-        return this.option;
-    }
-
     /** Applies the next value and re-reads the label. */
     public void cycle() {
-        Minecraft.getMinecraft().gameSettings.setOptionValue(this.option, 1);
+        this.source.cycle();
         refresh();
     }
 
     private void refresh() {
-        Minecraft mc = Minecraft.getMinecraft();
-        // getKeyBinding returns "Label: Value"; split so the two can be aligned apart.
-        String full = mc.gameSettings.getKeyBinding(this.option);
-        String label = I18n.format(this.option.getEnumString(), new Object[0]);
-        this.displayString = label;
-        String remainder = full.startsWith(label) ? full.substring(label.length()) : full;
-        if (remainder.startsWith(":")) {
-            remainder = remainder.substring(1);
-        }
-        value(remainder.trim());
+        this.displayString = this.source.label();
+        value(this.isToggle ? null : this.source.value());
     }
 
     private boolean isOn() {
-        return Minecraft.getMinecraft().gameSettings.getOptionOrdinalValue(this.option);
+        return this.source.on();
     }
 
     @Override
     public void advance(float deltaSeconds, float screenFade) {
+        // Re-read rather than refresh on click only. Neither the value nor whether the
+        // row can be edited at all is settled at layout time: several settings only
+        // become editable once a related one is turned on, and that related one is
+        // frequently the row directly above this. Read before the base class advances,
+        // which is what decides whether this frame counts as hovered.
+        this.enabled = this.source.available();
+        refresh();
         super.advance(deltaSeconds, screenFade);
         if (this.isToggle) {
             this.switchPos = Ease.approach(this.switchPos, isOn() ? 1.0F : 0.0F, 0.045F, deltaSeconds);
@@ -94,7 +125,9 @@ public class MenuOptionButton extends MenuButton {
         drawPanel(x1, y1, x2, y2, alpha);
 
         FontRenderer font = mc.fontRenderer;
-        int labelColor = Draw.fade(Draw.mix(Theme.text, Theme.textHover, this.hover), alpha);
+        int labelColor = Draw.fade(this.enabled
+                ? Draw.mix(Theme.text, Theme.textHover, this.hover)
+                : Theme.textDisabled, alpha);
 
         // The switch owns the right end of the row, so the label gets whatever is
         // left of it and no more. Drawn at a fixed position it ran underneath the
@@ -104,13 +137,68 @@ public class MenuOptionButton extends MenuButton {
         drawFitting(font, this.displayString, x1 + 10.0F,
                 y1 + (this.height - 8) / 2.0F, switchX - 6.0F - (x1 + 10.0F), labelColor);
 
-        drawSwitch(switchX, (y1 + y2) / 2.0F, alpha);
+        // A switch that cannot be flipped is drawn faint rather than absent: the setting
+        // is still there, it is simply not available yet.
+        drawSwitch(switchX, (y1 + y2) / 2.0F, alpha * (this.enabled ? 1.0F : 0.4F));
     }
 
     /** The switch owns the right end of the row; the label stops short of it. */
     @Override
     protected float trailingInset() {
         return 10.0F + SWITCH_WIDTH;
+    }
+
+    /**
+     * A vanilla {@link GameSettings} option.
+     *
+     * The game hands out its caption as one "Label: Value" string, so the two are split
+     * back apart here — the widget aligns them at opposite ends of the row and cannot
+     * do that with them stuck together.
+     */
+    private static final class VanillaSource implements Source {
+
+        private final GameSettings.Options option;
+
+        VanillaSource(GameSettings.Options option) {
+            this.option = option;
+        }
+
+        @Override
+        public String label() {
+            return I18n.format(this.option.getEnumString(), new Object[0]);
+        }
+
+        @Override
+        public String value() {
+            String full = Minecraft.getMinecraft().gameSettings.getKeyBinding(this.option);
+            String label = label();
+            String remainder = full.startsWith(label) ? full.substring(label.length()) : full;
+            if (remainder.startsWith(":")) {
+                remainder = remainder.substring(1);
+            }
+            return remainder.trim();
+        }
+
+        @Override
+        public boolean toggle() {
+            return this.option.getEnumBoolean();
+        }
+
+        @Override
+        public boolean on() {
+            return Minecraft.getMinecraft().gameSettings.getOptionOrdinalValue(this.option);
+        }
+
+        @Override
+        public void cycle() {
+            Minecraft.getMinecraft().gameSettings.setOptionValue(this.option, 1);
+        }
+
+        /** Vanilla has no notion of an option being temporarily unavailable. */
+        @Override
+        public boolean available() {
+            return true;
+        }
     }
 
     private void drawSwitch(float x, float cy, float alpha) {

@@ -364,8 +364,23 @@ public class MenuButton extends GuiButton {
         return (this.destructive || style == Style.DANGER) ? Theme.danger : Theme.accent;
     }
 
+    /**
+     * Whether this widget is in a state to be clicked at all.
+     *
+     * The fade is part of it and has to be: a widget drawn at zero opacity is still in
+     * the button list and still occupies its rectangle, so without this it would take
+     * clicks while invisible. {@link #visible} is left to the owning screen, which is
+     * what a scrolling list needs it for.
+     */
+    protected boolean acceptsInput() {
+        return this.enabled && this.visible && this.screenFade > 0.02F;
+    }
+
     @Override
     public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
+        if (!acceptsInput()) {
+            return false;
+        }
         boolean hit = super.mousePressed(mc, mouseX, mouseY);
         if (hit) {
             this.pressed = true;

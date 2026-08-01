@@ -7,6 +7,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.Theme;
+import com.console.uky.client.sound.UkySounds;
 import com.console.uky.client.world.UkyLoadingScreen;
 import com.console.uky.client.world.WorldEntryFade;
 import com.console.uky.client.world.TileShatter;
@@ -60,11 +61,25 @@ public class GuiWorldsScreen extends MenuScreen {
     /**
      * Seconds the bin must be held before a world is destroyed.
      *
-     * Long enough that it cannot happen by accident and short enough that it does not
-     * feel like a punishment. Releasing early runs it back rather than freezing it, so
-     * letting go really is cancelling.
+     * Taken from the length of the sound that plays under it rather than picked for
+     * feel, so the rise ends exactly where the world breaks. Releasing early runs the
+     * fill back and cuts the sound, so letting go really is cancelling.
      */
-    private static final float DELETE_HOLD_SECONDS = 1.05F;
+    private static final float DELETE_HOLD_SECONDS = UkySounds.DELETE_HOLD_SECONDS;
+
+    /**
+     * Seconds to run the fill back down after letting go.
+     *
+     * A flat figure, not a multiple of the fill. It used to unwind at twice the fill
+     * rate, which was half a second back when the hold was one; tied to the length of
+     * the sound the hold became four and a half, and the unwind with it — so a released
+     * bar sat there draining for over two seconds. That is not just slow, it puts the
+     * sound out of step: grabbing the bin again restarts the take from its beginning
+     * while the bar carries on from wherever it had drained to, and from then on the
+     * rise and the fill are describing different amounts of time. Snapping back means a
+     * second grab always starts both from nothing.
+     */
+    private static final float DELETE_UNWIND_SECONDS = 0.14F;
 
     /** Card whose bin is being held, or -1. */
     private int holdCard = -1;
@@ -559,6 +574,18 @@ public class GuiWorldsScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     /**
+     * Leaving mid-hold must not leave the rise playing.
+     *
+     * The screen can go while the button is still down — Escape, or the world being
+     * opened from underneath — and nothing else would ever stop the sound.
+     */
+    @Override
+    public void onGuiClosed() {
+        UkySounds.stopDeleteHold();
+        super.onGuiClosed();
+    }
+
+    /**
      * Advances or unwinds the hold on the bin.
      *
      * Driven from the button being physically down rather than from a click, because
@@ -575,6 +602,10 @@ public class GuiWorldsScreen extends MenuScreen {
 
         if (holding) {
             this.holdCard = this.hoveredCard;
+            // Started here rather than on the first frame of the press, because the
+            // sound and the fill have to begin together for the rise to line up with
+            // it. Repeated calls after the first do nothing.
+            UkySounds.startDeleteHold();
             this.holdProgress += this.delta / DELETE_HOLD_SECONDS;
             if (this.holdProgress >= 1.0F) {
                 destroyHeldWorld();
@@ -582,9 +613,13 @@ public class GuiWorldsScreen extends MenuScreen {
             return;
         }
 
-        // Unwound about twice as fast as it fills: a cancel should feel immediate,
-        // while the commit should feel deliberate.
-        this.holdProgress -= this.delta / DELETE_HOLD_SECONDS * 2.0F;
+        if (this.holdProgress > 0.0F) {
+            // Let go before the end: the rise is cut off, because it is a rise towards
+            // something that is now not going to happen.
+            UkySounds.stopDeleteHold();
+        }
+
+        this.holdProgress -= this.delta / DELETE_UNWIND_SECONDS;
         if (this.holdProgress <= 0.0F) {
             this.holdProgress = 0.0F;
             this.holdCard = -1;
@@ -603,9 +638,12 @@ public class GuiWorldsScreen extends MenuScreen {
         int index = this.holdCard;
         this.holdCard = -1;
         this.holdProgress = 0.0F;
+        // The rise has arrived; the break takes over from here.
+        UkySounds.stopDeleteHold();
         if (index < 0 || index >= this.worlds.size()) {
             return;
         }
+        UkySounds.play(UkySounds.DELETE_BREAK);
 
         SaveFormatComparator world = this.worlds.get(index);
         String folder = world.getFileName();

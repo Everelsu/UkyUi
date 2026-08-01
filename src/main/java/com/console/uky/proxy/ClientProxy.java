@@ -1,5 +1,6 @@
 package com.console.uky.proxy;
 
+import com.console.uky.client.WindowBranding;
 import com.console.uky.client.render.BlackHole;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkyMusicTicker;
@@ -52,6 +53,10 @@ public class ClientProxy extends CommonProxy {
         // vanilla's menu music played anyway. init runs from finishMinecraftLoading,
         // which is past that point.
         UkyMusicTicker.install(Minecraft.getMinecraft());
+
+        // Also not pre-init: startGame sets the title and the icon itself, and only
+        // reaches mod loading afterwards. Doing this any earlier would be overwritten.
+        WindowBranding.apply();
     }
 
 }

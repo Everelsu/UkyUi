@@ -15,7 +15,8 @@ public class UkyUI {
 
     public static final String MODID = "uky";
     public static final String NAME = "UltraKill Yourself UI";
-    public static final String VERSION = "0.3.0";
+    /** Must match {@code version} in build.gradle.kts; see the note there. */
+    public static final String VERSION = "0.4.0";
 
     public static final Logger LOGGER = LogManager.getLogger(NAME);
 

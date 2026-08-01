@@ -26,6 +26,26 @@ public class WorldCaptureHandler {
     private static Runnable pendingAction;
     private static boolean hidGui;
     private static int framesWaited;
+    private static int ticksWaited;
+
+    /**
+     * Game ticks to wait for the render tick that takes the picture, before leaving
+     * without one.
+     *
+     * The deferral is the risky part of this whole mechanism: between closing the menu
+     * and running the action, the client is sitting in a world with no screen and
+     * nothing scheduled to get it out. If the render tick that was supposed to finish
+     * the job never arrives — the window minimised, the renderer stalled, another mod
+     * throwing out of the same event — it sits there indefinitely while the integrated
+     * server shuts down underneath it, and the next frame drawn is a frame of a world
+     * whose registries FML has already begun taking apart.
+     *
+     * <p>Six, not two: the two frames this normally needs are two ticks only at twenty
+     * frames a second, and a loaded pack quitting a world is routinely slower than that.
+     * Set too tight, the picture would simply stop being taken on the machines that are
+     * hardest to get one from. Three hundred milliseconds is still a bound.
+     */
+    private static final int MAX_TICKS = 6;
 
     /**
      * Captures the world, then runs {@code afterwards}.
@@ -44,6 +64,7 @@ public class WorldCaptureHandler {
         pendingFolder = mc.getIntegratedServer().getFolderName();
         pendingAction = afterwards;
         framesWaited = 0;
+        ticksWaited = 0;
 
         hidGui = mc.gameSettings.hideGUI;
         mc.gameSettings.hideGUI = true;
@@ -70,14 +91,47 @@ public class WorldCaptureHandler {
         if (framesWaited++ < 1) {
             return;
         }
+        finish(true);
+    }
 
+    /**
+     * The way out if the render tick never comes.
+     *
+     * Nothing here takes a picture — a game tick is not a frame and there is no buffer
+     * to read. Its whole job is that the deferral cannot strand the client in a world
+     * it has already decided to leave. Also fires the moment the world goes: if it has
+     * gone there is nothing left to photograph, and the action is now overdue.
+     */
+    @SubscribeEvent
+    public void onClientTick(TickEvent.ClientTickEvent event) {
+        if (pendingFolder == null || event.phase != TickEvent.Phase.END) {
+            return;
+        }
+        if (++ticksWaited > MAX_TICKS || Minecraft.getMinecraft().theWorld == null) {
+            finish(false);
+        }
+    }
+
+    /**
+     * Ends the deferral: picture if there is one to take, then the action, once.
+     *
+     * The action runs from a finally, and the fields are cleared before any of it, so
+     * that a capture throwing — or an event firing again while this is running — cannot
+     * either skip the leaving or do it twice.
+     */
+    private static void finish(boolean takePicture) {
         String folder = pendingFolder;
         Runnable action = pendingAction;
         pendingFolder = null;
         pendingAction = null;
+        if (action == null) {
+            return;
+        }
 
         try {
-            WorldPreviews.capture(folder);
+            if (takePicture) {
+                WorldPreviews.capture(folder);
+            }
         } finally {
             Minecraft.getMinecraft().gameSettings.hideGUI = hidGui;
             // Leaving is drawn by the same screen as arriving, so its picture and

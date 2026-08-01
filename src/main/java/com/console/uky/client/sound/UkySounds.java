@@ -16,9 +16,23 @@ public final class UkySounds {
     public static final ResourceLocation INTRO_IMPACT = new ResourceLocation("uky", "intro_impact");
     public static final ResourceLocation MENU_MUSIC = new ResourceLocation("uky", "menu_music");
     public static final ResourceLocation BUTTON = new ResourceLocation("uky", "button");
+    public static final ResourceLocation DELETE_HOLD = new ResourceLocation("uky", "delete_hold");
+    public static final ResourceLocation DELETE_BREAK = new ResourceLocation("uky", "delete_break");
+
+    /**
+     * Length of {@code delete_hold.ogg}, in seconds.
+     *
+     * The hold gesture is timed to this rather than the other way round: the sound is
+     * one rising take that ends where the break begins, so a hold shorter than the file
+     * would cut it off mid-rise and a longer one would leave silence before the world
+     * broke. Read off the file — recut the sound and this number moves with it.
+     */
+    public static final float DELETE_HOLD_SECONDS = 4.52F;
 
     /** The looping menu track, kept so it can be stopped when leaving the menus. */
     private static LoopingSound music;
+    /** The hold take, kept so letting go early can cut it off. */
+    private static UiSound deleteHold;
     /**
      * Guards the restart poll. The menu asks to start the music every frame, so a
      * handle that has gone stale — which is what happens when the sound system is
@@ -92,12 +106,48 @@ public final class UkySounds {
     }
 
     /**
+     * Starts the hold take, if it is not already running.
+     *
+     * Called every frame the bin is held, like the menu track, because the gesture has
+     * no single moment to hook: it begins the first frame the button is down over the
+     * bin and that frame is not distinguishable from any other without keeping state
+     * the caller should not have to keep.
+     */
+    public static void startDeleteHold() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.getSoundHandler() == null || deleteHold != null) {
+            return;
+        }
+        deleteHold = new UiSound(DELETE_HOLD, 1.0F, 1.0F);
+        mc.getSoundHandler().playSound(deleteHold);
+    }
+
+    /**
+     * Cuts the hold take off, whether the gesture was completed or abandoned.
+     *
+     * Both endings want it stopped: letting go halfway must not leave the rise playing
+     * on into nothing, and finishing hands over to {@link #DELETE_BREAK}, which is a
+     * different sound and should not have the tail of this one under it.
+     */
+    public static void stopDeleteHold() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (deleteHold == null) {
+            return;
+        }
+        if (mc.getSoundHandler() != null) {
+            mc.getSoundHandler().stopSound(deleteHold);
+        }
+        deleteHold = null;
+    }
+
+    /**
      * Drops the cached handle. Called when the sound system reloads: the old
      * reference then refers to a track in an engine that no longer exists, and
      * keeping it would convince {@link #startMusic} there is nothing to do.
      */
     public static void onSoundSystemReloaded() {
         music = null;
+        deleteHold = null;
         nextRestartAttempt = 0L;
     }
 

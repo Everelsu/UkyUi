@@ -116,7 +116,7 @@ public class SoundSlider extends MenuButton {
 
     @Override
     public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
-        if (!this.enabled || !this.visible) {
+        if (!acceptsInput()) {
             return false;
         }
         boolean hit = mouseX >= this.xPosition && mouseY >= this.yPosition

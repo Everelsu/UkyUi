@@ -4,8 +4,14 @@
 }
 
 // ---- Project coordinates ----
+//
+// Keep `version` and UkyUI.VERSION together. Forge reads the version from the @Mod
+// annotation, which needs a compile-time constant and so cannot be given this one;
+// mcmod.info gets it from here through the processResources filter below. If the two
+// disagree, the mod list and the file name disagree, and it is the mod list people
+// quote in bug reports.
 group = "com.console.uky"
-version = "0.3.0"
+version = "0.4.0"
 
 // Java 8 toolchain is mandatory for 1.7.10 (both compiling and running)
 java {

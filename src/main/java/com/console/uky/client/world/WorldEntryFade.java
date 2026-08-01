@@ -67,6 +67,18 @@ public final class WorldEntryFade {
         return texture != null;
     }
 
+    /**
+     * Drops a dissolve still in flight.
+     *
+     * Called when a world is about to be entered or has just been left. Without it, a
+     * world entered before the previous one's dissolve had finished arrived underneath
+     * the previous world's photograph — the fade is static and keyed to nothing, so it
+     * has no way of noticing that what it is fading into is not what it was started for.
+     */
+    public static void cancel() {
+        texture = null;
+    }
+
     /** Registered on FML's bus, where {@link TickEvent} lives. */
     public static final class Handler {
 

@@ -17,11 +17,16 @@ import net.minecraft.client.settings.GameSettings;
  * screen at all, silently cuts the renderer's settings off from the player. The
  * shader options exist and there is no longer any door to them.
  *
- * <p>So this opens that door rather than trying to rebuild what is behind it. The
- * screen handed back is vanilla's, and whoever is listening replaces it on the way
- * up, exactly as it would have been from the vanilla menu. Nothing here knows or
- * needs to know what Sodium's options look like, and it keeps working if Angelica
- * changes them.
+ * <p>So this opens that door. The screen handed back is vanilla's, and whoever is
+ * listening replaces it on the way up, exactly as it would have been from the vanilla
+ * menu. Nothing here knows or needs to know what those options look like.
+ *
+ * <p>It is no longer the way in. {@link AngelicaOptions} reads the same options as a
+ * model and the Graphics tab draws them itself, which is a better answer than a second
+ * settings screen in a second style. This remains as the fallback for when that read
+ * comes back empty — the mod has changed shape, or a claimant turns up that was never
+ * built on Sodium at all — because the one outcome worth ruling out is the player
+ * having renderer settings and no way whatsoever to reach them.
  */
 public final class VideoSettingsTakeover {
 

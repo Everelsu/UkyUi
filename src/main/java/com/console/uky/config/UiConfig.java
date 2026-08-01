@@ -196,7 +196,9 @@ public final class UiConfig {
 
         customSplash = bool(CAT_SPLASH, "customSplash", true,
                 "Replace FML's mod-loading screen. Turn off if the loading screen misbehaves "
-                        + "on your GPU; the game falls back to Forge's own splash.");
+                        + "on your GPU; the game falls back to Forge's own splash. Ignored when "
+                        + "Angelica is installed, which manages GL state in a way this screen "
+                        + "cannot be made to share.");
         splashTips = strList(CAT_SPLASH, "tips", new String[0],
                 "Lines cycled at the bottom of the loading screen. Leave empty to show none.");
 
