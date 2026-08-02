@@ -488,6 +488,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) {
             apply();
+            switchBack();
             return;
         }
         super.keyTyped(typedChar, keyCode);
@@ -501,6 +502,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
         }
         if (button.id == ID_DONE) {
             apply();
+            switchBack();
         }
     }
 
@@ -538,7 +540,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
         }
         this.mc.gameSettings.saveOptions();
         this.mc.refreshResources();
-        this.mc.displayGuiScreen(this.parent);
+        switchBack();
     }
 
     @Override

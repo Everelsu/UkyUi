@@ -484,7 +484,7 @@ public class GuiControlsScreen extends MenuScreen {
         }
         if (keyCode == Keyboard.KEY_ESCAPE) {
             this.settings.saveOptions();
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
             return;
         }
         if (this.search.textboxKeyTyped(typedChar, keyCode)) {
@@ -513,7 +513,7 @@ public class GuiControlsScreen extends MenuScreen {
         }
         if (button.id == ID_DONE) {
             this.settings.saveOptions();
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
         }
     }
 

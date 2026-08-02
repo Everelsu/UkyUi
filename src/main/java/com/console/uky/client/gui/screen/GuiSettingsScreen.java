@@ -979,7 +979,7 @@ public class GuiSettingsScreen extends MenuScreen {
                 break;
             case ID_DONE:
                 save();
-                this.mc.displayGuiScreen(this.parent);
+                switchBack();
                 break;
             default:
                 break;
@@ -990,7 +990,16 @@ public class GuiSettingsScreen extends MenuScreen {
         // Vanilla saves before every sub-screen; matching that keeps behaviour
         // identical if the player alt-F4s from inside one.
         save();
-        this.mc.displayGuiScreen(screen);
+        if (screen instanceof MenuScreen) {
+            switchTo((MenuScreen) screen);
+        } else {
+            closeWith(new Runnable() {
+                @Override
+                public void run() {
+                    mc.displayGuiScreen(screen);
+                }
+            });
+        }
     }
 
     /**
@@ -1012,7 +1021,7 @@ public class GuiSettingsScreen extends MenuScreen {
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) { // Escape
             save();
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
             return;
         }
         super.keyTyped(typedChar, keyCode);

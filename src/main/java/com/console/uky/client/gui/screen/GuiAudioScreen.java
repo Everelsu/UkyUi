@@ -276,7 +276,7 @@ public class GuiAudioScreen extends MenuScreen {
         }
         if (button.id == ID_DONE) {
             this.settings.saveOptions();
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
         }
     }
 
@@ -284,7 +284,7 @@ public class GuiAudioScreen extends MenuScreen {
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) {
             this.settings.saveOptions();
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
             return;
         }
         super.keyTyped(typedChar, keyCode);

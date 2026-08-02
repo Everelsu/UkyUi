@@ -461,7 +461,7 @@ public class GuiProgressScreen extends MenuScreen {
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) {
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
             return;
         }
         if (keyCode == 200) {
@@ -494,7 +494,7 @@ public class GuiProgressScreen extends MenuScreen {
             return;
         }
         if (button.id == ID_DONE) {
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
         }
     }
 

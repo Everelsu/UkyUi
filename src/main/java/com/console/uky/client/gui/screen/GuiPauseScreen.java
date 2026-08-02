@@ -147,22 +147,20 @@ public class GuiPauseScreen extends MenuScreen {
                 });
                 break;
             case ID_OPTIONS:
-                this.mc.displayGuiScreen(new GuiSettingsScreen(this, this.mc.gameSettings));
+                switchTo(new GuiSettingsScreen(GuiPauseScreen.this, mc.gameSettings));
                 break;
             case ID_ACHIEVEMENTS:
-                if (this.mc.thePlayer != null) {
-                    this.mc.displayGuiScreen(
-                            new GuiProgressScreen(this, this.mc.thePlayer.getStatFileWriter(), GuiProgressScreen.achievementsTab()));
+                if (mc.thePlayer != null) {
+                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, mc.thePlayer.getStatFileWriter(), GuiProgressScreen.achievementsTab()));
                 }
                 break;
             case ID_STATS:
-                if (this.mc.thePlayer != null) {
-                    this.mc.displayGuiScreen(
-                            new GuiProgressScreen(this, this.mc.thePlayer.getStatFileWriter(), GuiProgressScreen.statsTab()));
+                if (mc.thePlayer != null) {
+                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, mc.thePlayer.getStatFileWriter(), GuiProgressScreen.statsTab()));
                 }
                 break;
             case ID_LAN:
-                this.mc.displayGuiScreen(new GuiShareScreen(this));
+                switchTo(new GuiShareScreen(GuiPauseScreen.this));
                 break;
             case ID_QUIT:
                 button.enabled = false;

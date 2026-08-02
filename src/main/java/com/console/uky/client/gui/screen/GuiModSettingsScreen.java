@@ -177,14 +177,14 @@ public class GuiModSettingsScreen extends MenuScreen {
     @Override
     protected void onAction(GuiButton button) {
         if (button.id == ID_DONE) {
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
         }
     }
 
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) {
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
             return;
         }
         String before = this.search.getText();

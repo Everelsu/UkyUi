@@ -632,10 +632,10 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
                 diveTo(new GuiServersScreen(this));
                 break;
             case ID_OPTIONS:
-                this.mc.displayGuiScreen(new GuiSettingsScreen(this, this.mc.gameSettings));
+                switchTo(new GuiSettingsScreen(GuiTitleScreen.this, mc.gameSettings));
                 break;
             case ID_MODS:
-                this.mc.displayGuiScreen(new GuiModsScreen(this));
+                switchTo(new GuiModsScreen(GuiTitleScreen.this));
                 break;
             case ID_QUIT:
                 this.mc.shutdown();

@@ -366,7 +366,7 @@ public class GuiModConfigScreen extends MenuScreen {
                 UkyUI.LOGGER.warn("Mod {} threw while saving its config", this.modId, t);
             }
         }
-        this.mc.displayGuiScreen(this.parent);
+        switchBack();
     }
 
     private static boolean isTrue(Object value) {

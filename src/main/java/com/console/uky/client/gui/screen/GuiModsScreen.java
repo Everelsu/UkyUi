@@ -272,7 +272,7 @@ public class GuiModsScreen extends MenuScreen {
     protected void onAction(GuiButton button) {
         switch (button.id) {
             case ID_DONE:
-                this.mc.displayGuiScreen(this.parent);
+                switchBack();
                 break;
             case ID_CONFIG:
                 openConfig();
@@ -299,7 +299,16 @@ public class GuiModsScreen extends MenuScreen {
                 return;
             }
             GuiScreen screen = screenClass.getConstructor(GuiScreen.class).newInstance(this);
-            this.mc.displayGuiScreen(screen);
+            if (screen instanceof MenuScreen) {
+                switchTo((MenuScreen) screen);
+            } else {
+                closeWith(new Runnable() {
+                    @Override
+                    public void run() {
+                        mc.displayGuiScreen(screen);
+                    }
+                });
+            }
         } catch (Exception e) {
             // A broken third-party factory must not take the menu down with it.
             com.console.uky.UkyUI.LOGGER.warn("Could not open config for " + mod.getModId(), e);
@@ -309,7 +318,7 @@ public class GuiModsScreen extends MenuScreen {
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) {
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
             return;
         }
         if (keyCode == 200) { // up

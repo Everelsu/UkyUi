@@ -348,7 +348,11 @@ public class GuiWorldPromptScreen extends MenuScreen {
     }
 
     private void cancel() {
-        this.mc.displayGuiScreen(this.parent);
+        if (this.parent instanceof MenuScreen) {
+            switchBack();
+        } else {
+            this.mc.displayGuiScreen(this.parent);
+        }
     }
 
     @Override

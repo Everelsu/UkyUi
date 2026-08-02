@@ -278,7 +278,7 @@ public class GuiShareScreen extends MenuScreen {
             return;
         }
         if (inside(x1 + half + 8, this.actionY, half, 20)) {
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
             return;
         }
         super.mouseClicked(mouseX, mouseY, button);
@@ -287,7 +287,7 @@ public class GuiShareScreen extends MenuScreen {
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) {
-            this.mc.displayGuiScreen(this.parent);
+            switchBack();
             return;
         }
         if (keyCode == 28 || keyCode == 156) {

@@ -38,7 +38,7 @@ public abstract class MenuScreen extends GuiScreen {
 
     private static final float FADE_IN_SECONDS = 0.45F;
 
-    private final AmbientParticles particles = new AmbientParticles();
+    private static final AmbientParticles particles = new AmbientParticles();
     private final Random grainRandom = new Random();
     /** Shared so the starfield keeps its position when moving between screens. */
     protected static final BlackHole blackHole = new BlackHole();
@@ -67,6 +67,9 @@ public abstract class MenuScreen extends GuiScreen {
     /** The fade alpha captured from the previous screen. */
     private static float preservedFadeAlpha;
 
+    /** Whether the next screen should reuse black hole camera/animation state. */
+    private static boolean holePreserved;
+
     // ---- closing animation ----
     /**
      * What to show once the exit animation finishes, or null while the screen is
@@ -92,6 +95,38 @@ public abstract class MenuScreen extends GuiScreen {
         }
         this.pendingClose = action;
         this.closing = 0.0F;
+    }
+
+    /**
+     * Instant seamless transition to another {@link MenuScreen}.
+     * Preserves fade alpha and black hole camera — the next screen picks up exactly where this one left off.
+     */
+    protected void switchTo(MenuScreen next) {
+        fadePreserved = true;
+        preservedFadeAlpha = this.fadeAlpha;
+        holePreserved = true;
+        this.pendingClose = null; // cancel any pending close animation
+        this.mc.displayGuiScreen(next);
+    }
+
+    /**
+     * Instant seamless return to parent screen (if it's a MenuScreen).
+     */
+    protected void switchBack() {
+        if (this.parent instanceof MenuScreen) {
+            fadePreserved = true;
+            preservedFadeAlpha = this.fadeAlpha;
+            holePreserved = true;
+            this.pendingClose = null;
+            this.mc.displayGuiScreen(this.parent);
+        } else {
+            closeWith(new Runnable() {
+                @Override
+                public void run() {
+                    mc.displayGuiScreen(parent);
+                }
+            });
+        }
     }
 
     protected boolean isClosing() {
@@ -241,13 +276,17 @@ public abstract class MenuScreen extends GuiScreen {
         } else {
             this.fadeAlpha = 0.0F;
         }
-        this.particles.resize(this.width, this.height);
-        blackHole.resize(this.width, this.height);
+        if (holePreserved) {
+            holePreserved = false;
+        } else {
+            this.particles.resize(this.width, this.height);
+            blackHole.resize(this.width, this.height);
+        }
         buildLayout();
 
         // The very first menu of the session starts on its own angle rather than
         // swinging in from wherever the camera happened to be initialised.
-        if (!cameraPlaced) {
+        if (!cameraPlaced && !holePreserved) {
             cameraPlaced = true;
             blackHole.snapTo(blackHolePose());
         }
@@ -351,6 +390,15 @@ public abstract class MenuScreen extends GuiScreen {
         this.fadeAlpha = Ease.outCubic(this.elapsed / FADE_IN_SECONDS);
 
         particles.update(this.delta);
+    }
+
+    /**
+     * Suppresses vanilla's default background (black screen) because {@link #drawBackdrop()}
+     * already draws a full-screen opaque backdrop. Without this, the first frame of a new
+     * screen shows a black flash from {@link GuiScreen#drawDefaultBackground()}.
+     */
+    @Override
+    public void drawDefaultBackground() {
     }
 
     // -------------------------------------------------------------- backdrop --
