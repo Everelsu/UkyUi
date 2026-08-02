@@ -62,6 +62,11 @@ public abstract class MenuScreen extends GuiScreen {
     /** Entrance fade, 0..1. */
     protected float fadeAlpha;
 
+    /** Whether the next screen should reuse this screen's fade alpha. */
+    private static boolean fadePreserved;
+    /** The fade alpha captured from the previous screen. */
+    private static float preservedFadeAlpha;
+
     // ---- closing animation ----
     /**
      * What to show once the exit animation finishes, or null while the screen is
@@ -230,7 +235,12 @@ public abstract class MenuScreen extends GuiScreen {
         this.lastFrameNanos = System.nanoTime();
         this.elapsed = 0.0F;
         this.delta = 0.0F;
-        this.fadeAlpha = 0.0F;
+        if (fadePreserved) {
+            this.fadeAlpha = preservedFadeAlpha;
+            fadePreserved = false;
+        } else {
+            this.fadeAlpha = 0.0F;
+        }
         this.particles.resize(this.width, this.height);
         blackHole.resize(this.width, this.height);
         buildLayout();
