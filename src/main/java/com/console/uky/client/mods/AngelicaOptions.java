@@ -388,6 +388,10 @@ public final class AngelicaOptions {
         Class<?> pages = find(PAGES);
         if (pages != null) {
             for (String factory : SODIUM_PAGES) {
+                // "text" page was added in a newer Angelica; skip silently if absent
+                if ("text".equals(factory) && !hasMethod(pages, factory)) {
+                    continue;
+                }
                 addPage(sections, build(pages, factory));
             }
         }
@@ -417,6 +421,16 @@ public final class AngelicaOptions {
         } catch (Throwable t) {
             UkyUI.LOGGER.warn("Angelica's {} settings page could not be built", factory, t);
             return null;
+        }
+    }
+
+    /** Whether the factory method exists on this Angelica version. */
+    private static boolean hasMethod(Class<?> owner, String name) {
+        try {
+            owner.getMethod(name);
+            return true;
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -643,7 +657,11 @@ public final class AngelicaOptions {
             pageOptions = page.getMethod("getOptions");
 
             storageSave = Class.forName(OPTIONS + "storage.OptionStorage").getMethod("save");
-            applyAtlasSettings = Class.forName(GAME_OPTIONS).getMethod("applyAtlasSettings");
+            try {
+                applyAtlasSettings = Class.forName(GAME_OPTIONS).getMethod("applyAtlasSettings");
+            } catch (NoSuchMethodException e) {
+                applyAtlasSettings = null; // older Angelica
+            }
 
             tickBoxClass = Class.forName(CONTROL + "TickBoxControl");
             cyclingClass = Class.forName(CONTROL + "CyclingControl");
