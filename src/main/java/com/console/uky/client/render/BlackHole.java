@@ -744,9 +744,9 @@ public final class BlackHole {
         shader.set("uGain", DISK_GAIN * SHADER_GAIN_TRIM);
         shader.set("uSteps", UiConfig.blackHoleQuality);
 
-        setColour("uHot", 0xFFF3E4);
-        setColour("uMid", Theme.accent);
-        setColour("uCold", Theme.accentAlt);
+        setColour("uHot", UiConfig.colorBlackHoleHot);
+        setColour("uMid", UiConfig.colorBlackHoleMid);
+        setColour("uCold", UiConfig.colorBlackHoleCold);
     }
 
     private void drawShadedDirect(float cx, float cy, float halfW, float halfH, float intensity) {

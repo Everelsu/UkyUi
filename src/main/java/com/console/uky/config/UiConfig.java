@@ -97,6 +97,10 @@ public final class UiConfig {
     public static int colorText = 0xE6E2D8;
     public static int colorTextDim = 0x8A8578;
     public static int colorDanger = 0xB4472F;
+    /** Black hole disk colours: inner (hot), middle, outer (cold). */
+    public static int colorBlackHoleHot = 0xFFF3E4;
+    public static int colorBlackHoleMid = 0xC8A24B;
+    public static int colorBlackHoleCold = 0x8C5A2B;
 
     private UiConfig() {
     }
@@ -209,6 +213,10 @@ public final class UiConfig {
         colorText = hex(CAT_THEME, "text", 0xE6E2D8, "Primary text colour.");
         colorTextDim = hex(CAT_THEME, "textDim", 0x8A8578, "Muted text colour.");
         colorDanger = hex(CAT_THEME, "danger", 0xB4472F, "Destructive action colour (quit, disconnect).");
+        colorBlackHoleHot = hex(CAT_THEME, "blackHoleHot", 0xFFF3E4, "Black hole inner disk colour (hot region).");
+        colorBlackHoleMid = hex(CAT_THEME, "blackHoleMid", 0xC8A24B, "Black hole middle disk colour.");
+        colorBlackHoleCold = hex(CAT_THEME, "blackHoleCold", 0x8C5A2B, "Black hole outer disk colour (cold region).");
+
     }
 
     /** Re-reads the in-memory config after the in-game editor changed it. */
