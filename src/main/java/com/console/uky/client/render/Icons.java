@@ -204,6 +204,139 @@ public final class Icons {
                       cx, cy + h * 0.6F, colour);
     }
 
+    /** Rounded speech bubble with a tail, for chat and community links. */
+    public static void chat(float cx, float cy, float size, int colour) {
+        float w = size * 0.46F;
+        float h = size * 0.34F;
+        float r = Math.max(1.0F, size * 0.14F);
+        Draw.roundedRect(cx - w, cy - h - size * 0.06F, cx + w, cy + h - size * 0.06F, r, colour);
+        // Tail off the bottom-left, the way a bubble hangs from the speaker.
+        Draw.triangle(cx - w * 0.55F, cy + h - size * 0.10F,
+                      cx - w * 0.05F, cy + h - size * 0.10F,
+                      cx - w * 0.45F, cy + size * 0.46F, colour);
+    }
+
+    /**
+     * Heart, for supporting-the-pack links.
+     *
+     * Two lobes and a wedge rather than a curve: at sixteen pixels a proper bezier
+     * would be four indistinguishable blobs, and this reads as a heart at any size.
+     */
+    public static void heart(float cx, float cy, float size, int colour) {
+        float r = size * 0.24F;
+        float top = cy - size * 0.10F;
+        Draw.circle(cx - r * 0.92F, top, r, colour);
+        Draw.circle(cx + r * 0.92F, top, r, colour);
+        Draw.triangle(cx - r * 1.84F, top + r * 0.35F,
+                      cx + r * 1.84F, top + r * 0.35F,
+                      cx, cy + size * 0.44F, colour);
+    }
+
+    /** Five-pointed star, for repositories and anything bookmarked. */
+    public static void star(float cx, float cy, float size, int colour) {
+        float outer = size * 0.5F;
+        float inner = outer * 0.42F;
+        // Ten points around the circle, alternating radius, stitched as a fan.
+        float px = cx;
+        float py = cy - outer;
+        for (int i = 1; i <= 10; i++) {
+            double a = -Math.PI / 2.0 + i * Math.PI / 5.0;
+            float r = (i % 2 == 0) ? outer : inner;
+            float x = cx + (float) Math.cos(a) * r;
+            float y = cy + (float) Math.sin(a) * r;
+            Draw.triangle(cx, cy, px, py, x, y, colour);
+            px = x;
+            py = y;
+        }
+    }
+
+    // ------------------------------------------------------------------ marks --
+    //
+    // Stylised versions of the marks a pack links to. Drawn rather than shipped as
+    // artwork for the same reason as everything else here — they take the theme
+    // colour, stay sharp at any GUI scale and cost no files — and stylised rather
+    // than copied because a rounded rectangle with a triangle in it is what makes a
+    // row of links legible at sixteen pixels, not fidelity to someone's brand book.
+    //
+    // Each takes a {@code behind} colour for the parts that are cut out of the
+    // shape, which the caller sets to whatever the mark is being drawn on.
+
+    /** Rounded screen with a play triangle punched out of it. */
+    public static void youtube(float cx, float cy, float size, int colour, int behind) {
+        float w = size * 0.50F;
+        float h = size * 0.36F;
+        Draw.roundedRect(cx - w, cy - h, cx + w, cy + h, size * 0.13F, colour);
+        float t = h * 0.55F;
+        Draw.triangle(cx - t * 0.5F, cy - t,
+                      cx - t * 0.5F, cy + t,
+                      cx + t * 0.8F, cy, behind);
+    }
+
+    /** The rounded face with two eyes and a pair of tails. */
+    public static void discord(float cx, float cy, float size, int colour, int behind) {
+        float w = size * 0.44F;
+        float h = size * 0.30F;
+        Draw.roundedRect(cx - w, cy - h, cx + w, cy + h * 0.75F, size * 0.15F, colour);
+        // Tails flaring out of the bottom corners, which is what makes it read as
+        // this mark rather than as any other rounded blob.
+        Draw.triangle(cx - w, cy + h * 0.10F,
+                      cx - w * 0.30F, cy + h * 0.70F,
+                      cx - w * 1.00F, cy + h * 1.15F, colour);
+        Draw.triangle(cx + w, cy + h * 0.10F,
+                      cx + w * 0.30F, cy + h * 0.70F,
+                      cx + w * 1.00F, cy + h * 1.15F, colour);
+        float e = Math.max(1.0F, size * 0.10F);
+        Draw.rect(cx - w * 0.46F - e * 0.5F, cy - e * 0.6F,
+                  cx - w * 0.46F + e * 0.5F, cy + e * 0.6F, behind);
+        Draw.rect(cx + w * 0.46F - e * 0.5F, cy - e * 0.6F,
+                  cx + w * 0.46F + e * 0.5F, cy + e * 0.6F, behind);
+    }
+
+    /** Paper plane, from a wing and a fin. */
+    public static void telegram(float cx, float cy, float size, int colour) {
+        float h = size * 0.5F;
+        Draw.triangle(cx - h, cy - h * 0.10F,
+                      cx + h, cy - h * 0.80F,
+                      cx - h * 0.05F, cy + h * 0.25F, colour);
+        Draw.triangle(cx - h * 0.05F, cy + h * 0.25F,
+                      cx + h, cy - h * 0.80F,
+                      cx + h * 0.20F, cy + h * 0.85F, colour);
+    }
+
+    /** Lightning bolt, for the boost. */
+    public static void boosty(float cx, float cy, float size, int colour) {
+        float h = size * 0.5F;
+        Draw.triangle(cx + h * 0.40F, cy - h,
+                      cx - h * 0.50F, cy + h * 0.14F,
+                      cx + h * 0.18F, cy + h * 0.14F, colour);
+        Draw.triangle(cx - h * 0.40F, cy + h,
+                      cx + h * 0.50F, cy - h * 0.14F,
+                      cx - h * 0.18F, cy - h * 0.14F, colour);
+    }
+
+    /** The chat glyph: a screen with a chin and two bars cut out. */
+    public static void twitch(float cx, float cy, float size, int colour, int behind) {
+        float w = size * 0.36F;
+        float h = size * 0.42F;
+        Draw.rect(cx - w, cy - h, cx + w, cy + h * 0.18F, colour);
+        Draw.triangle(cx - w, cy + h * 0.18F,
+                      cx + w * 0.10F, cy + h * 0.18F,
+                      cx - w * 0.45F, cy + h, colour);
+        float bw = Math.max(1.0F, size * 0.09F);
+        Draw.rect(cx - w * 0.42F - bw * 0.5F, cy - h * 0.55F,
+                  cx - w * 0.42F + bw * 0.5F, cy - h * 0.02F, behind);
+        Draw.rect(cx + w * 0.32F - bw * 0.5F, cy - h * 0.55F,
+                  cx + w * 0.32F + bw * 0.5F, cy - h * 0.02F, behind);
+    }
+
+    /** A circle beside a bar — the support mark. */
+    public static void patreon(float cx, float cy, float size, int colour) {
+        Draw.circle(cx + size * 0.13F, cy - size * 0.04F, size * 0.29F, colour);
+        float bw = Math.max(1.5F, size * 0.14F);
+        Draw.rect(cx - size * 0.42F, cy - size * 0.42F,
+                  cx - size * 0.42F + bw, cy + size * 0.46F, colour);
+    }
+
     /** Circular arrow, for "refresh". */
     public static void refresh(float cx, float cy, float size, int colour) {
         float r = size * 0.42F;

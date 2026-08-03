@@ -4,12 +4,15 @@ import com.console.uky.UkyUI;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
+import cpw.mods.fml.client.GuiNotification;
 import net.minecraft.client.LoadingScreenRenderer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.util.ResourceLocation;
+import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.Display;
 import org.lwjgl.opengl.GL11;
 
@@ -35,6 +38,14 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
      * push-in to animate and 10fps makes it judder.
      */
     private static final long REPAINT_MS = 40L;
+
+    /**
+     * Frame interval while an FML question is up, in milliseconds.
+     *
+     * That screen is driven from here rather than by the game loop (see
+     * {@link #pumpStartupQuery()}), so this is literally its frame rate.
+     */
+    private static final long FRAME_MS = 16L;
 
     private final Minecraft mc;
 
@@ -87,12 +98,125 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
             return;
         }
         try {
+            if (pumpStartupQuery()) {
+                return;
+            }
             paint(progress);
         } catch (Throwable t) {
             this.broken = true;
             UkyUI.LOGGER.warn("Custom loading screen failed; using the vanilla one", t);
             super.setLoadingProgress(progress);
         }
+    }
+
+    // -------------------------------------------------------- FML startup query --
+
+    /** Guards against a paint that somehow re-enters the loop below. */
+    private boolean pumping;
+
+    /**
+     * Runs FML's mid-load question — "there are missing blocks in this save,
+     * continue?" — to an answer, and reports whether it did.
+     *
+     * <p>This is the whole reason that screen used to lock the game up. It is not
+     * drawn by the game loop: while a world is starting, the client thread is parked
+     * inside {@code Minecraft.launchIntegratedServer} waiting for the server, and the
+     * only thing that draws or reads input for a {@code GuiNotification} is
+     * {@code FMLClientHandler.handleLoadingScreen}, which vanilla calls from
+     * {@code LoadingScreenRenderer.setLoadingProgress}. Overriding that method to
+     * paint our own artwork removed the single call site — so the question rendered
+     * at best a couple of frames a second underneath our loading art and never saw a
+     * click. The world load sat waiting for an answer that could not be given.
+     *
+     * <p>Rather than hand back to vanilla and inherit its five-frames-a-second
+     * repaint (the outer wait loop only comes round every 200ms), this drives the
+     * screen itself at a normal frame rate until it is answered. Blocking here is
+     * safe and is what FML does on its own synchronous path: the thread that asked
+     * the question is parked on a latch until the answer arrives, so there is nothing
+     * else for this thread to be doing.
+     *
+     * @return true if a question was handled and no loading art should be drawn
+     */
+    private boolean pumpStartupQuery() {
+        Minecraft mc = this.mc;
+        if (this.pumping || !(mc.currentScreen instanceof GuiNotification)) {
+            return false;
+        }
+        // Every call below goes to GL or to LWJGL's input queues, neither of which
+        // may be touched from the server thread.
+        if (!mc.func_152345_ab()) {
+            return false;
+        }
+
+        this.pumping = true;
+        try {
+            // Closing the window is the exit that is not an answer: the flag it sets
+            // is refreshed by the Display.update() at the end of every frame drawn
+            // below, and leaving the loop hands straight back to vanilla, which
+            // throws MinecraftError from here to unwind the load.
+            while (!Display.isCloseRequested()
+                    && mc.currentScreen instanceof GuiNotification) {
+                GuiScreen screen = mc.currentScreen;
+                drawQueryFrame(screen);
+                // Reads the mouse and keyboard queues and dispatches to the screen;
+                // without this the buttons are decoration.
+                screen.handleInput();
+
+                try {
+                    Thread.sleep(FRAME_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        } finally {
+            this.pumping = false;
+            // The loading art has been off screen for as long as the question was up,
+            // so the next call should repaint rather than wait out the interval.
+            this.lastPaint = 0L;
+        }
+        return true;
+    }
+
+    /** One frame of whatever query screen is up, set up and presented by hand. */
+    private void drawQueryFrame(GuiScreen screen) {
+        ScaledResolution resolution =
+                new ScaledResolution(this.mc, this.mc.displayWidth, this.mc.displayHeight);
+        int width = resolution.getScaledWidth();
+        int height = resolution.getScaledHeight();
+
+        Framebuffer target = this.mc.getFramebuffer();
+        boolean useFramebuffer = OpenGlHelper.isFramebufferEnabled() && target != null;
+        if (useFramebuffer) {
+            target.framebufferClear();
+            target.bindFramebuffer(false);
+        }
+
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glLoadIdentity();
+        GL11.glOrtho(0.0D, resolution.getScaledWidth_double(),
+                resolution.getScaledHeight_double(), 0.0D, 100.0D, 300.0D);
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glLoadIdentity();
+        GL11.glTranslatef(0.0F, 0.0F, -200.0F);
+        GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
+
+        GL11.glDisable(GL11.GL_LIGHTING);
+        GL11.glDisable(GL11.GL_FOG);
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+
+        int mouseX = Mouse.getX() * width / this.mc.displayWidth;
+        int mouseY = height - Mouse.getY() * height / this.mc.displayHeight - 1;
+        screen.drawScreen(mouseX, mouseY, 0.0F);
+
+        if (useFramebuffer) {
+            target.unbindFramebuffer();
+            target.framebufferRender(this.mc.displayWidth, this.mc.displayHeight);
+        }
+        this.mc.func_147120_f();
     }
 
     /** Picks up the picture and the clock on the first message of a load. */

@@ -3,6 +3,7 @@ package com.console.uky.client.gui.screen;
 import com.console.uky.UkyUI;
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.gui.Transitions;
+import com.console.uky.client.gui.widget.LinkButton;
 import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
@@ -181,7 +182,17 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
                 I18n.format("menu.quit", new Object[0]), MenuButton.Style.GHOST).destructive();
         y += rowHeight + rowGap;
 
-        buildLinkRow(columnX, y + 8, index);
+        // Lined up with the "01" of the menu entries above rather than with the
+        // buttons' own left edge, which is twelve units further out and made the
+        // links look like they had slipped off the column. Three units back on top
+        // of that, because a mark is drawn centred in its box and its ink starts
+        // about that far in, while the "01" above starts at its own first pixel.
+        int linkX = columnX + 9;
+        // Wider than the menu column: the links sit below it, where there is room
+        // out to the hole, and a two-word label does not fit in a column sized for
+        // one-word menu entries.
+        int linkWidth = Math.max(columnWidth, (int) (this.width * 0.36F));
+        buildLinkRow(linkX, y + 12, index, linkWidth, false);
     }
 
     private MenuButton addRow(int id, int x, int y, int width, int height, int index,
@@ -218,7 +229,10 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
         for (int i = 0; i < this.buttonList.size(); i++) {
             Object o = this.buttonList.get(i);
-            if (!(o instanceof MenuButton)) {
+            // Links are on this list too, and they are not on the rail: hovering one
+            // lit a node up beside the menu entries, pointing at a row that was not
+            // there. The rail belongs to the column above them.
+            if (!(o instanceof MenuButton) || o instanceof LinkButton) {
                 continue;
             }
             MenuButton button = (MenuButton) o;
@@ -235,30 +249,78 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
-    /** Small link buttons in a row, driven entirely by {@code mainmenu.links}. */
-    private void buildLinkRow(int x, int y, int index) {
+    /** Height of one link tile, and so the size of its mark. */
+    private static final int LINK_HEIGHT = 16;
+    private static final int LINK_GAP = 5;
+
+    /**
+     * The link row, driven entirely by {@code mainmenu.links}.
+     *
+     * Each line of that setting is {@code Label|URL} with an optional third field
+     * naming a mark — one of ours, or a PNG in the icon folder. What does not fit on
+     * a line wraps to the next one rather than running off into the black hole, so a
+     * pack can list as many as it likes without having to know how wide the window
+     * will be.
+     *
+     * @param rowWidth space the row may use
+     * @param centred  whether each line is centred on {@code x} instead of starting there
+     */
+    private void buildLinkRow(int x, int y, int index, int rowWidth, boolean centred) {
         String[] entries = UiConfig.links;
         if (entries == null || entries.length == 0) {
             return;
         }
-        int cursor = x;
+
+        // Laid out into lines first, then placed: a centred line cannot be positioned
+        // until it is known what else is on it.
+        List<List<LinkButton>> lines = new ArrayList<List<LinkButton>>();
+        List<LinkButton> line = new ArrayList<LinkButton>();
+        List<Integer> lineWidths = new ArrayList<Integer>();
+        int used = 0;
+
         for (int i = 0; i < entries.length; i++) {
-            String entry = entries[i];
-            int split = entry.indexOf('|');
-            if (split <= 0 || split == entry.length() - 1) {
+            String[] parts = entries[i].split("\\|");
+            if (parts.length < 2) {
                 continue; // malformed line in the config; skip rather than crash
             }
-            String label = entry.substring(0, split).trim();
-            String url = entry.substring(split + 1).trim();
+            String label = parts[0].trim();
+            String url = parts[1].trim();
+            String icon = parts.length > 2 ? parts[2].trim() : "";
+            if (label.isEmpty() || url.isEmpty()) {
+                continue;
+            }
 
-            int width = this.fontRendererObj.getStringWidth(label) + 14;
-            MenuButton button = new MenuButton(ID_LINK_BASE + this.linkTargets.size(),
-                    cursor, y, width, 14, label, MenuButton.Style.GHOST);
-            button.align(MenuButton.Align.LEFT);
+            int width = LinkButton.widthFor(this.fontRendererObj, label, LINK_HEIGHT);
+            if (!line.isEmpty() && used + LINK_GAP + width > rowWidth) {
+                lines.add(line);
+                lineWidths.add(Integer.valueOf(used));
+                line = new ArrayList<LinkButton>();
+                used = 0;
+            }
+
+            LinkButton button = LinkButton.of(ID_LINK_BASE + this.linkTargets.size(),
+                    0, 0, width, LINK_HEIGHT, label, url, icon);
             button.entrance(0.16F + (index + i) * 0.045F);
-            this.buttonList.add(button);
+            line.add(button);
             this.linkTargets.add(url);
-            cursor += width + 4;
+            used += (used == 0 ? 0 : LINK_GAP) + width;
+        }
+        if (!line.isEmpty()) {
+            lines.add(line);
+            lineWidths.add(Integer.valueOf(used));
+        }
+
+        for (int row = 0; row < lines.size(); row++) {
+            int cursor = centred ? x - lineWidths.get(row).intValue() / 2 : x;
+            int rowY = y + row * (LINK_HEIGHT + 4);
+            List<LinkButton> placed = lines.get(row);
+            for (int i = 0; i < placed.size(); i++) {
+                LinkButton button = placed.get(i);
+                button.xPosition = cursor;
+                button.yPosition = rowY;
+                this.buttonList.add(button);
+                cursor += button.width + LINK_GAP;
+            }
         }
     }
 
@@ -334,6 +396,9 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             y += BUTTON_HEIGHT + BUTTON_GAP;
         }
         add(ID_QUIT, centerX, y, index, I18n.format("menu.quit", new Object[0]), MenuButton.Style.DANGER);
+        y += BUTTON_HEIGHT;
+
+        buildLinkRow(centerX, y + 10, index + 1, (int) (this.width * 0.7F), true);
     }
 
     private static int clamp(int v, int min, int max) {
@@ -615,9 +680,12 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             this.fontRendererObj.drawString(UiConfig.footer, 6, this.height - 11, dim);
         }
 
-        String right = "UltraKill Yourself UI " + UkyUI.VERSION;
-        this.fontRendererObj.drawString(right,
-                this.width - this.fontRendererObj.getStringWidth(right) - 6, this.height - 11, dim);
+        if (UiConfig.footerRight != null && !UiConfig.footerRight.isEmpty()) {
+            String right = UiConfig.footerRight.replace("%version%", UkyUI.VERSION);
+            this.fontRendererObj.drawString(right,
+                    this.width - this.fontRendererObj.getStringWidth(right) - 6,
+                    this.height - 11, dim);
+        }
     }
 
     // ----------------------------------------------------------------- input --

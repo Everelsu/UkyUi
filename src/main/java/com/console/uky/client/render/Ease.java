@@ -26,6 +26,18 @@ public final class Ease {
         return 1.0F - inv * inv * inv;
     }
 
+    /**
+     * The t that {@link #outCubic} maps to {@code value}.
+     *
+     * For resuming a curve part-way through: a screen handed a fade that is already
+     * half up has to know how far along the curve that is, or continuing from it
+     * jumps.
+     */
+    public static float outCubicInverse(float value) {
+        value = clamp01(value);
+        return 1.0F - (float) Math.cbrt(1.0F - value);
+    }
+
     public static float inCubic(float t) {
         t = clamp01(t);
         return t * t * t;

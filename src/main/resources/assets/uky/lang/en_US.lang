@@ -42,3 +42,57 @@ uky.settings.videoTakeover=Open the renderer's own screen...
 uky.settings.renderer=Renderer
 uky.settings.shaderPacks=Shader packs
 uky.settings.shaderPacks.open=Choose a shader pack...
+
+# ---- death scene ----
+# Six lines per cause. The scene picks one at random and holds it for that death.
+uky.death.prompt=Press any key or click to return
+uky.death.promptLeave=Press any key to leave
+
+uky.death.generic.1=Signal lost. Nothing claimed the kill.
+uky.death.generic.2=You stopped. The world did not.
+uky.death.generic.3=No cause recorded. Same result.
+uky.death.generic.4=The run ends here unless you move.
+uky.death.generic.5=Silence, then whatever you do next.
+uky.death.generic.6=Get up. Nothing is watching.
+
+uky.death.fall.1=The ground was always going to win.
+uky.death.fall.2=You fell the whole way down.
+uky.death.fall.3=Terminal velocity, terminal result.
+uky.death.fall.4=Nothing hit you. You hit it.
+uky.death.fall.5=Height is not the problem. Landing is.
+uky.death.fall.6=Gravity kept its side of the deal.
+
+uky.death.fire.1=You went out before the fire did.
+uky.death.fire.2=Heat does not negotiate.
+uky.death.fire.3=Ash now. Something else in a minute.
+uky.death.fire.4=It burned through everything you were carrying.
+uky.death.fire.5=You were the fuel. It ran out.
+uky.death.fire.6=Nothing left to catch.
+
+uky.death.drown.1=The air ran out first.
+uky.death.drown.2=You stopped fighting the water.
+uky.death.drown.3=Down here nothing is in a hurry.
+uky.death.drown.4=The surface was closer than it looked.
+uky.death.drown.5=Lungs empty. Everything else follows.
+uky.death.drown.6=The water did not have to try.
+
+uky.death.explosion.1=Everything arrived at once.
+uky.death.explosion.2=The blast finished before you heard it.
+uky.death.explosion.3=You were closer than the plan allowed.
+uky.death.explosion.4=Pieces first, silence after.
+uky.death.explosion.5=It did not aim. It did not have to.
+uky.death.explosion.6=One second of noise, then this.
+
+uky.death.void.1=There was no bottom. There never is.
+uky.death.void.2=You fell out of the world.
+uky.death.void.3=Nothing down there wanted you.
+uky.death.void.4=The map ended. You kept going.
+uky.death.void.5=No ground, no sound, no cause.
+uky.death.void.6=You are not the first to miss the edge.
+
+uky.death.mob.1=Something took its time with you.
+uky.death.mob.2=It was faster. That is all.
+uky.death.mob.3=You were counted, not fought.
+uky.death.mob.4=It is still there.
+uky.death.mob.5=The hit landed. Nothing else did.
+uky.death.mob.6=You gave it the last opening.

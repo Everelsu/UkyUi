@@ -1,5 +1,6 @@
 package com.console.uky.handler;
 
+import com.console.uky.client.death.DeathScene;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.client.world.UkyLoadingScreen;
 import com.console.uky.client.world.WorldPreviews;
@@ -80,6 +81,7 @@ public class WorldCaptureHandler {
     @SubscribeEvent
     public void onSoundLoad(SoundLoadEvent event) {
         UkySounds.onSoundSystemReloaded();
+        DeathScene.onSoundSystemReloaded();
     }
 
     @SubscribeEvent

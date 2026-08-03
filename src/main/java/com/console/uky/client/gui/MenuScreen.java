@@ -61,6 +61,14 @@ public abstract class MenuScreen extends GuiScreen {
     protected float delta;
     /** Entrance fade, 0..1. */
     protected float fadeAlpha;
+    /**
+     * Where on the entrance curve this screen starts, in seconds.
+     *
+     * Zero for a screen opening cold. A screen taking over from another one starts
+     * at whatever point of the curve produces the fade it inherited, so the fade
+     * carries on from there instead of restarting — see {@link #initGui()}.
+     */
+    private float fadeOffset;
 
     /** Whether the next screen should reuse this screen's fade alpha. */
     private static boolean fadePreserved;
@@ -272,11 +280,19 @@ public abstract class MenuScreen extends GuiScreen {
         this.delta = 0.0F;
         if (fadePreserved) {
             this.fadeAlpha = preservedFadeAlpha;
+            // Not just the alpha: the curve it came off has to be resumed too.
+            // Setting the alpha alone did nothing visible, because the first frame
+            // recomputed it from an elapsed of zero and threw it away — which is
+            // exactly the blink that showed on every button press. Starting the
+            // clock part-way along the curve is what makes the handover seamless.
+            this.fadeOffset = FADE_IN_SECONDS * Ease.outCubicInverse(preservedFadeAlpha);
             fadePreserved = false;
         } else {
             this.fadeAlpha = 0.0F;
+            this.fadeOffset = 0.0F;
         }
-        if (holePreserved) {
+        boolean holeInherited = holePreserved;
+        if (holeInherited) {
             holePreserved = false;
         } else {
             this.particles.resize(this.width, this.height);
@@ -286,7 +302,7 @@ public abstract class MenuScreen extends GuiScreen {
 
         // The very first menu of the session starts on its own angle rather than
         // swinging in from wherever the camera happened to be initialised.
-        if (!cameraPlaced && !holePreserved) {
+        if (!cameraPlaced && !holeInherited) {
             cameraPlaced = true;
             blackHole.snapTo(blackHolePose());
         }
@@ -387,7 +403,7 @@ public abstract class MenuScreen extends GuiScreen {
         this.delta = Math.min(dt, 0.1F);
         this.elapsed += this.delta;
         Transitions.update(this.delta);
-        this.fadeAlpha = Ease.outCubic(this.elapsed / FADE_IN_SECONDS);
+        this.fadeAlpha = Ease.outCubic((this.elapsed + this.fadeOffset) / FADE_IN_SECONDS);
 
         particles.update(this.delta);
     }

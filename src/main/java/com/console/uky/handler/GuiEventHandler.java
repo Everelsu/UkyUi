@@ -3,10 +3,12 @@ package com.console.uky.handler;
 import com.console.uky.client.gui.screen.GuiConnectingScreen;
 import com.console.uky.client.render.UkyFontRenderer;
 import com.console.uky.client.gui.screen.GuiCreateWorldScreen;
+import com.console.uky.client.gui.screen.GuiDeathScreen;
 import com.console.uky.client.gui.screen.GuiDisconnectedScreen;
 import com.console.uky.client.gui.screen.GuiTitleScreen;
 import com.console.uky.client.gui.screen.GuiWorldPromptScreen;
 import com.console.uky.client.gui.screen.GuiSettingsScreen;
+import com.console.uky.client.gui.screen.GuiStartupQueryScreen;
 import com.console.uky.client.gui.screen.GuiPauseScreen;
 import com.console.uky.client.gui.screen.GuiWorldLoadingScreen;
 import com.console.uky.client.gui.screen.GuiWorldsScreen;
@@ -20,6 +22,7 @@ import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.gui.GuiCreateWorld;
 import net.minecraft.client.gui.GuiDisconnected;
 import net.minecraft.client.gui.GuiDownloadTerrain;
+import net.minecraft.client.gui.GuiGameOver;
 import net.minecraft.client.gui.GuiOptions;
 import net.minecraft.client.gui.GuiRenameWorld;
 import net.minecraft.client.gui.GuiSelectWorld;
@@ -74,6 +77,11 @@ public class GuiEventHandler {
             return;
         }
 
+        if (UiConfig.replaceDeathScreen && type == GuiGameOver.class) {
+            event.gui = new GuiDeathScreen();
+            return;
+        }
+
         if (UiConfig.replaceWorldList && type == GuiSelectWorld.class) {
             // Another mod (or a vanilla path we did not route) opened the stock
             // world list; swap it for the tiles.
@@ -124,6 +132,17 @@ public class GuiEventHandler {
             // Wraps rather than replaces: the vanilla screen is what notices the
             // world is ready and hands control back.
             event.gui = new GuiWorldLoadingScreen(event.gui);
+            return;
+        }
+
+        // FML's mid-load question. Restyled rather than replaced: it stays a
+        // GuiNotification because that type is what FML's own draw-and-input path
+        // looks for while the game loop is parked. See GuiStartupQueryScreen.
+        if (type.getName().startsWith("cpw.mods.fml.client.Gui")) {
+            GuiScreen restyled = GuiStartupQueryScreen.wrap(event.gui);
+            if (restyled != null) {
+                event.gui = restyled;
+            }
             return;
         }
 

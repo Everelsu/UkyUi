@@ -1,6 +1,7 @@
 package com.console.uky.proxy;
 
 import com.console.uky.client.WindowBranding;
+import com.console.uky.client.death.DeathTracker;
 import com.console.uky.client.render.BlackHole;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkyMusicTicker;
@@ -30,6 +31,13 @@ public class ClientProxy extends CommonProxy {
         }
 
         MinecraftForge.EVENT_BUS.register(new GuiEventHandler());
+
+        // Watches for what killed the player, and for the respawn that ends the
+        // scene. Both buses: the tick is FML's, the explosion it listens for is a
+        // sound event on Forge's.
+        DeathTracker deaths = new DeathTracker();
+        FMLCommonHandler.instance().bus().register(deaths);
+        MinecraftForge.EVENT_BUS.register(deaths);
         // ConfigChangedEvent lives on FML's bus, not Forge's.
         FMLCommonHandler.instance().bus().register(new ConfigChangeHandler());
         // Render-tick driven: quitting a world waits for one clean frame of it.

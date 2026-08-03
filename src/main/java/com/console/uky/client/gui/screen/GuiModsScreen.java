@@ -3,6 +3,7 @@ package com.console.uky.client.gui.screen;
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.gui.widget.ScrollList;
+import com.console.uky.client.mods.ModConfigCatalog;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
@@ -197,8 +198,15 @@ public class GuiModsScreen extends MenuScreen {
     }
 
     /** FML only exposes a config GUI when the mod declared a factory. */
+    /**
+     * Whether Configure has anywhere to go.
+     *
+     * Asks the catalogue rather than checking that the mod named a factory class: a
+     * name is not a working screen, and a factory that throws on construction was
+     * still lighting the button up.
+     */
     private static boolean hasConfigScreen(ModContainer mod) {
-        return mod.getGuiClassName() != null && !mod.getGuiClassName().isEmpty();
+        return entryFor(mod) != null;
     }
 
     // ----------------------------------------------------------------- input --
@@ -282,37 +290,51 @@ public class GuiModsScreen extends MenuScreen {
         }
     }
 
+    /**
+     * Opens the selected mod's settings, in our widgets wherever that is possible.
+     *
+     * This used to build the mod's own screen directly, which meant the Configure
+     * button here dropped straight into Forge's grey list — even for the mods whose
+     * settings the mod settings screen was already redrawing properly. The two go
+     * through the same catalogue now, so a mod that describes its config as data gets
+     * our screen from either entry point, and only a mod that hand-wrote its own
+     * screen gets that one.
+     */
     private void openConfig() {
         int index = this.list.getSelected();
         if (index < 0 || index >= this.mods.size()) {
             return;
         }
-        ModContainer mod = this.mods.get(index);
-        try {
-            Class<?> factoryClass = Class.forName(mod.getGuiClassName(), true,
-                    Loader.instance().getModClassLoader());
-            cpw.mods.fml.client.IModGuiFactory factory =
-                    (cpw.mods.fml.client.IModGuiFactory) factoryClass.newInstance();
-            factory.initialize(this.mc);
-            Class<? extends GuiScreen> screenClass = factory.mainConfigGuiClass();
-            if (screenClass == null) {
-                return;
-            }
-            GuiScreen screen = screenClass.getConstructor(GuiScreen.class).newInstance(this);
-            if (screen instanceof MenuScreen) {
-                switchTo((MenuScreen) screen);
-            } else {
-                closeWith(new Runnable() {
-                    @Override
-                    public void run() {
-                        mc.displayGuiScreen(screen);
-                    }
-                });
-            }
-        } catch (Exception e) {
-            // A broken third-party factory must not take the menu down with it.
-            com.console.uky.UkyUI.LOGGER.warn("Could not open config for " + mod.getModId(), e);
+        ModConfigCatalog.Entry entry = entryFor(this.mods.get(index));
+        if (entry == null) {
+            return;
         }
+
+        MenuScreen ours = GuiModConfigScreen.forEntry(entry, this);
+        if (ours != null) {
+            switchTo(ours);
+            return;
+        }
+
+        final GuiScreen theirs = ModConfigCatalog.instantiate(entry, this);
+        if (theirs != null) {
+            closeWith(new Runnable() {
+                @Override
+                public void run() {
+                    mc.displayGuiScreen(theirs);
+                }
+            });
+        }
+    }
+
+    private static ModConfigCatalog.Entry entryFor(ModContainer mod) {
+        List<ModConfigCatalog.Entry> entries = ModConfigCatalog.entries();
+        for (int i = 0; i < entries.size(); i++) {
+            if (entries.get(i).mod == mod) {
+                return entries.get(i);
+            }
+        }
+        return null;
     }
 
     @Override

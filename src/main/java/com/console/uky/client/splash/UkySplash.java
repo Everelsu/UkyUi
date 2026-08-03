@@ -488,7 +488,7 @@ public final class UkySplash {
                 return;
             }
             String[] tips = UiConfig.splashTips;
-            if (tips.length == 0) {
+            if (!UiConfig.showTips || tips.length == 0) {
                 return;
             }
             // One tip every 4.5s, cross-fading so the swap is not a hard cut.

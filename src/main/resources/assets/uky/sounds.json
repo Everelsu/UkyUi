@@ -28,5 +28,17 @@
     "sounds": [
       { "name": "delete_break", "stream": false }
     ]
+  },
+  "heartbeat": {
+    "category": "master",
+    "sounds": [
+      { "name": "heartbeat", "stream": false }
+    ]
+  },
+  "breathing": {
+    "category": "master",
+    "sounds": [
+      { "name": "breathing", "stream": true }
+    ]
   }
 }

@@ -11,7 +11,7 @@
 // disagree, the mod list and the file name disagree, and it is the mod list people
 // quote in bug reports.
 group = "com.console.uky"
-version = "0.4.0"
+version = "0.5.0"
 
 // Java 8 toolchain is mandatory for 1.7.10 (both compiling and running)
 java {
