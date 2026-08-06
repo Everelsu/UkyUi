@@ -20,6 +20,27 @@ java {
     }
 }
 
+// ---- Stale decompile guard ----
+//
+// RetroFuturaGradle keeps its decompiled and patched Minecraft in build/rfg, and it
+// does not clear that directory when mcVersion changes — it writes the new sources
+// over whatever is already there. This repository has a 1.7.10 branch and a 1.12.2
+// branch sharing one build directory, so checking out the other branch, building, and
+// coming back leaves the previous version's sources sitting in the tree. The Minecraft
+// recompile then fails on a hundred errors that all look like the mod's fault and none
+// of which are: cpw.mods.fml, tv.twitch, WorldSettings.GameType.
+//
+// The tell is unambiguous — cpw/ is 1.7.10's FML and cannot exist in a 1.12.2 tree —
+// so the leftovers are cleared rather than reported. Fixing it by hand is one rm and
+// five minutes of decompiling, every single time.
+run {
+    val rfg = layout.buildDirectory.dir("rfg").get().asFile
+    if (File(rfg, "minecraft-src/java/cpw").isDirectory) {
+        logger.lifecycle("Clearing 1.7.10 leftovers from ${rfg.path} (branch switch)")
+        rfg.deleteRecursively()
+    }
+}
+
 // ---- RetroFuturaGradle / Minecraft configuration ----
 minecraft {
     mcVersion.set("1.12.2")
@@ -111,7 +132,16 @@ tasks.named<JavaExec>("runClient").configure {
 // Coremod / mixin metadata for the built (production) jar. It has to go on `jar`
 // rather than on `reobfJar`: the reobfuscation task remaps the jar it is given and
 // writes the result itself, so a manifest configured on it is never used.
+//
+// The archive version is set here too: "ukyui-0.5.0.jar" tells a bug report nothing
+// about which Minecraft it was built for, and this project already lives on two
+// branches of that question. "ukyui-1.12.2-0.5.0.jar" is what actually distinguishes
+// the two, and it is what shows up in a mod list or a download link either way.
+// reobfJar (the file that ships) picks this up on its own: RetroFuturaGradle points
+// its archiveVersion at jar's by convention, which is also why nothing has to be
+// repeated for the "-dev" classifier that stays on the workspace jar alone.
 tasks.named<Jar>("jar").configure {
+    archiveVersion.set(minecraft.mcVersion.map { mc -> "$mc-${project.version}" })
     manifest {
         attributes(
             "FMLCorePlugin" to "com.console.uky.core.UkyCore",
