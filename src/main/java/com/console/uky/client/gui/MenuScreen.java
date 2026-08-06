@@ -13,7 +13,7 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.util.MathHelper;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 
@@ -221,8 +221,8 @@ public abstract class MenuScreen extends GuiScreen {
         // image left showing around it. Both spaces come off the framebuffer below,
         // which cannot disagree with itself.
         this.uiScaleFactor = autoScaleFactor(mc);
-        int ownWidth = MathHelper.ceiling_double_int((double) mc.displayWidth / this.uiScaleFactor);
-        int ownHeight = MathHelper.ceiling_double_int((double) mc.displayHeight / this.uiScaleFactor);
+        int ownWidth = MathHelper.ceil((double) mc.displayWidth / this.uiScaleFactor);
+        int ownHeight = MathHelper.ceil((double) mc.displayHeight / this.uiScaleFactor);
         super.setWorldAndResolution(mc, ownWidth, ownHeight);
     }
 
@@ -237,7 +237,7 @@ public abstract class MenuScreen extends GuiScreen {
     private void syncScale() {
         Minecraft mc = this.mc;
         this.uiScaleFactor = autoScaleFactor(mc);
-        ScaledResolution game = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+        ScaledResolution game = new ScaledResolution(mc);
         this.uiScaleX = this.width <= 0 ? 1.0F : (float) game.getScaledWidth() / this.width;
         this.uiScaleY = this.height <= 0 ? 1.0F : (float) game.getScaledHeight() / this.height;
     }
@@ -599,9 +599,9 @@ public abstract class MenuScreen extends GuiScreen {
     /** Section heading with an accent rule underneath. */
     protected void drawHeading(String title, int centerX, int y) {
         int color = Draw.withAlpha(Theme.text, this.fadeAlpha);
-        this.drawCenteredString(this.fontRendererObj, title, centerX, y, color);
+        this.drawCenteredString(this.fontRenderer, title, centerX, y, color);
 
-        float ruleWidth = Math.max(60, this.fontRendererObj.getStringWidth(title) * 0.7F);
+        float ruleWidth = Math.max(60, this.fontRenderer.getStringWidth(title) * 0.7F);
         float ruleY = y + 13;
         Draw.gradientH(centerX - ruleWidth / 2, ruleY, centerX, ruleY + 1,
                 Draw.withAlpha(Theme.accent, 0.0F), Draw.withAlpha(Theme.accent, 0.8F * this.fadeAlpha));
@@ -611,13 +611,13 @@ public abstract class MenuScreen extends GuiScreen {
 
     /** Small dim text, left-aligned. */
     protected void drawHint(String text, int x, int y) {
-        this.fontRendererObj.drawString(text, x, y, Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
+        this.fontRenderer.drawString(text, x, y, Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
     }
 
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void actionPerformed(GuiButton button) {
+    protected void actionPerformed(GuiButton button) throws java.io.IOException {
         if (!button.enabled) {
             return;
         }
@@ -650,8 +650,8 @@ public abstract class MenuScreen extends GuiScreen {
             return 0;
         }
         String fitted = fit(text, maxWidth);
-        this.fontRendererObj.drawString(fitted, x, y, colour);
-        return this.fontRendererObj.getStringWidth(fitted);
+        this.fontRenderer.drawString(fitted, x, y, colour);
+        return this.fontRenderer.getStringWidth(fitted);
     }
 
     /** As {@link #drawFitted}, but the text ends at {@code right}. */
@@ -660,8 +660,8 @@ public abstract class MenuScreen extends GuiScreen {
             return 0;
         }
         String fitted = fit(text, maxWidth);
-        int width = this.fontRendererObj.getStringWidth(fitted);
-        this.fontRendererObj.drawString(fitted, right - width, y, colour);
+        int width = this.fontRenderer.getStringWidth(fitted);
+        this.fontRenderer.drawString(fitted, right - width, y, colour);
         return width;
     }
 
@@ -671,8 +671,8 @@ public abstract class MenuScreen extends GuiScreen {
             return 0;
         }
         String fitted = fit(text, maxWidth);
-        int width = this.fontRendererObj.getStringWidth(fitted);
-        this.fontRendererObj.drawString(fitted, cx - width / 2, y, colour);
+        int width = this.fontRenderer.getStringWidth(fitted);
+        this.fontRenderer.drawString(fitted, cx - width / 2, y, colour);
         return width;
     }
 
@@ -683,7 +683,7 @@ public abstract class MenuScreen extends GuiScreen {
      * trailing "…" reads as "there is more here", which is the truth.
      */
     public String fit(String text, int maxWidth) {
-        FontRenderer font = this.fontRendererObj;
+        FontRenderer font = this.fontRenderer;
         if (font.getStringWidth(text) <= maxWidth) {
             return text;
         }

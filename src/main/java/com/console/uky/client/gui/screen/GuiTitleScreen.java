@@ -11,11 +11,12 @@ import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.client.splash.UkySplash;
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.client.GuiModList;
+import net.minecraftforge.common.ForgeVersion;
+import net.minecraftforge.fml.client.GuiModList;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiConfirmOpenLink;
 import net.minecraft.client.gui.GuiMultiplayer;
-import net.minecraft.client.gui.GuiSelectWorld;
+import net.minecraft.client.gui.GuiWorldSelection;
 import net.minecraft.client.gui.GuiYesNoCallback;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
@@ -240,7 +241,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             if (hover <= 0.02F) {
                 continue;
             }
-            float cy = button.yPosition + button.height / 2.0F;
+            float cy = button.y + button.height / 2.0F;
             int accent = button.isDestructive() ? Theme.danger : Theme.accent;
             Draw.rect(this.railX - 1.0F, cy - 5.0F * hover, this.railX + 2.0F, cy + 5.0F * hover,
                     Draw.fade(accent, alpha));
@@ -290,7 +291,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
                 continue;
             }
 
-            int width = LinkButton.widthFor(this.fontRendererObj, label, LINK_HEIGHT);
+            int width = LinkButton.widthFor(this.fontRenderer, label, LINK_HEIGHT);
             if (!line.isEmpty() && used + LINK_GAP + width > rowWidth) {
                 lines.add(line);
                 lineWidths.add(Integer.valueOf(used));
@@ -316,8 +317,8 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             List<LinkButton> placed = lines.get(row);
             for (int i = 0; i < placed.size(); i++) {
                 LinkButton button = placed.get(i);
-                button.xPosition = cursor;
-                button.yPosition = rowY;
+                button.x = cursor;
+                button.y = rowY;
                 this.buttonList.add(button);
                 cursor += button.width + LINK_GAP;
             }
@@ -621,7 +622,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             textY += 22;
         }
         if (UiConfig.tagline != null && !UiConfig.tagline.isEmpty()) {
-            this.drawCenteredString(this.fontRendererObj, UiConfig.tagline, centerX, textY,
+            this.drawCenteredString(this.fontRenderer, UiConfig.tagline, centerX, textY,
                     Draw.withAlpha(Theme.textDim, 0.9F * this.contentAlpha));
         }
     }
@@ -633,7 +634,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
         int totalWidth = 0;
         for (int i = 0; i < text.length(); i++) {
-            totalWidth += this.fontRendererObj.getCharWidth(text.charAt(i)) + tracking;
+            totalWidth += this.fontRenderer.getCharWidth(text.charAt(i)) + tracking;
         }
         totalWidth -= tracking;
 
@@ -655,9 +656,9 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
         for (int i = 0; i < text.length(); i++) {
             String ch = String.valueOf(text.charAt(i));
-            this.fontRendererObj.drawString(ch, (int) (cursor + 1), (int) (baseY + 1), shadow, false);
-            this.fontRendererObj.drawString(ch, (int) cursor, (int) baseY, color, false);
-            cursor += this.fontRendererObj.getCharWidth(text.charAt(i)) + tracking;
+            this.fontRenderer.drawString(ch, (int) (cursor + 1), (int) (baseY + 1), shadow, false);
+            this.fontRenderer.drawString(ch, (int) cursor, (int) baseY, color, false);
+            cursor += this.fontRenderer.getCharWidth(text.charAt(i)) + tracking;
         }
         GL11.glPopMatrix();
 
@@ -674,16 +675,19 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     private void drawCorners() {
         int dim = Draw.withAlpha(Theme.textDim, 0.75F * this.contentAlpha);
 
-        String left = "Minecraft 1.7.10";
-        this.fontRendererObj.drawString(left, 6, this.height - 20, dim);
+        // Read rather than written out: this line was a literal on 1.7.10 and was
+        // still claiming 1.7.10 after the port, which is the one thing on the screen
+        // a player would quote in a bug report.
+        String left = "Minecraft " + ForgeVersion.mcVersion;
+        this.fontRenderer.drawString(left, 6, this.height - 20, dim);
         if (UiConfig.footer != null && !UiConfig.footer.isEmpty()) {
-            this.fontRendererObj.drawString(UiConfig.footer, 6, this.height - 11, dim);
+            this.fontRenderer.drawString(UiConfig.footer, 6, this.height - 11, dim);
         }
 
         if (UiConfig.footerRight != null && !UiConfig.footerRight.isEmpty()) {
             String right = UiConfig.footerRight.replace("%version%", UkyUI.VERSION);
-            this.fontRendererObj.drawString(right,
-                    this.width - this.fontRendererObj.getStringWidth(right) - 6,
+            this.fontRenderer.drawString(right,
+                    this.width - this.fontRenderer.getStringWidth(right) - 6,
                     this.height - 11, dim);
         }
     }
@@ -741,13 +745,13 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         // Escape must not close the title screen into a black void.
         this.intro.skip();
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         if (this.intro.isActive()) {
             // While the intro runs the buttons are hidden, so a click can only mean
             // "get on with it".

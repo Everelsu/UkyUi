@@ -100,7 +100,7 @@ public class GuiServerEditScreen extends MenuScreen {
         int y = this.panelY1 + 52;
 
         if (hasName()) {
-            this.nameField = new GuiTextField(this.fontRendererObj,
+            this.nameField = new GuiTextField(0, this.fontRenderer,
                     this.panelX1 + 18, y, fieldWidth, 16);
             this.nameField.setMaxStringLength(64);
             this.nameField.setEnableBackgroundDrawing(false);
@@ -108,7 +108,7 @@ public class GuiServerEditScreen extends MenuScreen {
             y += 40;
         }
 
-        this.addressField = new GuiTextField(this.fontRendererObj,
+        this.addressField = new GuiTextField(1, this.fontRenderer,
                 this.panelX1 + 18, y, fieldWidth, 16);
         this.addressField.setMaxStringLength(128);
         this.addressField.setEnableBackgroundDrawing(false);
@@ -158,8 +158,8 @@ public class GuiServerEditScreen extends MenuScreen {
         drawPanel();
 
         String title = I18n.format(titleKey(), new Object[0]);
-        int titleWidth = this.fontRendererObj.getStringWidth(title);
-        this.fontRendererObj.drawString(title, (this.width - titleWidth) / 2, this.panelY1 + 16,
+        int titleWidth = this.fontRenderer.getStringWidth(title);
+        this.fontRenderer.drawString(title, (this.width - titleWidth) / 2, this.panelY1 + 16,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
         if (hasName()) {
@@ -196,12 +196,12 @@ public class GuiServerEditScreen extends MenuScreen {
 
     /** Caption above, dark strip, and a rule that lights up when focused. */
     private void drawField(GuiTextField field, String caption, boolean withGlobe) {
-        float x1 = field.xPosition - 5;
-        float x2 = field.xPosition + field.getWidth() + 5;
-        float y1 = field.yPosition - 4;
-        float y2 = field.yPosition + 12;
+        float x1 = field.x - 5;
+        float x2 = field.x + field.getWidth() + 5;
+        float y1 = field.y - 4;
+        float y2 = field.y + 12;
 
-        this.fontRendererObj.drawString(caption, (int) x1 + 1, (int) y1 - 12,
+        this.fontRenderer.drawString(caption, (int) x1 + 1, (int) y1 - 12,
                 Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
         Draw.rect(x1, y1, x2, y2, Draw.withAlpha(0x000000, 0.55F * this.fadeAlpha));
         Draw.rect(x1, y2 - 1, x2, y2, Draw.withAlpha(
@@ -235,7 +235,7 @@ public class GuiServerEditScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, (0.7F + this.resourceHover * 0.3F) * this.fadeAlpha));
 
         // The enum carries its own translated label, so there is no key to rebuild.
-        String value = this.draft.func_152586_b().func_152589_a().getUnformattedText();
+        String value = this.draft.getResourceMode().getMotd().getUnformattedText();
         // Value first: it is the part that changes, so it keeps the width it needs
         // and the caption beside it takes whatever is left.
         int valueWidth = drawFittedRight(value, x2 - 8, y + 5, (x2 - x1) / 2,
@@ -291,8 +291,8 @@ public class GuiServerEditScreen extends MenuScreen {
 
     private void centred(String text, int x, int width, int y, int colour) {
         String trimmed = fit(text, width - 8);
-        int w = this.fontRendererObj.getStringWidth(trimmed);
-        this.fontRendererObj.drawString(trimmed, x + (width - w) / 2, y, colour);
+        int w = this.fontRenderer.getStringWidth(trimmed);
+        this.fontRenderer.drawString(trimmed, x + (width - w) / 2, y, colour);
     }
 
     private boolean inside(int x, int y, int width, int height) {
@@ -311,7 +311,7 @@ public class GuiServerEditScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
 
@@ -353,12 +353,12 @@ public class GuiServerEditScreen extends MenuScreen {
 
     private void cycleResourceMode() {
         ServerData.ServerResourceMode[] modes = ServerData.ServerResourceMode.values();
-        int next = (this.draft.func_152586_b().ordinal() + 1) % modes.length;
-        this.draft.func_152584_a(modes[next]);
+        int next = (this.draft.getResourceMode().ordinal() + 1) % modes.length;
+        this.draft.setResourceMode(modes[next]);
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             cancel();
             return;

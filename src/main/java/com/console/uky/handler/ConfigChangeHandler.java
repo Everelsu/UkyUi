@@ -4,8 +4,8 @@ import com.console.uky.UkyUI;
 import com.console.uky.client.render.LinkIcons;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.client.event.ConfigChangedEvent;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.client.event.ConfigChangedEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 /**
  * Applies config edits made through the in-game screen without a restart —
@@ -15,7 +15,7 @@ public class ConfigChangeHandler {
 
     @SubscribeEvent
     public void onConfigChanged(ConfigChangedEvent.OnConfigChangedEvent event) {
-        if (!UkyUI.MODID.equals(event.modID)) {
+        if (!UkyUI.MODID.equals(event.getModID())) {
             return;
         }
         UiConfig.reload();

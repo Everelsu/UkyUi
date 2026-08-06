@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     id("java-library")
     id("com.gtnewhorizons.retrofuturagradle") version "2.0.2"
 }
@@ -13,7 +13,7 @@
 group = "com.console.uky"
 version = "0.5.0"
 
-// Java 8 toolchain is mandatory for 1.7.10 (both compiling and running)
+// Java 8 toolchain is mandatory for 1.12.2 (both compiling and running)
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(8))
@@ -22,13 +22,16 @@ java {
 
 // ---- RetroFuturaGradle / Minecraft configuration ----
 minecraft {
-    mcVersion.set("1.7.10")
+    mcVersion.set("1.12.2")
 
     // Name shown for the dev-environment player
     username.set("Developer")
 
-    // If you later add Mixin support for stuff like the loading screen ASM hook:
-    // extraTweakClasses.add("org.spongepowered.asm.launch.MixinTweaker")
+    // No extraTweakClasses, and specifically not MixinTweaker. RetroFuturaGradle
+    // finds MixinBooter's own coremod on the classpath and loads it, and that is what
+    // brings the Mixin subsystem up in the order it expects. Adding the tweaker as
+    // well starts it a second time from a second class loader, and Forge's own ASM
+    // transformers then fail to register with a loader constraint violation on Guava.
 }
 
 // Fill mcmod.info's ${modVersion} placeholder with the Gradle project version
@@ -46,22 +49,56 @@ repositories {
         name = "GTNH Maven"
         url = uri("https://nexus.gtnewhorizons.com/repository/public/")
     }
+    maven {
+        // MixinBooter — the 1.12.2 Mixin provider
+        name = "CleanroomMC"
+        url = uri("https://maven.cleanroommc.com/")
+    }
 }
 
 dependencies {
-    // UniMixins bundles SpongePowered Mixin + MixinBooterLegacy for 1.7.10.
-    // The ":dev" (deobfuscated) classifier is used for compiling and the dev run.
-    // In production the pack must also ship UniMixins as a mod.
-    implementation("io.github.legacymoddingmc:unimixins:0.3.1:dev")
+    // MixinBooter bundles SpongePowered Mixin for 1.12.2 and supplies the
+    // IEarlyMixinLoader hook our coremod uses. transitive = false: the published
+    // POM pulls in a 1.12.2 Forge/MCP tree that would fight RFG's own.
+    // In production the pack must also ship MixinBooter as a mod.
+    implementation("zone.rong:mixinbooter:11.13") { isTransitive = false }
 
     // Add deobfuscated third-party mod jars here later if needed, e.g.:
     // implementation(rfg.deobf(project.files("libs/somejar.jar")))
 }
 
-// Register our coremod (which provides the mixin config) for the dev run.
+// Classes and resources in one directory, for the dev run's benefit.
+//
+// Two separate problems meet here. Our jar is marked ForceLoadAsMod for production,
+// and MixinBooter moves any such file onto FML's "reparseable coremods" list — which
+// makes the classpath scan skip it, on the understanding that the mods folder scan
+// will meet it again. In a dev run there is no copy in the mods folder, so nothing
+// ever does: the coremod loads, the mixin applies, and the @Mod class is silently
+// never constructed. FML scans every *directory* on the classpath unconditionally, so
+// handing it a directory answers that.
+//
+// It has to be one directory, though. FML takes a mod's resource pack from whichever
+// classpath entry it found the @Mod class in, and Gradle keeps classes and resources
+// apart — so pointing it at both left it holding build/classes/java/main, which
+// contains no assets/ at all. The "uky" resource domain never reached the resource
+// manager and everything read through it quietly did nothing: sounds.json was never
+// parsed, so every sound the mod plays was reported as an unknown soundEvent.
+//
+// A copy rather than redirecting the source set's own output directory: that made
+// processResources and compileJava share a directory neither of them owned, and
+// Gradle's stale-output cleanup then refused to run either of them.
+val devClasspath = tasks.register<Sync>("devClasspath") {
+    description = "Merges classes and resources into one directory for the dev run"
+    from(sourceSets["main"].output)
+    into(layout.buildDirectory.dir("devclasspath"))
+}
+
+// Register our coremod, which is what supplies the mixin config.
 listOf(tasks.named<JavaExec>("runClient"), tasks.named<JavaExec>("runServer")).forEach { t ->
     t.configure {
         systemProperty("fml.coreMods.load", "com.console.uky.core.UkyCore")
+        dependsOn(devClasspath)
+        classpath(devClasspath.map { it.destinationDir })
     }
 }
 
@@ -71,7 +108,9 @@ tasks.named<JavaExec>("runClient").configure {
     args("--width", "1280", "--height", "720")
 }
 
-// Coremod / mixin metadata for the built (production) jar.
+// Coremod / mixin metadata for the built (production) jar. It has to go on `jar`
+// rather than on `reobfJar`: the reobfuscation task remaps the jar it is given and
+// writes the result itself, so a manifest configured on it is never used.
 tasks.named<Jar>("jar").configure {
     manifest {
         attributes(
@@ -81,4 +120,11 @@ tasks.named<Jar>("jar").configure {
             "MixinConfigs" to "mixins.uky.early.client.json"
         )
     }
+}
+
+// Deprecation detail is worth having on a version port: 1.12.2 deprecated a good
+// deal of what 1.7.10 called normal, and a silent warning is a behaviour change
+// nobody reads.
+tasks.named<JavaCompile>("compileJava").configure {
+    options.compilerArgs.addAll(listOf("-Xlint:deprecation"))
 }

@@ -58,7 +58,7 @@ public class UkyMusicTicker extends MusicTicker {
     }
 
     private boolean ownsTheMenus() {
-        return UiConfig.menuMusic && this.mc.theWorld == null;
+        return UiConfig.menuMusic && this.mc.world == null;
     }
 
     private void stopVanillaTrack() {

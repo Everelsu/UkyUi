@@ -8,7 +8,8 @@ import com.console.uky.client.render.Theme;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
-import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.world.GameType;
 import net.minecraft.world.WorldSettings;
 
 /**
@@ -66,7 +67,7 @@ public class GuiShareScreen extends MenuScreen {
         // player controller: 1.7.10 has a setter for the client's game type but no
         // getter, and the server's is the authoritative one anyway.
         if (this.mc.getIntegratedServer() != null) {
-            WorldSettings.GameType current = this.mc.getIntegratedServer().getGameType();
+            GameType current = this.mc.getIntegratedServer().getGameType();
             if (current != null) {
                 for (int i = 0; i < MODES.length; i++) {
                     if (MODES[i].equals(current.getName())) {
@@ -107,8 +108,8 @@ public class GuiShareScreen extends MenuScreen {
         drawPanel();
 
         String title = I18n.format("lanServer.title", new Object[0]);
-        int titleWidth = this.fontRendererObj.getStringWidth(title);
-        this.fontRendererObj.drawString(title, (this.width - titleWidth) / 2, this.panelY1 + 16,
+        int titleWidth = this.fontRenderer.getStringWidth(title);
+        this.fontRenderer.drawString(title, (this.width - titleWidth) / 2, this.panelY1 + 16,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
         drawModes();
@@ -130,7 +131,7 @@ public class GuiShareScreen extends MenuScreen {
     }
 
     private void drawModes() {
-        this.fontRendererObj.drawString(
+        this.fontRenderer.drawString(
                 I18n.format("selectWorld.gameMode", new Object[0]).toUpperCase(),
                 this.panelX1 + 18, this.modeY - 12,
                 Draw.withAlpha(Theme.textDim, 0.9F * this.fadeAlpha));
@@ -158,7 +159,7 @@ public class GuiShareScreen extends MenuScreen {
                                     (0.13F + this.modeHover[i] * 0.6F) * this.fadeAlpha));
 
             String label = I18n.format("selectWorld.gameMode." + MODES[i], new Object[0]);
-            this.fontRendererObj.drawString(
+            this.fontRenderer.drawString(
                     fit(label, width - 16),
                     x + 8, this.modeY + 8,
                     Draw.withAlpha(selected ? Theme.textHover : Theme.text, this.fadeAlpha));
@@ -166,7 +167,7 @@ public class GuiShareScreen extends MenuScreen {
             if (this.modeHeight >= 40) {
                 String blurb = I18n.format("selectWorld.gameMode." + MODES[i] + ".line1",
                         new Object[0]);
-                this.fontRendererObj.drawString(
+                this.fontRenderer.drawString(
                         fit(blurb, width - 16),
                         x + 8, this.modeY + 22,
                         Draw.withAlpha(Theme.textDim, 0.7F * this.fadeAlpha));
@@ -204,7 +205,7 @@ public class GuiShareScreen extends MenuScreen {
         while (label.endsWith(":")) {
             label = label.substring(0, label.length() - 1).trim();
         }
-        this.fontRendererObj.drawString(label, (int) (bx + box + 8), this.cheatsY + 7,
+        this.fontRenderer.drawString(label, (int) (bx + box + 8), this.cheatsY + 7,
                 Draw.withAlpha(this.allowCheats ? Theme.text : Theme.textDim, this.fadeAlpha));
     }
 
@@ -241,8 +242,8 @@ public class GuiShareScreen extends MenuScreen {
 
     private void centred(String text, int x, int width, int y, int colour) {
         String trimmed = fit(text, width - 8);
-        int w = this.fontRendererObj.getStringWidth(trimmed);
-        this.fontRendererObj.drawString(trimmed, x + (width - w) / 2, y, colour);
+        int w = this.fontRenderer.getStringWidth(trimmed);
+        this.fontRenderer.drawString(trimmed, x + (width - w) / 2, y, colour);
     }
 
     private boolean inside(int x, int y, int width, int height) {
@@ -253,7 +254,7 @@ public class GuiShareScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
 
@@ -285,7 +286,7 @@ public class GuiShareScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             switchBack();
             return;
@@ -310,11 +311,11 @@ public class GuiShareScreen extends MenuScreen {
         this.mc.displayGuiScreen(null);
 
         String port = this.mc.getIntegratedServer().shareToLAN(
-                WorldSettings.GameType.getByName(MODES[this.selectedMode]), this.allowCheats);
+                GameType.getByName(MODES[this.selectedMode]), this.allowCheats);
         String message = port != null
                 ? I18n.format("commands.publish.started", new Object[]{port})
                 : I18n.format("commands.publish.failed", new Object[0]);
-        this.mc.ingameGUI.getChatGUI().printChatMessage(new ChatComponentText(message));
+        this.mc.ingameGUI.getChatGUI().printChatMessage(new TextComponentString(message));
     }
 
     @Override

@@ -12,14 +12,14 @@ import com.console.uky.client.world.UkyLoadingScreen;
 import com.console.uky.client.world.WorldEntryFade;
 import com.console.uky.client.world.TileShatter;
 import com.console.uky.client.world.WorldPreviews;
-import cpw.mods.fml.client.FMLClientHandler;
+import net.minecraftforge.fml.client.FMLClientHandler;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiSelectWorld;
+import net.minecraft.client.gui.GuiWorldSelection;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.storage.ISaveFormat;
-import net.minecraft.world.storage.SaveFormatComparator;
+import net.minecraft.world.storage.WorldSummary;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -52,7 +52,7 @@ public class GuiWorldsScreen extends MenuScreen {
     private static final int TILE_GAP = 10;
     private static final float TILE_ASPECT = 16.0F / 9.0F;
 
-    private final List<SaveFormatComparator> worlds = new ArrayList<SaveFormatComparator>();
+    private final List<WorldSummary> worlds = new ArrayList<WorldSummary>();
     /** Smoothed hover weight per card, including the create card at index -1. */
     private float[] hoverAmount = new float[0];
     private float createHover;
@@ -171,7 +171,7 @@ public class GuiWorldsScreen extends MenuScreen {
     private void loadWorlds() {
         this.worlds.clear();
         try {
-            List<SaveFormatComparator> list = this.mc.getSaveLoader().getSaveList();
+            List<WorldSummary> list = this.mc.getSaveLoader().getSaveList();
             this.worlds.addAll(list);
             // Most recently played first: almost always the one wanted.
             Collections.sort(this.worlds);
@@ -318,7 +318,7 @@ public class GuiWorldsScreen extends MenuScreen {
 
     private void drawHeader() {
         String title = I18n.format("selectWorld.title", new Object[0]);
-        this.fontRendererObj.drawString(title, this.gridX, 26,
+        this.fontRenderer.drawString(title, this.gridX, 26,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
         Draw.gradientH(this.gridX, 40, this.gridX + this.gridWidth, 41,
                 Draw.withAlpha(Theme.accent, 0.5F * this.fadeAlpha),
@@ -328,7 +328,7 @@ public class GuiWorldsScreen extends MenuScreen {
         boolean over = isOverBack(this.lastMouseX, this.lastMouseY);
         int colour = Draw.withAlpha(over ? Theme.textHover : Theme.textDim, this.fadeAlpha);
         Icons.back(this.gridX + this.gridWidth - 10, 30, 9, colour);
-        this.fontRendererObj.drawString(I18n.format("gui.back", new Object[0]),
+        this.fontRenderer.drawString(I18n.format("gui.back", new Object[0]),
                 this.gridX + this.gridWidth - 8 + 6 - 44, 26, colour);
     }
 
@@ -412,8 +412,8 @@ public class GuiWorldsScreen extends MenuScreen {
         Icons.plus(cx, cy, 18 + hover * 3, 2.0F, colour);
 
         String label = I18n.format("selectWorld.create", new Object[0]);
-        int w = this.fontRendererObj.getStringWidth(label);
-        this.fontRendererObj.drawString(label, (int) (cx - w / 2.0F),
+        int w = this.fontRenderer.getStringWidth(label);
+        this.fontRenderer.drawString(label, (int) (cx - w / 2.0F),
                 (int) (cy + 16), colour);
 
         if (hover > 0.02F) {
@@ -429,7 +429,7 @@ public class GuiWorldsScreen extends MenuScreen {
             return;
         }
 
-        SaveFormatComparator world = this.worlds.get(index);
+        WorldSummary world = this.worlds.get(index);
         float hover = this.hoverAmount[index];
         float alpha = this.fadeAlpha;
         float x2 = x + this.tileWidth;
@@ -452,20 +452,30 @@ public class GuiWorldsScreen extends MenuScreen {
 
         String name = fit(world.getDisplayName(),
                 this.tileWidth - 12);
-        this.fontRendererObj.drawString(name, x + 6, (int) (y2 - 20),
+        this.fontRenderer.drawString(name, x + 6, (int) (y2 - 20),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
-        this.fontRendererObj.drawString(DATE.format(new Date(world.getLastTimePlayed())),
+        this.fontRenderer.drawString(DATE.format(new Date(world.getLastTimePlayed())),
                 x + 6, (int) (y2 - 10), Draw.withAlpha(Theme.textDim, 0.85F * alpha));
 
-        if (world.isHardcoreModeEnabled()) {
-            this.fontRendererObj.drawString("HARDCORE", x + 6, (int) y + 6,
+        boolean hardcore = world.isHardcoreModeEnabled();
+        if (hardcore) {
+            this.fontRenderer.drawString("HARDCORE", x + 6, (int) y + 6,
                     Draw.withAlpha(Theme.danger, 0.95F * alpha));
+        }
+
+        // A hardcore world is outlined in the danger colour, and outlined at rest
+        // rather than only under the pointer. The word in the corner is easy to miss
+        // on a grid of screenshots, and this is the one property of a save that is
+        // worth knowing before you click it: everything else here can be undone.
+        int edge = hardcore ? Theme.danger : Theme.accent;
+        float edgeAlpha = hardcore ? 0.55F + 0.45F * hover : hover;
+        if (edgeAlpha > 0.02F) {
+            Draw.border(x, y, x2, y2, 1.0F, Draw.withAlpha(edge, edgeAlpha * alpha));
         }
 
         if (hover > 0.02F) {
             drawCardActions(index, x, y, hover, alpha);
-            Draw.border(x, y, x2, y2, 1.0F, Draw.withAlpha(Theme.accent, hover * alpha));
-            Draw.glow(x, y, x2, y2, 5.0F, Draw.withAlpha(Theme.accent, 0.25F * hover * alpha), 4);
+            Draw.glow(x, y, x2, y2, 5.0F, Draw.withAlpha(edge, 0.25F * hover * alpha), 4);
         }
     }
 
@@ -645,7 +655,7 @@ public class GuiWorldsScreen extends MenuScreen {
         }
         UkySounds.play(UkySounds.DELETE_BREAK);
 
-        SaveFormatComparator world = this.worlds.get(index);
+        WorldSummary world = this.worlds.get(index);
         String folder = world.getFileName();
         float x = slotX(index + 1);
         float y = slotY(index + 1);
@@ -666,7 +676,7 @@ public class GuiWorldsScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         if (Transitions.isBusy() || isZooming()) {
             return;
         }
@@ -679,7 +689,7 @@ public class GuiWorldsScreen extends MenuScreen {
             return;
         }
         if (this.hoveredCard >= 0 && this.hoveredCard < this.worlds.size()) {
-            final SaveFormatComparator world = this.worlds.get(this.hoveredCard);
+            final WorldSummary world = this.worlds.get(this.hoveredCard);
             switch (this.hoveredAction) {
                 case HIT_RENAME:
                     this.mc.displayGuiScreen(new GuiWorldPromptScreen(this,
@@ -705,7 +715,7 @@ public class GuiWorldsScreen extends MenuScreen {
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0) {
@@ -714,7 +724,7 @@ public class GuiWorldsScreen extends MenuScreen {
         }
     }
 
-    private void play(SaveFormatComparator world) {
+    private void play(WorldSummary world) {
         if (this.launching) {
             return;
         }
@@ -728,10 +738,10 @@ public class GuiWorldsScreen extends MenuScreen {
 
         this.mc.displayGuiScreen(null);
         // FML's loader adds the checks vanilla does not: missing mods, old save
-        // formats. It insists on a GuiSelectWorld to return to if it has to warn,
+        // formats. It insists on a GuiWorldSelection to return to if it has to warn,
         // so it gets a throwaway one pointing back where this screen came from.
         FMLClientHandler.instance().tryLoadExistingWorld(
-                new GuiSelectWorld(this.parent), world.getFileName(), world.getDisplayName());
+                new GuiWorldSelection(this.parent), world);
     }
 
     private void back() {
@@ -746,7 +756,7 @@ public class GuiWorldsScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             back();
             return;

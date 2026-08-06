@@ -1,8 +1,10 @@
 package com.console.uky.client.mods;
 
 import com.console.uky.UkyUI;
-import cpw.mods.fml.common.Loader;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraft.client.Minecraft;
+import net.minecraftforge.client.resource.ReloadRequirements;
+import net.minecraftforge.fml.client.FMLClientHandler;
 import net.minecraft.client.gui.GuiScreen;
 
 import java.lang.reflect.Field;
@@ -613,7 +615,9 @@ public final class AngelicaOptions {
         try {
             if (flags.contains("REQUIRES_ASSET_RELOAD")) {
                 applyAtlasSettings.invoke(null);
-                mc.refreshResources();
+                // Everything, because what the renderer wants rebuilt after an
+                // atlas change is its business rather than something to guess at.
+                FMLClientHandler.instance().refreshResources(ReloadRequirements.all());
             } else if (flags.contains("REQUIRES_RENDERER_RELOAD") && mc.renderGlobal != null) {
                 mc.renderGlobal.loadRenderers();
             }

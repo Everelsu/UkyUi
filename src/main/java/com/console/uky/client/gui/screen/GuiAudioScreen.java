@@ -8,7 +8,7 @@ import com.console.uky.client.gui.widget.SoundSlider;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.audio.SoundCategory;
+import net.minecraft.util.SoundCategory;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
@@ -37,8 +37,8 @@ public class GuiAudioScreen extends MenuScreen {
     /** Everything except MASTER, which gets its own row above these. */
     private static final SoundCategory[] CATEGORIES = {
         SoundCategory.MUSIC, SoundCategory.RECORDS, SoundCategory.WEATHER,
-        SoundCategory.BLOCKS, SoundCategory.MOBS, SoundCategory.ANIMALS,
-        SoundCategory.PLAYERS,
+        SoundCategory.BLOCKS, SoundCategory.HOSTILE, SoundCategory.NEUTRAL,
+        SoundCategory.PLAYERS, SoundCategory.AMBIENT, SoundCategory.VOICE,
     };
 
     private static final GameSettings.Options[] CHAT_OPTIONS = {
@@ -141,7 +141,7 @@ public class GuiAudioScreen extends MenuScreen {
         int x = this.panelX1 + PADDING;
         for (int i = 0; i < TABS.length; i++) {
             String label = I18n.format(TABS[i], new Object[0]);
-            this.tabWidth[i] = this.fontRendererObj.getStringWidth(label) + label.length()
+            this.tabWidth[i] = this.fontRenderer.getStringWidth(label) + label.length()
                     + labelPad * 2;
             this.tabX[i] = x;
 
@@ -183,10 +183,10 @@ public class GuiAudioScreen extends MenuScreen {
         for (int i = 0; i < CHAT_OPTIONS.length; i++) {
             GameSettings.Options option = CHAT_OPTIONS[i];
             int x = (i % 2 == 0) ? this.leftColumn : this.rightColumn;
-            MenuButton widget = option.getEnumFloat()
-                    ? new MenuSlider(option.returnEnumOrdinal(), x, y,
+            MenuButton widget = option.isFloat()
+                    ? new MenuSlider(option.getOrdinal(), x, y,
                             this.columnWidth, this.rowHeight, option)
-                    : new MenuOptionButton(option.returnEnumOrdinal(), x, y,
+                    : new MenuOptionButton(option.getOrdinal(), x, y,
                             this.columnWidth, this.rowHeight, option);
             widget.entrance(0.06F + i * 0.02F);
             this.buttonList.add(widget);
@@ -244,7 +244,7 @@ public class GuiAudioScreen extends MenuScreen {
                 Draw.withAlpha(Theme.background, 0.45F * a),
                 Draw.withAlpha(Theme.background, 0.0F));
 
-        this.fontRendererObj.drawString(
+        this.fontRenderer.drawString(
                 I18n.format("options.sounds.title", new Object[0]),
                 this.panelX1 + PADDING, this.panelY1 + 14,
                 Draw.withAlpha(Theme.text, a));
@@ -281,7 +281,7 @@ public class GuiAudioScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             this.settings.saveOptions();
             switchBack();

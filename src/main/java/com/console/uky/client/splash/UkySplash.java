@@ -1,9 +1,9 @@
 package com.console.uky.client.splash;
 
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.client.SplashProgress;
-import cpw.mods.fml.common.ProgressManager;
-import cpw.mods.fml.common.ProgressManager.ProgressBar;
+import net.minecraftforge.fml.client.SplashProgress;
+import net.minecraftforge.fml.common.ProgressManager;
+import net.minecraftforge.fml.common.ProgressManager.ProgressBar;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.LWJGLException;
@@ -72,7 +72,7 @@ public final class UkySplash {
      */
     public static boolean start() {
         try {
-            UiConfig.loadEarly(Minecraft.getMinecraft().mcDataDir);
+            UiConfig.loadEarly(Minecraft.getMinecraft().gameDir);
             if (!UiConfig.customSplash) {
                 return false;
             }
@@ -188,7 +188,7 @@ public final class UkySplash {
      * a null classpath resource for images that only exist as an override.
      */
     private static InputStream open(String classpathResource, String overrideName) throws IOException {
-        File override = new File(Minecraft.getMinecraft().mcDataDir, OVERRIDE_DIR + "/" + overrideName);
+        File override = new File(Minecraft.getMinecraft().gameDir, OVERRIDE_DIR + "/" + overrideName);
         if (override.isFile()) {
             return new FileInputStream(override);
         }
@@ -269,7 +269,7 @@ public final class UkySplash {
         private void loadFont() {
             InputStream stream = null;
             try {
-                stream = Minecraft.getMinecraft().mcDefaultResourcePack.getInputStream(FONT_LOCATION);
+                stream = Minecraft.getMinecraft().defaultResourcePack.getInputStream(FONT_LOCATION);
                 fontTexture = new SplashTexture(stream, false);
                 font = new SplashFont(fontTexture, FONT_LOCATION);
             } catch (Throwable t) {

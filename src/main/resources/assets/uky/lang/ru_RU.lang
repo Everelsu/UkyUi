@@ -1,4 +1,11 @@
 # UltraKill Yourself UI localization
+#
+# Имя файла обязано остаться ru_RU / en_US, а не ru_ru / en_us, хотя пути ресурсов
+# в 1.12.2 в остальном строчные. У мода нет своего pack.mcmeta, поэтому Forge считает
+# его ресурс-пак форматом 2 и оборачивает в LegacyV2Adapter — а тот переписывает любой
+# запрос lang/xx_yy.lang в lang/xx_YY.lang ещё до пака. Строчные имена просто никто не
+# спрашивает: файл лежит впустую, каждый ключ uky.* показывается своим же именем, и
+# интерфейс заполняется сырыми ключами, пока ванильные строки работают как ни в чём не бывало.
 uky.menu.mods=Моды
 uky.menu.modOptions=Настройки модов
 
@@ -13,6 +20,8 @@ uky.mods.config=Настроить
 uky.language.search=Поиск языка...
 uky.mods.by=Автор:
 
+uky.worlds.renameTitle=Переименовать мир
+uky.worlds.renameButton=Переименовать
 uky.worlds.noPreview=нет снимка
 
 uky.gamemode.hardcore.line1=Одна жизнь, сложность не выбрать.
@@ -20,6 +29,7 @@ uky.gamemode.hardcore.line2=Умрёшь — мир умрёт вместе с �
 uky.gamemode.hardcore.warning=Одна жизнь. Ты умрёшь навсегда.
 
 
+uky.progress.none=Пока пусто.
 uky.progress.search=Поиск...
 
 uky.controls.search=Поиск действия или клавиши...
@@ -41,8 +51,10 @@ uky.settings.shaderPacks.open=Выбрать шейдерный пакет...
 # ---- сцена смерти ----
 # По шесть строк на причину. Сцена выбирает одну на всю смерть.
 uky.death.prompt=Нажми любую клавишу или кликни, чтобы вернуться
-uky.death.promptLeave=Нажми любую клавишу, чтобы выйти
+uky.death.promptLeave=Любая другая клавиша — выйти
 
+uky.death.hardcore=Хардкор. Возрождения не будет.
+uky.death.promptSpectate=Enter — остаться наблюдателем
 uky.death.generic.1=Сигнал потерян. Убийство никто не забрал.
 uky.death.generic.2=Ты остановился. Мир — нет.
 uky.death.generic.3=Причина не записана. Результат тот же.

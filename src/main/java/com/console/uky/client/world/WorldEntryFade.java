@@ -3,8 +3,8 @@ package com.console.uky.client.world;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.ResourceLocation;
@@ -103,13 +103,13 @@ public final class WorldEntryFade {
 
     private static void draw(float progress) {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.theWorld == null) {
+        if (mc.world == null) {
             // Left again before the fade finished; there is nothing to fade into.
             texture = null;
             return;
         }
         ScaledResolution resolution =
-                new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+                new ScaledResolution(mc);
         int width = resolution.getScaledWidth();
         int height = resolution.getScaledHeight();
 

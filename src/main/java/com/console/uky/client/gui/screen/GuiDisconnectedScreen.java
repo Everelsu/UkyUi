@@ -6,7 +6,7 @@ import com.console.uky.client.render.Theme;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
-import net.minecraft.util.IChatComponent;
+import net.minecraft.util.text.ITextComponent;
 
 import java.util.List;
 
@@ -27,7 +27,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
 
     private final GuiScreen parent;
     private final String heading;
-    private final IChatComponent reason;
+    private final ITextComponent reason;
 
     private List<?> lines;
     private int panelX1;
@@ -42,7 +42,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
     private int mouseX;
     private int mouseY;
 
-    public GuiDisconnectedScreen(GuiScreen parent, String heading, IChatComponent reason) {
+    public GuiDisconnectedScreen(GuiScreen parent, String heading, ITextComponent reason) {
         this.parent = parent;
         this.heading = heading == null ? "" : heading;
         this.reason = reason;
@@ -58,7 +58,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
         this.panelX2 = this.panelX1 + panelWidth;
 
         String text = this.reason == null ? "" : this.reason.getFormattedText();
-        this.lines = this.fontRendererObj.listFormattedStringToWidth(text, panelWidth - 36);
+        this.lines = this.fontRenderer.listFormattedStringToWidth(text, panelWidth - 36);
 
         int body = Math.max(1, this.lines.size()) * 10;
         int panelHeight = 44 + body + 46;
@@ -95,16 +95,16 @@ public class GuiDisconnectedScreen extends GuiScreen {
         Draw.border(this.panelX1, this.panelY1, this.panelX2, this.panelY2, 1.0F,
                 Draw.withAlpha(Theme.text, 0.10F * a));
 
-        int headingWidth = this.fontRendererObj.getStringWidth(this.heading);
-        this.fontRendererObj.drawString(this.heading,
+        int headingWidth = this.fontRenderer.getStringWidth(this.heading);
+        this.fontRenderer.drawString(this.heading,
                 (this.width - headingWidth) / 2, this.panelY1 + 16,
                 Draw.withAlpha(Theme.danger, 0.95F * a));
 
         int y = this.panelY1 + 40;
         for (int i = 0; i < this.lines.size(); i++) {
             String line = String.valueOf(this.lines.get(i));
-            int width = this.fontRendererObj.getStringWidth(line);
-            this.fontRendererObj.drawString(line, (this.width - width) / 2, y + i * 10,
+            int width = this.fontRenderer.getStringWidth(line);
+            this.fontRenderer.drawString(line, (this.width - width) / 2, y + i * 10,
                     Draw.withAlpha(Theme.text, 0.85F * a));
         }
 
@@ -124,13 +124,13 @@ public class GuiDisconnectedScreen extends GuiScreen {
         Draw.rect(x, y, x + width, y + 20,
                 Draw.withAlpha(fill, (0.62F + this.backHover * 0.18F) * this.fade));
         String label = I18n.format("gui.toMenu", new Object[0]);
-        int labelWidth = this.fontRendererObj.getStringWidth(label);
-        this.fontRendererObj.drawString(label, x + (width - labelWidth) / 2, y + 6,
+        int labelWidth = this.fontRenderer.getStringWidth(label);
+        this.fontRenderer.drawString(label, x + (width - labelWidth) / 2, y + 6,
                 Draw.withAlpha(0x0B0B0E, this.fade));
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         int width = this.panelX2 - 18 - (this.panelX1 + 18);
         int x = this.panelX1 + 18;
         int y = buttonY();
@@ -142,7 +142,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1 || keyCode == 28 || keyCode == 156) {
             leave();
         }
@@ -153,7 +153,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
     }
 
     @Override
-    protected void actionPerformed(GuiButton button) {
+    protected void actionPerformed(GuiButton button) throws java.io.IOException {
         if (button.id == ID_BACK) {
             leave();
         }

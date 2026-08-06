@@ -1,10 +1,11 @@
-# UltraKill Yourself UI — мод интерфейса для 1.7.10
+# UltraKill Yourself UI — мод интерфейса для 1.12.2
 
 Заменяет ванильные экраны Minecraft на собственные: загрузочный экран, главное
 меню, настройки, меню паузы. Всё рисуется кодом (без текстур виджетов), палитра
 и поведение задаются конфигом — под техсборку.
 
-Тулчейн: **RetroFuturaGradle** (замена устаревшего ForgeGradle 1.x для 1.7.10).
+Тулчейн: **RetroFuturaGradle** (умеет 1.12.2 наравне с 1.7.10, в отличие от
+устаревшего ForgeGradle 2.3).
 
 Все настройки — в [CONFIG.md](CONFIG.md): ссылки с иконками, подсказки на
 загрузке, сцена смерти, палитра.
@@ -18,7 +19,10 @@
   ```
   ./gradlew build -Dorg.gradle.java.home="C:\Program Files\Eclipse Adoptium\jdk-25.0.3.9-hotspot"
   ```
-- Интернет-доступ к `nexus.gtnewhorizons.com` и стандартным Maven/Mojang/Forge репозиториям
+- Интернет-доступ к `nexus.gtnewhorizons.com`, `maven.cleanroommc.com` и
+  стандартным Maven/Mojang/Forge репозиториям
+- **MixinBooter** в сборке (в 1.12.2 он заменяет UniMixins): мод — coremod и без
+  него mixin-конфиг не применится
 
 ## Сборка и запуск
 ```

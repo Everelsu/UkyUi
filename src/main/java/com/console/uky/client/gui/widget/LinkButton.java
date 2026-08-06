@@ -57,13 +57,13 @@ public class LinkButton extends MenuButton {
     }
 
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY) {
+    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
         if (!this.visible) {
             return;
         }
-        this.field_146123_n = mouseX >= this.xPosition && mouseY >= this.yPosition
-                && mouseX < this.xPosition + this.width
-                && mouseY < this.yPosition + this.height;
+        this.hovered = mouseX >= this.x && mouseY >= this.y
+                && mouseX < this.x + this.width
+                && mouseY < this.y + this.height;
 
         float alpha = this.entrance * this.screenFade;
         if (alpha <= 0.01F) {
@@ -77,8 +77,8 @@ public class LinkButton extends MenuButton {
         // it sits under, which is exactly backwards for a secondary row. These are
         // marks and words: the mark carries the colour, and hovering warms it and
         // draws a line under the pair. Nothing moves and nothing fills.
-        float x1 = this.xPosition;
-        float y1 = this.yPosition;
+        float x1 = this.x;
+        float y1 = this.y;
         float x2 = x1 + this.width;
         float y2 = y1 + this.height;
         float h = this.hover;

@@ -11,11 +11,12 @@ import com.console.uky.client.gui.screen.GuiSettingsScreen;
 import com.console.uky.client.gui.screen.GuiStartupQueryScreen;
 import com.console.uky.client.gui.screen.GuiPauseScreen;
 import com.console.uky.client.gui.screen.GuiWorldLoadingScreen;
+import com.console.uky.client.gui.screen.GuiWorkingScreen;
 import com.console.uky.client.gui.screen.GuiWorldsScreen;
 import com.console.uky.client.sound.UkyMusicTicker;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiIngameMenu;
 import net.minecraft.client.gui.GuiMainMenu;
@@ -24,11 +25,12 @@ import net.minecraft.client.gui.GuiDisconnected;
 import net.minecraft.client.gui.GuiDownloadTerrain;
 import net.minecraft.client.gui.GuiGameOver;
 import net.minecraft.client.gui.GuiOptions;
-import net.minecraft.client.gui.GuiRenameWorld;
-import net.minecraft.client.gui.GuiSelectWorld;
+import net.minecraft.client.gui.GuiWorldEdit;
+import net.minecraft.client.gui.GuiWorldSelection;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiScreenWorking;
 import net.minecraft.client.multiplayer.GuiConnecting;
-import net.minecraft.util.IChatComponent;
+import net.minecraft.util.text.ITextComponent;
 import net.minecraftforge.client.event.GuiOpenEvent;
 
 import java.lang.reflect.Field;
@@ -51,7 +53,7 @@ public class GuiEventHandler {
     public void onGuiOpen(GuiOpenEvent event) {
         // The menu track follows the menus: it survives moving between title,
         // world select and options, and stops the moment a world is in play.
-        if (Minecraft.getMinecraft().theWorld != null) {
+        if (Minecraft.getMinecraft().world != null) {
             UkySounds.stopMusic();
         }
 
@@ -62,38 +64,42 @@ public class GuiEventHandler {
         keepLatinCrisp();
         UkyFontRenderer.install(Minecraft.getMinecraft());
 
-        if (event.gui == null) {
+        if (event.getGui() == null) {
             return;
         }
-        Class<?> type = event.gui.getClass();
+        Class<?> type = event.getGui().getClass();
 
         if (UiConfig.replaceMainMenu && type == GuiMainMenu.class) {
-            event.gui = new GuiTitleScreen();
+            event.setGui(new GuiTitleScreen());
             return;
         }
 
         if (UiConfig.replacePauseMenu && type == GuiIngameMenu.class) {
-            event.gui = new GuiPauseScreen();
+            event.setGui(new GuiPauseScreen());
             return;
         }
 
         if (UiConfig.replaceDeathScreen && type == GuiGameOver.class) {
-            event.gui = new GuiDeathScreen();
+            event.setGui(new GuiDeathScreen());
             return;
         }
 
-        if (UiConfig.replaceWorldList && type == GuiSelectWorld.class) {
+        if (UiConfig.replaceWorldList && type == GuiWorldSelection.class) {
             // Another mod (or a vanilla path we did not route) opened the stock
             // world list; swap it for the tiles.
-            event.gui = new GuiWorldsScreen(parentOf(event.gui));
+            event.setGui(new GuiWorldsScreen(parentOf(event.getGui())));
             return;
         }
 
-        if (UiConfig.replaceWorldList && type == GuiRenameWorld.class) {
-            String folder = folderOf(event.gui);
+        // 1.7.10 had a rename-only screen; 1.12.2 folded renaming into "Edit World"
+        // alongside "Reset icon" and "Open folder". Those two are not reachable
+        // through the prompt this puts up — the mod's own world list is the intended
+        // way in and offers neither. Take this branch out to leave the stock screen.
+        if (UiConfig.replaceWorldList && type == GuiWorldEdit.class) {
+            String folder = folderOf(event.getGui());
             if (folder != null) {
-                event.gui = new GuiWorldPromptScreen(parentOf(event.gui),
-                        GuiWorldPromptScreen.Mode.RENAME, folder);
+                event.setGui(new GuiWorldPromptScreen(parentOf(event.getGui()),
+                        GuiWorldPromptScreen.Mode.RENAME, folder));
             }
             return;
         }
@@ -102,28 +108,28 @@ public class GuiEventHandler {
             // A world type's customiser hands control back by displaying the
             // GuiCreateWorld it was given; that instance carries the edited
             // generator options, so it is restored rather than replaced.
-            GuiCreateWorldScreen resumed = GuiCreateWorldScreen.resume(event.gui);
-            event.gui = resumed != null
+            GuiCreateWorldScreen resumed = GuiCreateWorldScreen.resume(event.getGui());
+            event.setGui(resumed != null
                     ? resumed
-                    : new GuiCreateWorldScreen(parentOf(event.gui));
+                    : new GuiCreateWorldScreen(parentOf(event.getGui())));
             return;
         }
 
         if (type == GuiConnecting.class) {
             // Wrapped, not replaced: the vanilla screen owns the handshake.
-            event.gui = new GuiConnectingScreen(event.gui);
+            event.setGui(new GuiConnectingScreen(event.getGui()));
             return;
         }
 
         if (type == GuiDisconnected.class) {
             // Everything this screen needs is locatable by field type — one String,
-            // one IChatComponent, one GuiScreen — so no MCP names are involved and it
+            // one ITextComponent, one GuiScreen — so no MCP names are involved and it
             // works the same in a production pack.
-            String heading = firstOfType(event.gui, String.class);
-            IChatComponent reason = firstOfType(event.gui, IChatComponent.class);
+            String heading = firstOfType(event.getGui(), String.class);
+            ITextComponent reason = firstOfType(event.getGui(), ITextComponent.class);
             if (reason != null) {
-                event.gui = new GuiDisconnectedScreen(parentOf(event.gui),
-                        heading == null ? "" : heading, reason);
+                event.setGui(new GuiDisconnectedScreen(parentOf(event.getGui()),
+                        heading == null ? "" : heading, reason));
             }
             return;
         }
@@ -131,29 +137,38 @@ public class GuiEventHandler {
         if (UiConfig.replaceLoadingScreen && type == GuiDownloadTerrain.class) {
             // Wraps rather than replaces: the vanilla screen is what notices the
             // world is ready and hands control back.
-            event.gui = new GuiWorldLoadingScreen(event.gui);
+            event.setGui(new GuiWorldLoadingScreen(event.getGui()));
+            return;
+        }
+
+        // The phase before that one: the integrated server starting up. Left alone it
+        // draws Mojang's tiled dirt, which flashed through every world load in the
+        // gaps between UkyLoadingScreen's repaints. Ours is a subclass, so the exact
+        // class test above cannot match it and this cannot recurse.
+        if (UiConfig.replaceLoadingScreen && type == GuiScreenWorking.class) {
+            event.setGui(new GuiWorkingScreen());
             return;
         }
 
         // FML's mid-load question. Restyled rather than replaced: it stays a
         // GuiNotification because that type is what FML's own draw-and-input path
         // looks for while the game loop is parked. See GuiStartupQueryScreen.
-        if (type.getName().startsWith("cpw.mods.fml.client.Gui")) {
-            GuiScreen restyled = GuiStartupQueryScreen.wrap(event.gui);
+        if (type.getName().startsWith("net.minecraftforge.fml.client.Gui")) {
+            GuiScreen restyled = GuiStartupQueryScreen.wrap(event.getGui());
             if (restyled != null) {
-                event.gui = restyled;
+                event.setGui(restyled);
             }
             return;
         }
 
         if (UiConfig.replaceOptions && type == GuiOptions.class) {
-            event.gui = new GuiSettingsScreen(parentOf(event.gui),
-                    Minecraft.getMinecraft().gameSettings);
+            event.setGui(new GuiSettingsScreen(parentOf(event.getGui()),
+                    Minecraft.getMinecraft().gameSettings));
         }
     }
 
     /**
-     * Reads the save folder out of a {@link GuiRenameWorld}.
+     * Reads the save folder out of a {@link GuiWorldEdit}.
      *
      * Located by type like {@link #parentOf}: the screen holds exactly one String
      * field, the folder it was constructed with. Null if that ever stops being

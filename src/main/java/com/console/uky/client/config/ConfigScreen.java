@@ -2,8 +2,8 @@ package com.console.uky.client.config;
 
 import com.console.uky.UkyUI;
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.client.config.GuiConfig;
-import cpw.mods.fml.client.config.IConfigElement;
+import net.minecraftforge.fml.client.config.GuiConfig;
+import net.minecraftforge.fml.client.config.IConfigElement;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraftforge.common.config.ConfigElement;
 

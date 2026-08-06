@@ -51,7 +51,7 @@ public class GuiConnectingScreen extends GuiScreen {
         Draw.vignette(this.width, this.height, 0.7F, 0xFF000000);
 
         String message = I18n.format("connect.connecting", new Object[0]);
-        this.drawCenteredString(this.fontRendererObj, message,
+        this.drawCenteredString(this.fontRenderer, message,
                 this.width / 2, this.height / 2 - 16, Draw.withAlpha(Theme.text, 0.9F));
 
         drawIndicator();
@@ -79,7 +79,7 @@ public class GuiConnectingScreen extends GuiScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         // Vanilla swallows input here too; cancelling mid-handshake is not offered.
     }
 

@@ -14,7 +14,7 @@ import net.minecraft.client.gui.GuiYesNoCallback;
 import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
-import net.minecraft.client.network.OldServerPinger;
+import net.minecraft.client.network.ServerPinger;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
@@ -44,7 +44,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private static final float TILE_ASPECT = 16.0F / 9.0F;
 
     private ServerList servers;
-    private OldServerPinger pinger;
+    private ServerPinger pinger;
 
     /** Decoded server icons, keyed by address. */
     private final Map<String, ResourceLocation> icons = new HashMap<String, ResourceLocation>();
@@ -95,7 +95,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         if (this.servers == null) {
             this.servers = new ServerList(this.mc);
             this.servers.loadServerList();
-            this.pinger = new OldServerPinger();
+            this.pinger = new ServerPinger();
             pingAll();
         }
 
@@ -134,7 +134,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                 @Override
                 public void run() {
                     try {
-                        GuiServersScreen.this.pinger.func_147224_a(data);
+                        GuiServersScreen.this.pinger.ping(data);
                     } catch (Exception e) {
                         data.pingToServer = -1L;
                         data.populationInfo = "";
@@ -168,7 +168,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     protected void drawContent(int mouseX, int mouseY) {
         this.scroll = Ease.approach(this.scroll, this.scrollTarget, 0.05F, this.delta);
         try {
-            this.pinger.func_147223_a();
+            this.pinger.pingPendingNetworks();
         } catch (Exception e) {
             // A failed ping tick is not worth a broken screen.
         }
@@ -187,7 +187,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     private void drawHeader() {
-        this.fontRendererObj.drawString(I18n.format("multiplayer.title", new Object[0]),
+        this.fontRenderer.drawString(I18n.format("multiplayer.title", new Object[0]),
                 this.gridX, 26, Draw.withAlpha(Theme.text, this.fadeAlpha));
         Draw.gradientH(this.gridX, 40, this.gridX + this.gridWidth, 41,
                 Draw.withAlpha(Theme.accent, 0.5F * this.fadeAlpha),
@@ -196,7 +196,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         boolean over = isOverBack(this.lastMouseX, this.lastMouseY);
         int colour = Draw.withAlpha(over ? Theme.textHover : Theme.textDim, this.fadeAlpha);
         Icons.back(this.gridX + this.gridWidth - 10, 30, 9, colour);
-        this.fontRendererObj.drawString(I18n.format("gui.back", new Object[0]),
+        this.fontRenderer.drawString(I18n.format("gui.back", new Object[0]),
                 this.gridX + this.gridWidth - 46, 26, colour);
 
         boolean overRefresh = isOverRefresh(this.lastMouseX, this.lastMouseY);
@@ -207,8 +207,8 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         // a plus should: add a server to the list and keep it.
         boolean overDirect = isOverDirect(this.lastMouseX, this.lastMouseY);
         String direct = I18n.format("selectServer.direct", new Object[0]);
-        this.fontRendererObj.drawString(direct,
-                this.gridX + this.gridWidth - 96 - this.fontRendererObj.getStringWidth(direct), 26,
+        this.fontRenderer.drawString(direct,
+                this.gridX + this.gridWidth - 96 - this.fontRenderer.getStringWidth(direct), 26,
                 Draw.withAlpha(overDirect ? Theme.textHover : Theme.textDim, this.fadeAlpha));
     }
 
@@ -224,7 +224,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
     private boolean isOverDirect(int mouseX, int mouseY) {
         int right = this.gridX + this.gridWidth;
-        int width = this.fontRendererObj.getStringWidth(
+        int width = this.fontRenderer.getStringWidth(
                 I18n.format("selectServer.direct", new Object[0]));
         return mouseX >= right - 96 - width && mouseX <= right - 96
                 && mouseY >= 20 && mouseY <= 40;
@@ -302,8 +302,8 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         Icons.plus(cx, cy, 18 + hover * 3, 2.0F, colour);
 
         String label = I18n.format("selectServer.add", new Object[0]);
-        int w = this.fontRendererObj.getStringWidth(label);
-        this.fontRendererObj.drawString(label, (int) (cx - w / 2.0F), (int) (cy + 16), colour);
+        int w = this.fontRenderer.getStringWidth(label);
+        this.fontRenderer.drawString(label, (int) (cx - w / 2.0F), (int) (cy + 16), colour);
     }
 
     private void drawServerCard(int index, int slot) {
@@ -334,11 +334,11 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                 Draw.withAlpha(0x000000, 0.0F), Draw.withAlpha(0x000000, 0.88F * alpha));
 
         String name = fit(data.serverName, this.tileWidth - 12);
-        this.fontRendererObj.drawString(name, x + 6, (int) (y2 - 28),
+        this.fontRenderer.drawString(name, x + 6, (int) (y2 - 28),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
 
         String motd = data.serverMOTD == null ? "" : data.serverMOTD.replace('\n', ' ');
-        this.fontRendererObj.drawString(
+        this.fontRenderer.drawString(
                 fit(motd, this.tileWidth - 12),
                 x + 6, (int) (y2 - 18), Draw.withAlpha(Theme.textDim, 0.85F * alpha));
 
@@ -370,7 +370,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     : (data.pingToServer < 400L ? Theme.accent : Theme.danger);
         }
         Draw.rect(x, y + 1, x + 3, y + 4, Draw.withAlpha(dot, alpha));
-        this.fontRendererObj.drawString(text, x + 7, y,
+        this.fontRenderer.drawString(text, x + 7, y,
                 Draw.withAlpha(Theme.textDim, 0.8F * alpha));
     }
 
@@ -445,7 +445,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         if (Transitions.isBusy()) {
             return;
         }
@@ -483,7 +483,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0) {
@@ -518,7 +518,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private void beginAddServer() {
         this.mode = MODE_ADD;
         this.draft = new ServerData(
-                I18n.format("selectServer.defaultName", new Object[0]), "");
+                I18n.format("selectServer.defaultName", new Object[0]), "", false);
         this.mc.displayGuiScreen(new GuiServerEditScreen(
                 this, GuiServerEditScreen.Mode.ADD, this.draft));
     }
@@ -532,15 +532,15 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private void beginEditServer(int index, ServerData existing) {
         this.mode = MODE_EDIT;
         this.editIndex = index;
-        this.draft = new ServerData(existing.serverName, existing.serverIP);
-        this.draft.func_152584_a(existing.func_152586_b());
+        this.draft = new ServerData(existing.serverName, existing.serverIP, false);
+        this.draft.setResourceMode(existing.getResourceMode());
         this.mc.displayGuiScreen(new GuiServerEditScreen(this, GuiServerEditScreen.Mode.EDIT, this.draft));
     }
 
     private void beginDirectConnect() {
         this.mode = MODE_DIRECT;
         this.draft = new ServerData(
-                I18n.format("selectServer.defaultName", new Object[0]), "");
+                I18n.format("selectServer.defaultName", new Object[0]), "", false);
         this.mc.displayGuiScreen(new GuiServerEditScreen(this, GuiServerEditScreen.Mode.DIRECT, this.draft));
     }
 
@@ -585,7 +585,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     ServerData live = this.servers.getServerData(this.editIndex);
                     live.serverName = this.draft.serverName;
                     live.serverIP = this.draft.serverIP;
-                    live.func_152584_a(this.draft.func_152586_b());
+                    live.setResourceMode(this.draft.getResourceMode());
                     this.servers.saveServerList();
                 }
                 break;
@@ -616,7 +616,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     public void onGuiClosed() {
         super.onGuiClosed();
         if (this.pinger != null) {
-            this.pinger.func_147226_b();
+            this.pinger.clearPendingNetworks();
         }
     }
 
@@ -626,7 +626,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             back();
             return;

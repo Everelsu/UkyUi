@@ -1,6 +1,15 @@
 # UltraKill Yourself UI localization
+#
+# The file name MUST stay en_US / ru_RU, not en_us / ru_ru, even though 1.12.2
+# resource paths are otherwise lowercase. A mod ships no pack.mcmeta of its own, so
+# Forge treats its resource pack as format 2 and wraps it in LegacyV2Adapter — and
+# that adapter rewrites every request for lang/xx_yy.lang into lang/xx_YY.lang before
+# it reaches the pack. Lowercase names are simply never asked for: the file loads for
+# nothing, every uky.* key falls through to its own name, and the interface fills up
+# with raw keys while vanilla strings keep working.
+#
 # Vanilla keys (menu.singleplayer, options.title, ...) are reused where they exist;
-# only strings that 1.7.10 hardcodes, or that are ours, need an entry here.
+# only strings that vanilla hardcodes, or that are ours, need an entry here.
 uky.menu.mods=Mods
 uky.menu.modOptions=Mod Options
 
@@ -15,6 +24,8 @@ uky.mods.config=Configure
 uky.language.search=Search languages...
 uky.mods.by=by
 
+uky.worlds.renameTitle=Rename this world
+uky.worlds.renameButton=Rename
 uky.worlds.noPreview=no picture yet
 
 # Vanilla splits its hardcore blurb across two keys written to wrap inside a narrow
@@ -25,6 +36,7 @@ uky.gamemode.hardcore.line2=When you die, the world dies with you.
 uky.gamemode.hardcore.warning=One life. You die for good.
 
 
+uky.progress.none=Nothing here yet.
 uky.progress.search=Search...
 
 uky.controls.search=Search a binding or a key...
@@ -46,8 +58,10 @@ uky.settings.shaderPacks.open=Choose a shader pack...
 # ---- death scene ----
 # Six lines per cause. The scene picks one at random and holds it for that death.
 uky.death.prompt=Press any key or click to return
-uky.death.promptLeave=Press any key to leave
+uky.death.promptLeave=Any other key to leave
 
+uky.death.hardcore=Hardcore. There is no respawn.
+uky.death.promptSpectate=Enter — stay and watch
 uky.death.generic.1=Signal lost. Nothing claimed the kill.
 uky.death.generic.2=You stopped. The world did not.
 uky.death.generic.3=No cause recorded. Same result.

@@ -50,7 +50,7 @@ public final class LinkIcons {
 
     /** The folder pack icons are read from, created if it is not there yet. */
     public static File folder() {
-        File dir = new File(Minecraft.getMinecraft().mcDataDir, UiConfig.linkIconFolder);
+        File dir = new File(Minecraft.getMinecraft().gameDir, UiConfig.linkIconFolder);
         if (!dir.exists()) {
             // Made eagerly and on purpose: a folder that exists is documentation, and
             // "put your PNGs here" is much easier to act on when the here is visible.

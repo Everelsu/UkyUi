@@ -1,8 +1,8 @@
 package com.console.uky.proxy;
 
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.common.event.FMLInitializationEvent;
-import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLInitializationEvent;
+import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 
 /**
  * Server-safe proxy. Keep anything here strictly logic-only —

@@ -5,9 +5,9 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.client.FMLClientHandler;
-import cpw.mods.fml.client.GuiNotification;
-import cpw.mods.fml.common.StartupQuery;
+import net.minecraftforge.fml.client.FMLClientHandler;
+import net.minecraftforge.fml.client.GuiNotification;
+import net.minecraftforge.fml.common.StartupQuery;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.resources.I18n;
 import org.lwjgl.input.Keyboard;
@@ -68,8 +68,8 @@ public class GuiStartupQueryScreen extends GuiNotification {
      */
     public static GuiStartupQueryScreen wrap(net.minecraft.client.gui.GuiScreen screen) {
         Class<?> type = screen.getClass();
-        if (type != cpw.mods.fml.client.GuiNotification.class
-                && type != cpw.mods.fml.client.GuiConfirmation.class) {
+        if (type != net.minecraftforge.fml.client.GuiNotification.class
+                && type != net.minecraftforge.fml.client.GuiConfirmation.class) {
             return null;
         }
         for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
@@ -138,7 +138,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
             String line = lines[i].trim();
             if (this.heading.isEmpty()) {
                 if (!line.isEmpty()) {
-                    this.heading = this.fontRendererObj.trimStringToWidth(line, room);
+                    this.heading = this.fontRenderer.trimStringToWidth(line, room);
                 }
                 continue;
             }
@@ -150,7 +150,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
                 }
                 continue;
             }
-            List<?> wrapped = this.fontRendererObj.listFormattedStringToWidth(line, room);
+            List<?> wrapped = this.fontRenderer.listFormattedStringToWidth(line, room);
             for (int j = 0; j < wrapped.size(); j++) {
                 this.body.add(String.valueOf(wrapped.get(j)));
             }
@@ -198,7 +198,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
             if (button instanceof MenuButton) {
                 ((MenuButton) button).advance(delta, fade);
             }
-            button.drawButton(this.mc, mouseX, mouseY);
+            button.drawButton(this.mc, mouseX, mouseY, partialTicks);
         }
     }
 
@@ -211,7 +211,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
         int accent = this.confirmation ? Theme.danger : Theme.accent;
         Draw.rect(centerX - 14, y - 12, centerX + 14, y - 11, Draw.withAlpha(accent, 0.9F * fade));
 
-        this.drawCenteredString(this.fontRendererObj, this.heading, centerX, y,
+        this.drawCenteredString(this.fontRenderer, this.heading, centerX, y,
                 Draw.withAlpha(Theme.text, fade));
     }
 
@@ -235,7 +235,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
             int colour = i < this.lead
                     ? Draw.withAlpha(Theme.text, 0.92F * fade)
                     : Draw.withAlpha(Theme.textDim, 0.85F * fade);
-            this.drawCenteredString(this.fontRendererObj, line, centerX, top + drawn * LINE_H,
+            this.drawCenteredString(this.fontRenderer, line, centerX, top + drawn * LINE_H,
                     colour);
         }
 
@@ -243,7 +243,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
             // Says both that there is more and that the wheel is what reaches it —
             // the stock screen printed "..." and left the rest unreadable.
             String hint = (this.scroll + drawn) + " / " + this.body.size();
-            this.drawCenteredString(this.fontRendererObj, hint, centerX,
+            this.drawCenteredString(this.fontRenderer, hint, centerX,
                     top + this.visibleLines * LINE_H + 4,
                     Draw.withAlpha(Theme.accent, 0.7F * fade));
         }
@@ -252,7 +252,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
     // ------------------------------------------------------------------- input --
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
         if (wheel != 0) {
@@ -270,7 +270,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
      * is a choice, and "acknowledged" where there is not.
      */
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == Keyboard.KEY_ESCAPE) {
             answer(!this.confirmation);
             return;
@@ -287,7 +287,7 @@ public class GuiStartupQueryScreen extends GuiNotification {
         if (!button.enabled) {
             return;
         }
-        // No click sound here: MenuButton plays its own from func_146113_a, which
+        // No click sound here: MenuButton plays its own from playPressSound, which
         // GuiScreen calls on the way to this method.
         answer(button.id == 0);
     }

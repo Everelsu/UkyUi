@@ -66,7 +66,7 @@ public final class WorldPreviews {
     // ------------------------------------------------------------------ paths --
 
     public static File savesDir() {
-        return new File(Minecraft.getMinecraft().mcDataDir, "saves");
+        return new File(Minecraft.getMinecraft().gameDir, "saves");
     }
 
     public static File previewFile(String folderName) {

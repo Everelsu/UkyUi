@@ -4,8 +4,8 @@ import com.console.uky.client.death.DeathScene;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.client.world.UkyLoadingScreen;
 import com.console.uky.client.world.WorldPreviews;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.event.sound.SoundLoadEvent;
 
@@ -56,7 +56,7 @@ public class WorldCaptureHandler {
      */
     public static void captureThen(Runnable afterwards) {
         Minecraft mc = Minecraft.getMinecraft();
-        if (pendingFolder != null || mc.theWorld == null || !mc.isSingleplayer()
+        if (pendingFolder != null || mc.world == null || !mc.isSingleplayer()
                 || mc.getIntegratedServer() == null) {
             afterwards.run();
             return;
@@ -109,7 +109,7 @@ public class WorldCaptureHandler {
         if (pendingFolder == null || event.phase != TickEvent.Phase.END) {
             return;
         }
-        if (++ticksWaited > MAX_TICKS || Minecraft.getMinecraft().theWorld == null) {
+        if (++ticksWaited > MAX_TICKS || Minecraft.getMinecraft().world == null) {
             finish(false);
         }
     }

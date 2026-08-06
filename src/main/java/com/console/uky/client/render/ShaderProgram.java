@@ -104,8 +104,8 @@ public final class ShaderProgram {
             stream = Minecraft.getMinecraft().getResourceManager()
                     .getResource(location).getInputStream();
         } catch (Exception fromPacks) {
-            String path = "/assets/" + location.getResourceDomain() + "/"
-                    + location.getResourcePath();
+            String path = "/assets/" + location.getNamespace() + "/"
+                    + location.getPath();
             stream = ShaderProgram.class.getResourceAsStream(path);
             if (stream == null) {
                 throw fromPacks;

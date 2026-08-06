@@ -12,7 +12,9 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.ResourcePackRepository;
 import net.minecraft.client.resources.I18n;
-import net.minecraft.util.EnumChatFormatting;
+import net.minecraftforge.client.resource.ReloadRequirements;
+import net.minecraftforge.fml.client.FMLClientHandler;
+import net.minecraft.util.text.TextFormatting;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
@@ -204,7 +206,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
 
         drawGlassPanel();
 
-        this.fontRendererObj.drawString(
+        this.fontRenderer.drawString(
                 I18n.format("resourcePack.title", new Object[0]).toUpperCase(),
                 this.panelX1 + 16, this.panelY1 + 14,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
@@ -236,7 +238,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
     }
 
     private void drawColumnHeading(String label, int x) {
-        this.fontRendererObj.drawString(label.toUpperCase(), x, this.listTop - 48,
+        this.fontRenderer.drawString(label.toUpperCase(), x, this.listTop - 48,
                 Draw.withAlpha(Theme.textDim, 0.9F * this.fadeAlpha));
         Draw.gradientH(x, this.listTop - 34, x + this.columnWidth, this.listTop - 33,
                 Draw.withAlpha(Theme.accent, 0.35F * this.fadeAlpha),
@@ -246,13 +248,13 @@ public class GuiResourcePacksScreen extends MenuScreen {
     /** Wraps {@code text} to {@code width}, optionally centred, capped at {@code maxLines}. */
     private void drawWrapped(String text, int x, int y, int width, int maxLines, int colour,
                              boolean centred) {
-        List<?> lines = this.fontRendererObj.listFormattedStringToWidth(text, width);
+        List<?> lines = this.fontRenderer.listFormattedStringToWidth(text, width);
         for (int i = 0; i < lines.size() && i < maxLines; i++) {
             String line = String.valueOf(lines.get(i));
             int drawX = centred
-                    ? x + (width - this.fontRendererObj.getStringWidth(line)) / 2
+                    ? x + (width - this.fontRenderer.getStringWidth(line)) / 2
                     : x;
-            this.fontRendererObj.drawString(line, drawX, y + i * 10, colour);
+            this.fontRenderer.drawString(line, drawX, y + i * 10, colour);
         }
     }
 
@@ -310,11 +312,11 @@ public class GuiResourcePacksScreen extends MenuScreen {
             int controls = this.inUse ? 40 : 16;
             String name = GuiResourcePacksScreen.this.fit(
                     entry.getResourcePackName(), rowWidth - 34 - controls);
-            this.fontRendererObj().drawString(name, textX, rowY + 5,
+            this.fontRenderer().drawString(name, textX, rowY + 5,
                     Draw.withAlpha(Theme.text, alpha));
 
             String description = stripFormatting(entry.getTexturePackDescription());
-            this.fontRendererObj().drawString(
+            this.fontRenderer().drawString(
                     GuiResourcePacksScreen.this.fit(description,
                             rowWidth - 34 - controls),
                     textX, rowY + 16, Draw.withAlpha(Theme.textDim, 0.7F * alpha));
@@ -322,8 +324,8 @@ public class GuiResourcePacksScreen extends MenuScreen {
             drawRowControls(index, rowX, rowY, rowWidth, rowHeight, alpha);
         }
 
-        private net.minecraft.client.gui.FontRenderer fontRendererObj() {
-            return GuiResourcePacksScreen.this.fontRendererObj;
+        private net.minecraft.client.gui.FontRenderer fontRenderer() {
+            return GuiResourcePacksScreen.this.fontRenderer;
         }
 
         private void drawRowControls(int index, int rowX, int rowY, int rowWidth,
@@ -356,7 +358,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
 
     /** Descriptions may carry colour codes; they would render as literal glyphs here. */
     private static String stripFormatting(String text) {
-        return text == null ? "" : EnumChatFormatting.getTextWithoutFormattingCodes(text);
+        return text == null ? "" : TextFormatting.getTextWithoutFormattingCodes(text);
     }
 
     /**
@@ -393,7 +395,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
 
@@ -462,14 +464,14 @@ public class GuiResourcePacksScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+    protected void mouseReleased(int mouseX, int mouseY, int state) {
         this.availableList.mouseReleased();
         this.selectedList.mouseReleased();
-        super.mouseMovedOrUp(mouseX, mouseY, state);
+        super.mouseReleased(mouseX, mouseY, state);
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel == 0) {
@@ -485,7 +487,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             apply();
             switchBack();
@@ -532,14 +534,15 @@ public class GuiResourcePacksScreen extends MenuScreen {
         List<ResourcePackRepository.Entry> ordered =
                 new ArrayList<ResourcePackRepository.Entry>(this.selected);
         Collections.reverse(ordered);
-        repository.func_148527_a(ordered);
+        repository.setRepositories(ordered);
 
         this.mc.gameSettings.resourcePacks.clear();
         for (ResourcePackRepository.Entry entry : ordered) {
             this.mc.gameSettings.resourcePacks.add(entry.getResourcePackName());
         }
         this.mc.gameSettings.saveOptions();
-        this.mc.refreshResources();
+        // Everything: a resource pack can supply any kind of asset there is.
+        FMLClientHandler.instance().refreshResources(ReloadRequirements.all());
         switchBack();
     }
 

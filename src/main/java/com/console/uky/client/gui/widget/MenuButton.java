@@ -156,7 +156,7 @@ public class MenuButton extends GuiButton {
 
         // A selected entry stays lit whether or not the pointer is on it, so the
         // active tab reads as open rather than as merely hovered a moment ago.
-        float target = this.selected || (this.field_146123_n && this.enabled) ? 1.0F : 0.0F;
+        float target = this.selected || (this.hovered && this.enabled) ? 1.0F : 0.0F;
         this.hover = Ease.approach(this.hover, target, 0.055F, deltaSeconds);
         this.press = Ease.approach(this.press, this.pressed ? 1.0F : 0.0F, 0.030F, deltaSeconds);
 
@@ -168,13 +168,13 @@ public class MenuButton extends GuiButton {
     }
 
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY) {
+    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
         if (!this.visible) {
             return;
         }
-        this.field_146123_n = mouseX >= this.xPosition && mouseY >= this.yPosition
-                && mouseX < this.xPosition + this.width
-                && mouseY < this.yPosition + this.height;
+        this.hovered = mouseX >= this.x && mouseY >= this.y
+                && mouseX < this.x + this.width
+                && mouseY < this.y + this.height;
 
         float alpha = this.entrance * this.screenFade;
         if (alpha <= 0.01F) {
@@ -183,8 +183,8 @@ public class MenuButton extends GuiButton {
 
         // Entrance slides in from the left; press nudges down a hair.
         float slide = (1.0F - this.entrance) * 14.0F;
-        float x1 = this.xPosition - slide;
-        float y1 = this.yPosition + this.press * 1.0F;
+        float x1 = this.x - slide;
+        float y1 = this.y + this.press * 1.0F;
         float x2 = x1 + this.width;
         float y2 = y1 + this.height;
 
@@ -394,7 +394,7 @@ public class MenuButton extends GuiButton {
     }
 
     @Override
-    public void func_146113_a(SoundHandler soundHandler) {
+    public void playPressSound(SoundHandler soundHandler) {
         if (!UiConfig.buttonSounds) {
             return;
         }

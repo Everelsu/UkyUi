@@ -9,15 +9,15 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import cpw.mods.fml.client.config.ConfigGuiType;
-import cpw.mods.fml.client.config.IConfigElement;
-import cpw.mods.fml.client.event.ConfigChangedEvent;
-import cpw.mods.fml.common.FMLCommonHandler;
-import cpw.mods.fml.common.Loader;
+import net.minecraftforge.fml.client.config.ConfigGuiType;
+import net.minecraftforge.fml.client.config.IConfigElement;
+import net.minecraftforge.fml.client.event.ConfigChangedEvent;
+import net.minecraftforge.fml.common.Loader;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.resources.I18n;
+import net.minecraftforge.common.MinecraftForge;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -215,7 +215,7 @@ public class GuiModConfigScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (this.editor != null) {
             if (keyCode == 1 || keyCode == 28) {
                 commitEditor();
@@ -230,7 +230,7 @@ public class GuiModConfigScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         super.mouseClicked(mouseX, mouseY, button);
 
         if (this.editor != null) {
@@ -246,7 +246,7 @@ public class GuiModConfigScreen extends MenuScreen {
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0) {
@@ -302,7 +302,7 @@ public class GuiModConfigScreen extends MenuScreen {
     private void beginEditing(int index, IConfigElement element) {
         int rowY = this.list.rowTop(index);
         int width = 120;
-        this.editor = new GuiTextField(this.fontRendererObj,
+        this.editor = new GuiTextField(0, this.fontRenderer,
                 this.list.rowRight() - width - 16, rowY + 5, width, 14);
         this.editor.setMaxStringLength(256);
         this.editor.setText(String.valueOf(element.get()));
@@ -355,11 +355,12 @@ public class GuiModConfigScreen extends MenuScreen {
     private void applyAndClose() {
         if (this.edited && Loader.isModLoaded(this.modId)) {
             try {
-                boolean worldRunning = this.mc.theWorld != null;
-                FMLCommonHandler.instance().bus().post(
+                boolean worldRunning = this.mc.world != null;
+                // 1.7.10 posted these on FML's own bus; 1.12.2 has only the one.
+                MinecraftForge.EVENT_BUS.post(
                         new ConfigChangedEvent.OnConfigChangedEvent(this.modId, null,
                                 worldRunning, this.requiresMcRestart));
-                FMLCommonHandler.instance().bus().post(
+                MinecraftForge.EVENT_BUS.post(
                         new ConfigChangedEvent.PostConfigChangedEvent(this.modId, null,
                                 worldRunning, this.requiresMcRestart));
             } catch (Throwable t) {

@@ -98,7 +98,7 @@ public class GuiWorldPromptScreen extends MenuScreen {
         this.cardY = Math.max(46, (this.height - blockHeight) / 2 + 20);
 
         String previous = this.nameField == null ? this.worldName : this.nameField.getText();
-        this.nameField = new GuiTextField(this.fontRendererObj,
+        this.nameField = new GuiTextField(0, this.fontRenderer,
                 this.cardX + 1, this.cardY + this.cardHeight + 18, this.cardWidth - 2, 16);
         this.nameField.setMaxStringLength(32);
         this.nameField.setEnableBackgroundDrawing(false);
@@ -145,11 +145,14 @@ public class GuiWorldPromptScreen extends MenuScreen {
     }
 
     private void drawTitle() {
+        // Our own key for the rename half. 1.12.2 folded renaming into the "Edit
+        // World" screen and deleted selectWorld.renameTitle with it; selectWorld.edit
+        // .title says "Edit World", which is not what this prompt does.
         String title = this.mode == Mode.RENAME
-                ? I18n.format("selectWorld.renameTitle", new Object[0])
+                ? I18n.format("uky.worlds.renameTitle", new Object[0])
                 : I18n.format("selectWorld.deleteQuestion", new Object[0]);
-        int width = this.fontRendererObj.getStringWidth(title);
-        this.fontRendererObj.drawString(title, (this.width - width) / 2, this.cardY - 22,
+        int width = this.fontRenderer.getStringWidth(title);
+        this.fontRenderer.drawString(title, (this.width - width) / 2, this.cardY - 22,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
     }
 
@@ -173,7 +176,7 @@ public class GuiWorldPromptScreen extends MenuScreen {
         Draw.gradientV(this.cardX, y2 - 20, x2, y2,
                 Draw.withAlpha(0x000000, 0.0F), Draw.withAlpha(0x000000, 0.88F * this.fadeAlpha));
         String name = fit(this.worldName, this.cardWidth - 12);
-        this.fontRendererObj.drawString(name, this.cardX + 6, (int) (y2 - 14),
+        this.fontRenderer.drawString(name, this.cardX + 6, (int) (y2 - 14),
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
         Draw.border(this.cardX, this.cardY, x2, y2, 1.0F,
@@ -192,10 +195,10 @@ public class GuiWorldPromptScreen extends MenuScreen {
     }
 
     private void drawNameField() {
-        float x1 = this.nameField.xPosition - 1;
-        float x2 = this.nameField.xPosition + this.nameField.getWidth() + 1;
-        float y1 = this.nameField.yPosition - 3;
-        float y2 = this.nameField.yPosition + 15;
+        float x1 = this.nameField.x - 1;
+        float x2 = this.nameField.x + this.nameField.getWidth() + 1;
+        float y1 = this.nameField.y - 3;
+        float y2 = this.nameField.y + 15;
 
         Draw.rect(x1, y1, x2, y2, Draw.withAlpha(0x000000, 0.55F * this.fadeAlpha));
         Draw.rect(x1, y2 - 1, x2, y2,
@@ -210,12 +213,12 @@ public class GuiWorldPromptScreen extends MenuScreen {
         // clause. Put the name back in front of it.
         String warning = "'" + this.worldName + "' "
                 + I18n.format("selectWorld.deleteWarning", new Object[0]);
-        List<?> lines = this.fontRendererObj.listFormattedStringToWidth(warning, this.cardWidth + 40);
+        List<?> lines = this.fontRenderer.listFormattedStringToWidth(warning, this.cardWidth + 40);
         int y = this.cardY + this.cardHeight + 10;
         for (int i = 0; i < lines.size() && i < 2; i++) {
             String line = String.valueOf(lines.get(i));
-            int width = this.fontRendererObj.getStringWidth(line);
-            this.fontRendererObj.drawString(line, (this.width - width) / 2, y + i * 10,
+            int width = this.fontRenderer.getStringWidth(line);
+            this.fontRenderer.drawString(line, (this.width - width) / 2, y + i * 10,
                     Draw.withAlpha(Theme.textDim, 0.9F * this.fadeAlpha));
         }
     }
@@ -258,14 +261,14 @@ public class GuiWorldPromptScreen extends MenuScreen {
 
     private String confirmLabel() {
         return this.mode == Mode.RENAME
-                ? I18n.format("selectWorld.renameButton", new Object[0])
+                ? I18n.format("uky.worlds.renameButton", new Object[0])
                 : I18n.format("selectWorld.deleteButton", new Object[0]);
     }
 
     private void centred(String text, int x, int width, int y, int colour) {
         String trimmed = fit(text, width - 8);
-        int w = this.fontRendererObj.getStringWidth(trimmed);
-        this.fontRendererObj.drawString(trimmed, x + (width - w) / 2, y, colour);
+        int w = this.fontRenderer.getStringWidth(trimmed);
+        this.fontRenderer.drawString(trimmed, x + (width - w) / 2, y, colour);
     }
 
     private boolean inside(int x, int y, int width, int height) {
@@ -280,7 +283,7 @@ public class GuiWorldPromptScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
         if (this.mode == Mode.RENAME) {
@@ -302,7 +305,7 @@ public class GuiWorldPromptScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             cancel();
             return;

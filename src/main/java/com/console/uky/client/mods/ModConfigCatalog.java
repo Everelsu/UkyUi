@@ -1,12 +1,12 @@
 package com.console.uky.client.mods;
 
 import com.console.uky.UkyUI;
-import cpw.mods.fml.client.FMLClientHandler;
-import cpw.mods.fml.client.IModGuiFactory;
-import cpw.mods.fml.client.config.GuiConfig;
-import cpw.mods.fml.client.config.IConfigElement;
-import cpw.mods.fml.common.Loader;
-import cpw.mods.fml.common.ModContainer;
+import net.minecraftforge.fml.client.FMLClientHandler;
+import net.minecraftforge.fml.client.IModGuiFactory;
+import net.minecraftforge.fml.client.config.GuiConfig;
+import net.minecraftforge.fml.client.config.IConfigElement;
+import net.minecraftforge.fml.common.Loader;
+import net.minecraftforge.fml.common.ModContainer;
 import net.minecraft.client.gui.GuiScreen;
 
 import java.util.ArrayList;
@@ -34,7 +34,15 @@ public final class ModConfigCatalog {
     public static final class Entry {
 
         public final ModContainer mod;
-        public final Class<? extends GuiScreen> screenClass;
+        /**
+         * The mod's own factory, which builds the screen.
+         *
+         * 1.7.10 named the class and let the caller construct it; 1.12.2 hands the
+         * construction to the factory, so that is what has to be kept. It also means
+         * "is this one of Forge's screens" can no longer be answered from a class
+         * literal and has to be answered by building one — see {@link #discover}.
+         */
+        public final IModGuiFactory factory;
 
         /**
          * Whether the screen is one of Forge's, and so can be redrawn in our own
@@ -48,9 +56,9 @@ public final class ModConfigCatalog {
          */
         public final boolean redrawable;
 
-        Entry(ModContainer mod, Class<? extends GuiScreen> screenClass, boolean redrawable) {
+        Entry(ModContainer mod, IModGuiFactory factory, boolean redrawable) {
             this.mod = mod;
-            this.screenClass = screenClass;
+            this.factory = factory;
             this.redrawable = redrawable;
         }
 
@@ -112,14 +120,10 @@ public final class ModConfigCatalog {
             // broken mod must not cost the list every other entry.
             try {
                 IModGuiFactory factory = client.getGuiFactoryFor(mod);
-                if (factory == null) {
+                if (factory == null || !factory.hasConfigGui()) {
                     continue;
                 }
-                Class<? extends GuiScreen> screen = factory.mainConfigGuiClass();
-                if (screen == null) {
-                    continue;
-                }
-                found.add(new Entry(mod, screen, GuiConfig.class.isAssignableFrom(screen)));
+                found.add(new Entry(mod, factory, isForgeScreen(factory)));
             } catch (Throwable t) {
                 UkyUI.LOGGER.warn("Could not read the settings screen of mod {}",
                         mod.getModId(), t);
@@ -153,10 +157,33 @@ public final class ModConfigCatalog {
      */
     public static GuiScreen instantiate(Entry entry, GuiScreen parent) {
         try {
-            return entry.screenClass.getConstructor(GuiScreen.class).newInstance(parent);
+            return entry.factory.createConfigGui(parent);
         } catch (Throwable t) {
             UkyUI.LOGGER.warn("Could not open the settings screen of mod {}", entry.modId(), t);
             return null;
+        }
+    }
+
+    /**
+     * Whether this factory produces one of Forge's own screens.
+     *
+     * On 1.7.10 this was a class comparison and cost nothing. 1.12.2 only offers a
+     * factory method, so the only way to find out is to build one and look at it —
+     * once, at discovery, with the result thrown away. The throwaway parent is a bare
+     * {@code GuiScreen} rather than null because a mod is free to touch its parent in
+     * the constructor, and a probe must not be the thing that breaks it.
+     */
+    /** Stand-in parent for the probe below; never shown, never drawn. */
+    private static final GuiScreen PROBE_PARENT = new GuiScreen() {
+    };
+
+    private static boolean isForgeScreen(IModGuiFactory factory) {
+        try {
+            return factory.createConfigGui(PROBE_PARENT) instanceof GuiConfig;
+        } catch (Throwable t) {
+            // Not answerable, so treat it as hand-written: it will be opened as its
+            // author drew it rather than taken apart.
+            return false;
         }
     }
 

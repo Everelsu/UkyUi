@@ -1,7 +1,7 @@
 package com.console.uky.mixins;
 
 import com.console.uky.client.splash.UkySplash;
-import cpw.mods.fml.client.SplashProgress;
+import net.minecraftforge.fml.client.SplashProgress;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

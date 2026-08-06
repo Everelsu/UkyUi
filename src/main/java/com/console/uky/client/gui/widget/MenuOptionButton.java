@@ -99,17 +99,17 @@ public class MenuOptionButton extends MenuButton {
     }
 
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY) {
+    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
         if (!this.isToggle) {
-            super.drawButton(mc, mouseX, mouseY);
+            super.drawButton(mc, mouseX, mouseY, partialTicks);
             return;
         }
         if (!this.visible) {
             return;
         }
-        this.field_146123_n = mouseX >= this.xPosition && mouseY >= this.yPosition
-                && mouseX < this.xPosition + this.width
-                && mouseY < this.yPosition + this.height;
+        this.hovered = mouseX >= this.x && mouseY >= this.y
+                && mouseX < this.x + this.width
+                && mouseY < this.y + this.height;
 
         float alpha = this.entrance * this.screenFade;
         if (alpha <= 0.01F) {
@@ -117,8 +117,8 @@ public class MenuOptionButton extends MenuButton {
         }
 
         float slide = (1.0F - this.entrance) * 14.0F;
-        float x1 = this.xPosition - slide;
-        float y1 = this.yPosition + this.press;
+        float x1 = this.x - slide;
+        float y1 = this.y + this.press;
         float x2 = x1 + this.width;
         float y2 = y1 + this.height;
 
@@ -165,7 +165,7 @@ public class MenuOptionButton extends MenuButton {
 
         @Override
         public String label() {
-            return I18n.format(this.option.getEnumString(), new Object[0]);
+            return I18n.format(this.option.getTranslation(), new Object[0]);
         }
 
         @Override
@@ -181,7 +181,7 @@ public class MenuOptionButton extends MenuButton {
 
         @Override
         public boolean toggle() {
-            return this.option.getEnumBoolean();
+            return this.option.isBoolean();
         }
 
         @Override

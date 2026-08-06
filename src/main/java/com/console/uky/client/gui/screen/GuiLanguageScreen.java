@@ -11,6 +11,8 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.resources.I18n;
+import net.minecraftforge.client.resource.VanillaResourceType;
+import net.minecraftforge.fml.client.FMLClientHandler;
 import net.minecraft.client.resources.Language;
 import net.minecraft.client.resources.LanguageManager;
 
@@ -63,7 +65,7 @@ public class GuiLanguageScreen extends MenuScreen {
         this.panelY2 = this.height - Math.max(12, (int) (this.height * 0.10F));
 
         String previous = this.search == null ? "" : this.search.getText();
-        this.search = new GuiTextField(this.fontRendererObj,
+        this.search = new GuiTextField(0, this.fontRenderer,
                 this.panelX1 + 14, this.panelY1 + 30, panelWidth - 28, 16);
         this.search.setMaxStringLength(32);
         this.search.setEnableBackgroundDrawing(false);
@@ -151,7 +153,7 @@ public class GuiLanguageScreen extends MenuScreen {
     /**
      * The language's own name, without the region {@code toString} appends.
      *
-     * 1.7.10 keeps {@code name} and {@code region} private with no accessors, so the
+     * Vanilla keeps {@code name} and {@code region} private with no accessors, so the
      * formatted string is all there is to work from.
      */
     private static String nameOf(Language language) {
@@ -209,7 +211,7 @@ public class GuiLanguageScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, 0.55F * this.fadeAlpha),
                 Draw.withAlpha(Theme.accent, 0.0F));
 
-        this.fontRendererObj.drawString(I18n.format("options.language", new Object[0]),
+        this.fontRenderer.drawString(I18n.format("options.language", new Object[0]),
                 panelX1 + 14, panelY1 + 12, Draw.withAlpha(Theme.text, this.fadeAlpha));
 
         drawSearchBox();
@@ -217,7 +219,7 @@ public class GuiLanguageScreen extends MenuScreen {
 
         // Vanilla's own warning, kept because it is genuinely useful.
         String notice = I18n.format("options.languageWarning", new Object[0]);
-        this.fontRendererObj.drawString(notice, panelX1 + 14, panelY2 - 44,
+        this.fontRenderer.drawString(notice, panelX1 + 14, panelY2 - 44,
                 Draw.withAlpha(Theme.textDim, 0.6F * this.fadeAlpha));
     }
 
@@ -226,10 +228,10 @@ public class GuiLanguageScreen extends MenuScreen {
         // extend 6 below and 4 above, so the underline sat well clear of the text and
         // the placeholder was drawn 4 lower than typed text would be — the field
         // looked skewed and the caption looked like it belonged to something else.
-        int x1 = this.search.xPosition - 5;
-        int x2 = this.search.xPosition + this.search.width + 5;
-        int y1 = this.search.yPosition - 4;
-        int y2 = this.search.yPosition + 12;
+        int x1 = this.search.x - 5;
+        int x2 = this.search.x + this.search.width + 5;
+        int y1 = this.search.y - 4;
+        int y2 = this.search.y + 12;
 
         Draw.rect(x1, y1, x2, y2, Draw.withAlpha(Theme.surface, 0.55F * this.fadeAlpha));
         Draw.rect(x1, y2 - 1, x2, y2,
@@ -239,8 +241,8 @@ public class GuiLanguageScreen extends MenuScreen {
         if (this.search.getText().isEmpty()) {
             // Same baseline the field itself draws at, so the caption sits exactly
             // where the first typed character will appear.
-            this.fontRendererObj.drawString(I18n.format("uky.language.search", new Object[0]),
-                    this.search.xPosition, this.search.yPosition,
+            this.fontRenderer.drawString(I18n.format("uky.language.search", new Object[0]),
+                    this.search.x, this.search.y,
                     Draw.withAlpha(Theme.textDim, 0.5F * this.fadeAlpha));
         }
         this.search.drawTextBox();
@@ -277,14 +279,14 @@ public class GuiLanguageScreen extends MenuScreen {
             // buried in "Name (Region)".
             String name = screen.fit(nameOf(language),
                     rowWidth - 16);
-            screen.fontRendererObj.drawString(name, rowX + 8, rowY + 4,
+            screen.fontRenderer.drawString(name, rowX + 8, rowY + 4,
                     Draw.withAlpha(color, alpha));
 
             String region = regionOf(language);
             String sub = region.isEmpty()
                     ? language.getLanguageCode()
                     : region + "  ·  " + language.getLanguageCode();
-            screen.fontRendererObj.drawString(
+            screen.fontRenderer.drawString(
                     screen.fit(sub, rowWidth - 16),
                     rowX + 8, rowY + 13, Draw.withAlpha(Theme.textDim, 0.65F * alpha));
 
@@ -312,10 +314,13 @@ public class GuiLanguageScreen extends MenuScreen {
         }
         this.languageManager.setCurrentLanguage(language);
         this.mc.gameSettings.language = language.getLanguageCode();
-        this.mc.refreshResources();
-        this.fontRendererObj.setUnicodeFlag(this.languageManager.isCurrentLocaleUnicode()
+        // Only the language files, which is what vanilla's own screen reloads
+        // here. A full refresh rebuilds every texture atlas as well, and on a
+        // loaded pack that is several seconds of stall to change a caption.
+        FMLClientHandler.instance().refreshResources(VanillaResourceType.LANGUAGES);
+        this.fontRenderer.setUnicodeFlag(this.languageManager.isCurrentLocaleUnicode()
                 || this.mc.gameSettings.forceUnicodeFont);
-        this.fontRendererObj.setBidiFlag(this.languageManager.isCurrentLanguageBidirectional());
+        this.fontRenderer.setBidiFlag(this.languageManager.isCurrentLanguageBidirectional());
         this.mc.gameSettings.saveOptions();
         this.applyFlash = 1.0F;
         // Labels changed language, so the controls have to be rebuilt — but not the
@@ -326,7 +331,7 @@ public class GuiLanguageScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         this.search.mouseClicked(mouseX, mouseY, button);
         if (this.list.mouseClicked(mouseX, mouseY)) {
             return;
@@ -341,13 +346,13 @@ public class GuiLanguageScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+    protected void mouseReleased(int mouseX, int mouseY, int state) {
         this.list.mouseReleased();
-        super.mouseMovedOrUp(mouseX, mouseY, state);
+        super.mouseReleased(mouseX, mouseY, state);
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0) {
@@ -356,7 +361,7 @@ public class GuiLanguageScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             switchBack();
             return;

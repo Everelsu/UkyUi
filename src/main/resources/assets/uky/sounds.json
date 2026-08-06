@@ -1,44 +1,37 @@
 {
   "intro_impact": {
-    "category": "master",
     "sounds": [
-      { "name": "low", "stream": false }
+      { "name": "uky:low", "stream": false }
     ]
   },
   "menu_music": {
-    "category": "music",
     "sounds": [
-      { "name": "music", "stream": true }
+      { "name": "uky:music", "stream": true }
     ]
   },
   "button": {
-    "category": "master",
     "sounds": [
-      { "name": "button_sound", "stream": false }
+      { "name": "uky:button_sound", "stream": false }
     ]
   },
   "delete_hold": {
-    "category": "master",
     "sounds": [
-      { "name": "delete_hold", "stream": false }
+      { "name": "uky:delete_hold", "stream": false }
     ]
   },
   "delete_break": {
-    "category": "master",
     "sounds": [
-      { "name": "delete_break", "stream": false }
+      { "name": "uky:delete_break", "stream": false }
     ]
   },
   "heartbeat": {
-    "category": "master",
     "sounds": [
-      { "name": "heartbeat", "stream": false }
+      { "name": "uky:heartbeat", "stream": false }
     ]
   },
   "breathing": {
-    "category": "master",
     "sounds": [
-      { "name": "breathing", "stream": true }
+      { "name": "uky:breathing", "stream": true }
     ]
   }
 }

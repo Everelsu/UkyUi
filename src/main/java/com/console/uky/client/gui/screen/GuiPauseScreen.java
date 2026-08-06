@@ -62,7 +62,7 @@ public class GuiPauseScreen extends MenuScreen {
         y += ROW_HEIGHT + ROW_GAP;
 
         add(new MenuButton(ID_ACHIEVEMENTS, left, y, halfWidth, ROW_HEIGHT,
-                I18n.format("gui.achievements", new Object[0]), MenuButton.Style.NORMAL), index++);
+                I18n.format("gui.advancements", new Object[0]), MenuButton.Style.NORMAL), index++);
         add(new MenuButton(ID_STATS, right, y, halfWidth, ROW_HEIGHT,
                 I18n.format("gui.stats", new Object[0]), MenuButton.Style.NORMAL), index++);
         y += ROW_HEIGHT + ROW_GAP;
@@ -150,13 +150,13 @@ public class GuiPauseScreen extends MenuScreen {
                 switchTo(new GuiSettingsScreen(GuiPauseScreen.this, mc.gameSettings));
                 break;
             case ID_ACHIEVEMENTS:
-                if (mc.thePlayer != null) {
-                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, mc.thePlayer.getStatFileWriter(), GuiProgressScreen.achievementsTab()));
+                if (mc.player != null) {
+                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, mc.player.getStatFileWriter(), GuiProgressScreen.advancementsTab()));
                 }
                 break;
             case ID_STATS:
-                if (mc.thePlayer != null) {
-                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, mc.thePlayer.getStatFileWriter(), GuiProgressScreen.statsTab()));
+                if (mc.player != null) {
+                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, mc.player.getStatFileWriter(), GuiProgressScreen.statsTab()));
                 }
                 break;
             case ID_LAN:
@@ -186,7 +186,7 @@ public class GuiPauseScreen extends MenuScreen {
      * ever be seen by whoever clicked.
      */
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             if (!isClosing()) {
                 closeWith(new Runnable() {
@@ -215,8 +215,8 @@ public class GuiPauseScreen extends MenuScreen {
      * straight to the server list rather than via the title screen.
      */
     private void quitTo(net.minecraft.client.gui.GuiScreen destination) {
-        if (this.mc.theWorld != null) {
-            this.mc.theWorld.sendQuittingDisconnectingPacket();
+        if (this.mc.world != null) {
+            this.mc.world.sendQuittingDisconnectingPacket();
         }
         this.mc.loadWorld((WorldClient) null);
         this.mc.displayGuiScreen(destination);

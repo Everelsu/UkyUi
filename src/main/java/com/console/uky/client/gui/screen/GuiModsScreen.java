@@ -7,8 +7,8 @@ import com.console.uky.client.mods.ModConfigCatalog;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import cpw.mods.fml.common.Loader;
-import cpw.mods.fml.common.ModContainer;
+import net.minecraftforge.fml.common.Loader;
+import net.minecraftforge.fml.common.ModContainer;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
@@ -115,11 +115,11 @@ public class GuiModsScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, 0.5F * this.fadeAlpha),
                 Draw.withAlpha(Theme.accent, 0.0F));
 
-        this.fontRendererObj.drawString(I18n.format("uky.menu.mods", new Object[0]),
+        this.fontRenderer.drawString(I18n.format("uky.menu.mods", new Object[0]),
                 panelX1 + 14, panelY1 + 14, Draw.withAlpha(Theme.text, this.fadeAlpha));
         String count = this.mods.size() + " " + I18n.format("uky.mods.loaded", new Object[0]);
-        this.fontRendererObj.drawString(count,
-                panelX2 - 14 - this.fontRendererObj.getStringWidth(count), panelY1 + 14,
+        this.fontRenderer.drawString(count,
+                panelX2 - 14 - this.fontRenderer.getStringWidth(count), panelY1 + 14,
                 Draw.withAlpha(Theme.textDim, 0.8F * this.fadeAlpha));
 
         this.list.draw(mouseX, mouseY, this.fadeAlpha);
@@ -163,7 +163,7 @@ public class GuiModsScreen extends MenuScreen {
         String description = mod.getMetadata() == null ? "" : mod.getMetadata().description;
         if (description != null && !description.isEmpty()) {
             // drawSplitString is the one place vanilla's wrapping is exactly what we want.
-            this.fontRendererObj.drawSplitString(description, x, y, maxWidth,
+            this.fontRenderer.drawSplitString(description, x, y, maxWidth,
                     Draw.withAlpha(Theme.textDim, 0.9F * this.fadeAlpha));
         }
 
@@ -233,14 +233,14 @@ public class GuiModsScreen extends MenuScreen {
             }
 
             int nameColor = isSelected ? Theme.textHover : Theme.text;
-            GuiModsScreen.this.fontRendererObj.drawString(trim(mod.getName(), rowWidth - 14),
+            GuiModsScreen.this.fontRenderer.drawString(trim(mod.getName(), rowWidth - 14),
                     rowX + 8, rowY + 4, Draw.withAlpha(nameColor, alpha));
-            GuiModsScreen.this.fontRendererObj.drawString(mod.getVersion(),
+            GuiModsScreen.this.fontRenderer.drawString(mod.getVersion(),
                     rowX + 8, rowY + 13, Draw.withAlpha(Theme.textDim, 0.7F * alpha));
         }
 
         private String trim(String text, int maxWidth) {
-            if (GuiModsScreen.this.fontRendererObj.getStringWidth(text) <= maxWidth) {
+            if (GuiModsScreen.this.fontRenderer.getStringWidth(text) <= maxWidth) {
                 return text;
             }
             return GuiModsScreen.this.fit(text, maxWidth - 6);
@@ -248,7 +248,7 @@ public class GuiModsScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         if (this.list.mouseClicked(mouseX, mouseY)) {
             return;
         }
@@ -262,13 +262,13 @@ public class GuiModsScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+    protected void mouseReleased(int mouseX, int mouseY, int state) {
         this.list.mouseReleased();
-        super.mouseMovedOrUp(mouseX, mouseY, state);
+        super.mouseReleased(mouseX, mouseY, state);
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0) {
@@ -338,7 +338,7 @@ public class GuiModsScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             switchBack();
             return;

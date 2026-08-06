@@ -16,6 +16,7 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ChatAllowedCharacters;
+import net.minecraft.world.GameType;
 import net.minecraft.world.WorldSettings;
 import net.minecraft.world.WorldType;
 
@@ -179,14 +180,14 @@ public class GuiCreateWorldScreen extends MenuScreen {
                 : I18n.format("selectWorld.newWorld", new Object[0]);
         String seed = this.seedField != null ? this.seedField.getText() : "";
 
-        this.nameField = new GuiTextField(this.fontRendererObj,
+        this.nameField = new GuiTextField(0, this.fontRenderer,
                 this.contentX + 1, blockTop + 13, fieldWidth - 2, 16);
         this.nameField.setMaxStringLength(32);
         this.nameField.setEnableBackgroundDrawing(false);
         this.nameField.setText(name);
         this.nameField.setFocused(true);
 
-        this.seedField = new GuiTextField(this.fontRendererObj,
+        this.seedField = new GuiTextField(1, this.fontRenderer,
                 this.contentX + fieldWidth + 13, blockTop + 13, fieldWidth - 2, 16);
         this.seedField.setEnableBackgroundDrawing(false);
         this.seedField.setText(seed);
@@ -201,9 +202,9 @@ public class GuiCreateWorldScreen extends MenuScreen {
     /** Every world type that can actually be created, mods included. */
     private void collectTypes() {
         this.types.clear();
-        for (int i = 0; i < WorldType.worldTypes.length; i++) {
-            WorldType type = WorldType.worldTypes[i];
-            if (type != null && type.getCanBeCreated()) {
+        for (int i = 0; i < WorldType.WORLD_TYPES.length; i++) {
+            WorldType type = WorldType.WORLD_TYPES[i];
+            if (type != null && type.canBeCreated()) {
                 this.types.add(Integer.valueOf(i));
             }
         }
@@ -278,7 +279,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
     }
 
     private void drawHeader() {
-        this.fontRendererObj.drawString(
+        this.fontRenderer.drawString(
                 I18n.format("selectWorld.create", new Object[0]).toUpperCase(),
                 this.contentX, 26, Draw.withAlpha(Theme.text, this.fadeAlpha));
         Draw.gradientH(this.contentX, 40, this.contentX + this.contentWidth, 41,
@@ -294,8 +295,8 @@ public class GuiCreateWorldScreen extends MenuScreen {
         int right = this.contentX + this.contentWidth;
         Icons.back(right - 6, 30, 9, colour);
         String cancel = I18n.format("gui.cancel", new Object[0]);
-        this.fontRendererObj.drawString(cancel,
-                right - 16 - this.fontRendererObj.getStringWidth(cancel), 26, colour);
+        this.fontRenderer.drawString(cancel,
+                right - 16 - this.fontRenderer.getStringWidth(cancel), 26, colour);
     }
 
     private boolean isOverBack() {
@@ -311,13 +312,13 @@ public class GuiCreateWorldScreen extends MenuScreen {
 
     /** A field is a caption, a dark strip and a rule that lights up when focused. */
     private void drawField(GuiTextField field, String caption, boolean withDice) {
-        float x1 = field.xPosition - 1;
-        float x2 = field.xPosition + field.getWidth() + 1;
-        float y1 = field.yPosition - 3;
-        float y2 = field.yPosition + 15;
+        float x1 = field.x - 1;
+        float x2 = field.x + field.getWidth() + 1;
+        float y1 = field.y - 3;
+        float y2 = field.y + 15;
         boolean focused = field.isFocused();
 
-        this.fontRendererObj.drawString(caption, (int) x1, (int) y1 - 12,
+        this.fontRenderer.drawString(caption, (int) x1, (int) y1 - 12,
                 Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
 
         Draw.rect(x1, y1, x2, y2, Draw.withAlpha(0x000000, 0.55F * this.fadeAlpha));
@@ -333,9 +334,9 @@ public class GuiCreateWorldScreen extends MenuScreen {
         // The seed field's placeholder explains what leaving it blank does, which
         // vanilla only says in a separate line of grey text below the box.
         if (withDice && field.getText().isEmpty() && !focused) {
-            this.fontRendererObj.drawString(
+            this.fontRenderer.drawString(
                     I18n.format("selectWorld.seedInfo", new Object[0]),
-                    field.xPosition + 2, field.yPosition + 1,
+                    field.x + 2, field.y + 1,
                     Draw.withAlpha(Theme.textDisabled, 0.7F * this.fadeAlpha));
         }
     }
@@ -406,7 +407,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
         if (line2 != null && !line2.isEmpty()) {
             text = text + " " + line2;
         }
-        List<String> lines = this.fontRendererObj.listFormattedStringToWidth(text, maxWidth);
+        List<String> lines = this.fontRenderer.listFormattedStringToWidth(text, maxWidth);
 
         // Only as many lines as the tile can hold; the last visible one takes an
         // ellipsis so a cut-off sentence does not look like a rendering fault.
@@ -418,10 +419,10 @@ public class GuiCreateWorldScreen extends MenuScreen {
                 // hold — so the ellipsis has to be forced on. fit() only marks a line
                 // that is too wide, and the last line that fits usually is not, which
                 // left blurbs ending on a bare comma as though the text were broken.
-                line = this.fontRendererObj.trimStringToWidth(line,
-                        maxWidth - this.fontRendererObj.getStringWidth("...")).trim() + "...";
+                line = this.fontRenderer.trimStringToWidth(line,
+                        maxWidth - this.fontRenderer.getStringWidth("...")).trim() + "...";
             }
-            this.fontRendererObj.drawString(line, x + 10, (int) y + i * 10, colour);
+            this.fontRenderer.drawString(line, x + 10, (int) y + i * 10, colour);
         }
     }
 
@@ -434,7 +435,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
 
         for (int i = 0; i < count && i < columns; i++) {
             int typeIndex = this.types.get(i).intValue();
-            WorldType type = WorldType.worldTypes[typeIndex];
+            WorldType type = WorldType.WORLD_TYPES[typeIndex];
             int x = this.contentX + i * (tileWidth + TILE_GAP);
             boolean over = inside(x, this.typeY, tileWidth, this.typeHeight);
             this.typeHover[i] = Ease.approach(this.typeHover[i], over ? 1.0F : 0.0F,
@@ -448,24 +449,24 @@ public class GuiCreateWorldScreen extends MenuScreen {
                     : Draw.mix(Theme.textDim, Theme.accent, this.typeHover[i]), this.fadeAlpha);
             float cy = this.typeY + this.typeHeight * 0.5F;
             float iconSize = Math.min(14.0F, this.typeHeight * 0.5F);
-            if (type.getWorldTypeName().toLowerCase().contains("flat")) {
+            if (type.getName().toLowerCase().contains("flat")) {
                 Icons.flat(x + 13, cy, iconSize, tint);
-            } else if (type.getWorldTypeName().toLowerCase().contains("large")) {
+            } else if (type.getName().toLowerCase().contains("large")) {
                 Icons.globe(x + 13, cy, iconSize, tint);
             } else {
                 Icons.terrain(x + 13, cy, iconSize, tint);
             }
 
             String label = fit(
-                    I18n.format(type.getTranslateName(), new Object[0]), tileWidth - 30);
-            this.fontRendererObj.drawString(label, x + 24, (int) (cy - 4),
+                    I18n.format(type.getTranslationKey(), new Object[0]), tileWidth - 30);
+            this.fontRenderer.drawString(label, x + 24, (int) (cy - 4),
                     Draw.withAlpha(selected ? Theme.textHover : Theme.text, this.fadeAlpha));
         }
 
         // More types than fit on one row is a modded situation; the extras are
         // reachable by clicking the row, which cycles.
         if (count > columns) {
-            this.fontRendererObj.drawString("+" + (count - columns),
+            this.fontRenderer.drawString("+" + (count - columns),
                     this.contentX + this.contentWidth - 14, this.typeY - 12,
                     Draw.withAlpha(Theme.textDim, 0.8F * this.fadeAlpha));
         }
@@ -506,7 +507,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
 
             String label = fit(toggleLabel(i),
                     tileWidth - (int) box - 14);
-            this.fontRendererObj.drawString(label, (int) (bx + box + 6),
+            this.fontRenderer.drawString(label, (int) (bx + box + 6),
                     (int) (this.toggleY + this.toggleHeight / 2.0F - 4),
                     Draw.withAlpha(on ? Theme.text : Theme.textDim, alpha));
         }
@@ -517,7 +518,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
             String note = fit(
                     I18n.format("uky.gamemode.hardcore.warning", new Object[0]),
                     this.contentWidth);
-            this.fontRendererObj.drawString(note,
+            this.fontRenderer.drawString(note,
                     this.contentX, this.toggleY + this.toggleHeight + 6,
                     Draw.withAlpha(Theme.danger, 0.85F * this.fadeAlpha));
         }
@@ -563,8 +564,8 @@ public class GuiCreateWorldScreen extends MenuScreen {
                     Draw.withAlpha(Theme.accent, 0.3F * this.createHover * this.fadeAlpha), 4);
         }
         String label = I18n.format("selectWorld.create", new Object[0]).toUpperCase();
-        int labelWidth = this.fontRendererObj.getStringWidth(label);
-        this.fontRendererObj.drawString(label,
+        int labelWidth = this.fontRenderer.getStringWidth(label);
+        this.fontRenderer.drawString(label,
                 createX + (createWidth - labelWidth) / 2, this.actionY + 6,
                 Draw.withAlpha(0x0B0B0E, this.fadeAlpha));
 
@@ -581,8 +582,8 @@ public class GuiCreateWorldScreen extends MenuScreen {
                             this.fadeAlpha));
             String custom = I18n.format("selectWorld.customizeType", new Object[0]);
             custom = fit(custom, customWidth - 12);
-            int w = this.fontRendererObj.getStringWidth(custom);
-            this.fontRendererObj.drawString(custom, customX + (customWidth - w) / 2,
+            int w = this.fontRenderer.getStringWidth(custom);
+            this.fontRenderer.drawString(custom, customX + (customWidth - w) / 2,
                     this.actionY + 6, Draw.withAlpha(
                             Draw.mix(Theme.textDim, Theme.textHover, this.customizeHover),
                             this.fadeAlpha));
@@ -590,7 +591,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
     }
 
     private boolean isCustomizable() {
-        WorldType type = WorldType.worldTypes[this.selectedType];
+        WorldType type = WorldType.WORLD_TYPES[this.selectedType];
         return type != null && type.isCustomizable();
     }
 
@@ -601,7 +602,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
         while (label.endsWith(":")) {
             label = label.substring(0, label.length() - 1).trim();
         }
-        this.fontRendererObj.drawString(label.toUpperCase(), this.contentX, y,
+        this.fontRenderer.drawString(label.toUpperCase(), this.contentX, y,
                 Draw.withAlpha(Theme.textDim, 0.9F * this.fadeAlpha));
     }
 
@@ -644,7 +645,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         if (Transitions.isBusy()) {
             return;
         }
@@ -685,7 +686,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
         if (isCustomizable()) {
             int customX = createX - 118;
             if (inside(customX, this.actionY, 110, 20)) {
-                WorldType.worldTypes[this.selectedType].onCustomizeButton(this.mc, bridge());
+                WorldType.WORLD_TYPES[this.selectedType].onCustomizeButton(this.mc, bridge());
                 return;
             }
         }
@@ -750,7 +751,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             cancel();
             return;
@@ -821,15 +822,15 @@ public class GuiCreateWorldScreen extends MenuScreen {
             }
         }
 
-        WorldType type = WorldType.worldTypes[this.selectedType];
+        WorldType type = WorldType.WORLD_TYPES[this.selectedType];
         type.onGUICreateWorldPress();
 
         boolean hardcore = isHardcore();
-        WorldSettings.GameType gameType =
-                WorldSettings.GameType.getByName(hardcore ? "survival" : MODES[this.selectedMode].id);
+        GameType gameType =
+                GameType.getByName(hardcore ? "survival" : MODES[this.selectedMode].id);
         WorldSettings settings = new WorldSettings(seed, gameType,
                 this.generateStructures, hardcore, type);
-        settings.func_82750_a(this.generatorOptions);
+        settings.setGeneratorOptions(this.generatorOptions);
         if (this.bonusChest && !hardcore) {
             settings.enableBonusChest();
         }
@@ -858,13 +859,13 @@ public class GuiCreateWorldScreen extends MenuScreen {
      */
     private String folderName(String name) {
         String folder = name;
-        for (char c : ChatAllowedCharacters.allowedCharacters) {
+        for (char c : ChatAllowedCharacters.ILLEGAL_FILE_CHARACTERS) {
             folder = folder.replace(c, '_');
         }
         if (folder.trim().isEmpty()) {
             folder = "World";
         }
-        return GuiCreateWorld.func_146317_a(this.mc.getSaveLoader(), folder);
+        return GuiCreateWorld.getUncollidingSaveDirName(this.mc.getSaveLoader(), folder);
     }
 
     // The customiser round-trip. Only one can be in flight, since it is modal.
@@ -880,7 +881,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
      */
     private GuiCreateWorld bridge() {
         GuiCreateWorld vanilla = new GuiCreateWorld(this.parent);
-        vanilla.field_146334_a = this.generatorOptions;
+        vanilla.chunkProviderSettingsJson = this.generatorOptions;
         pendingBridge = vanilla;
         pendingOwner = this;
         return vanilla;
@@ -896,7 +897,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
             return null;
         }
         GuiCreateWorldScreen owner = pendingOwner;
-        owner.generatorOptions = pendingBridge.field_146334_a;
+        owner.generatorOptions = pendingBridge.chunkProviderSettingsJson;
         pendingBridge = null;
         pendingOwner = null;
         return owner;

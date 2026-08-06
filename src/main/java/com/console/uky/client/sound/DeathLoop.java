@@ -7,6 +7,8 @@ import com.console.uky.config.UiConfig;
 import net.minecraft.client.audio.ISound;
 import net.minecraft.client.audio.MovingSound;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundCategory;
+import net.minecraft.util.SoundEvent;
 
 /**
  * The two loops under the death screen: a heart winding down and breathing that
@@ -43,17 +45,20 @@ public class DeathLoop extends MovingSound {
     private final float themeVolume;
 
     private DeathLoop(ResourceLocation sound, boolean heart, float themeVolume) {
-        super(sound);
+        // 1.12.2's MovingSound takes a SoundEvent rather than a location. An
+        // unregistered one is enough: all the constructor wants from it is the name,
+        // and the sound itself is resolved from sounds.json by that name either way.
+        super(new SoundEvent(sound), SoundCategory.MASTER);
         this.heart = heart;
         this.themeVolume = themeVolume;
         this.repeat = true;
-        this.field_147665_h = 0;
+        this.repeatDelay = 0;
         // Played at the listener: there is no world position for the inside of
         // someone's chest, and attenuating it would silence it the moment the camera
         // drifts away from where the body fell.
-        this.field_147666_i = ISound.AttenuationType.NONE;
+        this.attenuationType = ISound.AttenuationType.NONE;
         this.volume = 0.0F;
-        this.field_147663_c = 1.0F;
+        this.pitch = 1.0F;
         update();
     }
 
@@ -81,7 +86,7 @@ public class DeathLoop extends MovingSound {
             // than a sound being faded out.
             float decay = Ease.outCubic(t / HEART_DECAY);
             this.volume = Math.max(MIN_VOLUME, master * (1.00F - 0.55F * decay));
-            this.field_147663_c = 1.08F - 0.30F * decay;
+            this.pitch = 1.08F - 0.30F * decay;
             return;
         }
 
@@ -89,6 +94,6 @@ public class DeathLoop extends MovingSound {
         // after the other rather than as one noise.
         float rise = Ease.outCubic((t - 0.8F) / 1.2F);
         this.volume = Math.max(MIN_VOLUME, master * 0.75F * rise);
-        this.field_147663_c = 0.96F;
+        this.pitch = 0.96F;
     }
 }

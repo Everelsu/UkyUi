@@ -1,7 +1,7 @@
 package com.console.uky.core;
 
-import cpw.mods.fml.relauncher.IFMLLoadingPlugin;
-import io.github.tox1cozz.mixinbooterlegacy.IEarlyMixinLoader;
+import net.minecraftforge.fml.relauncher.IFMLLoadingPlugin;
+import zone.rong.mixinbooter.IEarlyMixinLoader;
 
 import java.util.Collections;
 import java.util.List;
@@ -9,10 +9,23 @@ import java.util.Map;
 
 /**
  * FML core plugin. Its only job is to declare our early mixin config so the
- * SpongePowered Mixin subsystem (provided by UniMixins) applies it before the
+ * SpongePowered Mixin subsystem (provided by MixinBooter) applies it before the
  * game classes are loaded — which is what lets us reskin the FML splash screen.
+ *
+ * <p>{@code IEarlyMixinLoader} is deprecated in favour of MixinBooter's late loader,
+ * which needs no coremod at all — and cannot be used here. The class this mixin
+ * patches, {@code SplashProgress}, is loaded and run before mod discovery has
+ * happened, so a config queued at mod-load time arrives after the screen it is meant
+ * to replace has already been drawn. Registering the config by hand with
+ * {@code Mixins.addConfiguration} is not the answer either: from a coremod
+ * constructor that runs before the environment has settled, it goes through Guava
+ * across two class loaders and throws {@code IllegalAccessError}. Letting MixinBooter
+ * queue it, which is what this interface is for, is what works.
+ *
+ * <p>See {@link UkyTweaker} for why naming that interface here is safe in a dev run.
  */
-@IFMLLoadingPlugin.MCVersion("1.7.10")
+@SuppressWarnings("deprecation")
+@IFMLLoadingPlugin.MCVersion("1.12.2")
 @IFMLLoadingPlugin.Name("UKY Core")
 @IFMLLoadingPlugin.SortingIndex(1001)
 public class UkyCore implements IFMLLoadingPlugin, IEarlyMixinLoader {

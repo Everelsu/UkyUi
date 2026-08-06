@@ -1,6 +1,6 @@
 package com.console.uky.client.splash;
 
-import cpw.mods.fml.client.SplashProgress;
+import net.minecraftforge.fml.client.SplashProgress;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;

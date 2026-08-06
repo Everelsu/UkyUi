@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.ISound;
 import net.minecraft.client.audio.PositionedSound;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundCategory;
 
 /**
  * The mod's own sound events, wired to {@code assets/uky/sounds.json}.
@@ -151,24 +152,30 @@ public final class UkySounds {
         nextRestartAttempt = 0L;
     }
 
-    /** Non-attenuated one-shot; {@link PositionedSound}'s fields are protected. */
+    /**
+     * Non-attenuated one-shot; {@link PositionedSound}'s fields are protected.
+     *
+     * The category is passed in code rather than read from {@code sounds.json}: 1.7.10
+     * took it from the entry there, 1.12.2 takes it from the {@link ISound} itself and
+     * ignores the json key entirely.
+     */
     private static final class UiSound extends PositionedSound {
         private UiSound(ResourceLocation location, float volume, float pitch) {
-            super(location);
+            super(location, SoundCategory.MASTER);
             this.volume = volume;
-            this.field_147663_c = pitch;
-            this.field_147666_i = ISound.AttenuationType.NONE;
+            this.pitch = pitch;
+            this.attenuationType = ISound.AttenuationType.NONE;
         }
     }
 
     /** Non-attenuated looping sound, for the menu track. */
     private static final class LoopingSound extends PositionedSound {
         private LoopingSound(ResourceLocation location, float volume) {
-            super(location);
+            super(location, SoundCategory.MUSIC);
             this.volume = volume;
             this.repeat = true;
-            this.field_147665_h = 0;
-            this.field_147666_i = ISound.AttenuationType.NONE;
+            this.repeatDelay = 0;
+            this.attenuationType = ISound.AttenuationType.NONE;
         }
     }
 }

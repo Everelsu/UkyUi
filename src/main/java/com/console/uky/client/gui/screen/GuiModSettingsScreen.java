@@ -62,7 +62,7 @@ public class GuiModSettingsScreen extends MenuScreen {
         this.panelY2 = this.height - Math.max(10, (int) (this.height * 0.07F));
 
         String previous = this.search == null ? "" : this.search.getText();
-        this.search = new GuiTextField(this.fontRendererObj,
+        this.search = new GuiTextField(0, this.fontRenderer,
                 this.panelX1 + 15, this.panelY1 + 36, panelWidth - 30, 16);
         this.search.setMaxStringLength(48);
         this.search.setEnableBackgroundDrawing(false);
@@ -182,7 +182,7 @@ public class GuiModSettingsScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             switchBack();
             return;
@@ -195,7 +195,7 @@ public class GuiModSettingsScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         super.mouseClicked(mouseX, mouseY, button);
         this.search.mouseClicked(mouseX, mouseY, button);
         if (this.list.mouseClicked(mouseX, mouseY)) {
@@ -207,7 +207,7 @@ public class GuiModSettingsScreen extends MenuScreen {
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0) {

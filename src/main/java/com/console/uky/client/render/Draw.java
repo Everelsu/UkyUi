@@ -2,7 +2,9 @@ package com.console.uky.client.render;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 
@@ -309,12 +311,13 @@ public final class Draw {
         GL11.glTranslatef(cx, cy, 0.0F);
         GL11.glRotatef(degrees, 0.0F, 0.0F, 1.0F);
 
-        Tessellator t = Tessellator.instance;
-        t.startDrawingQuads();
-        t.addVertexWithUV(-halfW, halfH, 0.0D, u1, v2);
-        t.addVertexWithUV(halfW, halfH, 0.0D, u2, v2);
-        t.addVertexWithUV(halfW, -halfH, 0.0D, u2, v1);
-        t.addVertexWithUV(-halfW, -halfH, 0.0D, u1, v1);
+        Tessellator t = Tessellator.getInstance();
+        BufferBuilder b = t.getBuffer();
+        b.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+        b.pos(-halfW, halfH, 0.0D).tex(u1, v2).endVertex();
+        b.pos(halfW, halfH, 0.0D).tex(u2, v2).endVertex();
+        b.pos(halfW, -halfH, 0.0D).tex(u2, v1).endVertex();
+        b.pos(-halfW, -halfH, 0.0D).tex(u1, v1).endVertex();
         t.draw();
 
         GL11.glPopMatrix();
@@ -329,12 +332,13 @@ public final class Draw {
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         color(argb);
 
-        Tessellator t = Tessellator.instance;
-        t.startDrawingQuads();
-        t.addVertexWithUV(x, y + h, 0.0D, 0.0D, 1.0D);
-        t.addVertexWithUV(x + w, y + h, 0.0D, 1.0D, 1.0D);
-        t.addVertexWithUV(x + w, y, 0.0D, 1.0D, 0.0D);
-        t.addVertexWithUV(x, y, 0.0D, 0.0D, 0.0D);
+        Tessellator t = Tessellator.getInstance();
+        BufferBuilder b = t.getBuffer();
+        b.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+        b.pos(x, y + h, 0.0D).tex(0.0D, 1.0D).endVertex();
+        b.pos(x + w, y + h, 0.0D).tex(1.0D, 1.0D).endVertex();
+        b.pos(x + w, y, 0.0D).tex(1.0D, 0.0D).endVertex();
+        b.pos(x, y, 0.0D).tex(0.0D, 0.0D).endVertex();
         t.draw();
 
         GL11.glDisable(GL11.GL_BLEND);
@@ -366,12 +370,13 @@ public final class Draw {
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         color(argb);
 
-        Tessellator t = Tessellator.instance;
-        t.startDrawingQuads();
-        t.addVertexWithUV(x, y + h, 0.0D, u0, v0 + vSpan);
-        t.addVertexWithUV(x + w, y + h, 0.0D, u0 + uSpan, v0 + vSpan);
-        t.addVertexWithUV(x + w, y, 0.0D, u0 + uSpan, v0);
-        t.addVertexWithUV(x, y, 0.0D, u0, v0);
+        Tessellator t = Tessellator.getInstance();
+        BufferBuilder b = t.getBuffer();
+        b.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+        b.pos(x, y + h, 0.0D).tex(u0, v0 + vSpan).endVertex();
+        b.pos(x + w, y + h, 0.0D).tex(u0 + uSpan, v0 + vSpan).endVertex();
+        b.pos(x + w, y, 0.0D).tex(u0 + uSpan, v0).endVertex();
+        b.pos(x, y, 0.0D).tex(u0, v0).endVertex();
         t.draw();
 
         GL11.glDisable(GL11.GL_BLEND);
@@ -427,7 +432,7 @@ public final class Draw {
         Minecraft mc = Minecraft.getMinecraft();
         float f = clipScale;
         if (f <= 0.0F) {
-            f = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight).getScaleFactor();
+            f = new ScaledResolution(mc).getScaleFactor();
         }
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
         // glScissor origin is bottom-left in real pixels, GUI space is top-left in scaled units

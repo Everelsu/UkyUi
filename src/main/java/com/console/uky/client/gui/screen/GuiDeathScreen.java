@@ -55,6 +55,17 @@ public class GuiDeathScreen extends GuiGameOver {
      */
     private static final float SAMPLE_SECONDS = 0.10F;
 
+    /**
+     * 1.12.2's {@code GuiGameOver} takes the death message; 1.7.10's took nothing.
+     * Null on purpose — the base class only ever reads it from the drawing and input
+     * methods this screen replaces outright, and the line shown here comes from
+     * {@link com.console.uky.client.death.DeathTracker} instead, which is what makes
+     * the scene match the way the player died rather than merely report it.
+     */
+    public GuiDeathScreen() {
+        super(null);
+    }
+
     private final Random noise = new Random();
 
     private long lastFrameNanos = System.nanoTime();
@@ -75,6 +86,14 @@ public class GuiDeathScreen extends GuiGameOver {
     private boolean hardcore;
     /** Seconds into the exit animation, or -1 while the scene is simply running. */
     private float leaving = -1.0F;
+    /**
+     * Hardcore only: the player asked to stay and watch rather than leave.
+     *
+     * The respawn packet is what does it — on a hardcore server the respawn handler
+     * puts the player straight into spectator instead of reviving them — so this is
+     * the same request the non-hardcore path makes, and only the wording differs.
+     */
+    private boolean spectating;
 
     // ------------------------------------------------------------- lifecycle --
 
@@ -87,8 +106,8 @@ public class GuiDeathScreen extends GuiGameOver {
         DeathScene.begin();
 
         this.buttonList.clear();
-        this.hardcore = this.mc.theWorld != null
-                && this.mc.theWorld.getWorldInfo().isHardcoreModeEnabled();
+        this.hardcore = this.mc.world != null
+                && this.mc.world.getWorldInfo().isHardcoreModeEnabled();
 
         // Rebuilt while the respawn is in flight: the picture has already switched
         // off, so this instance opens on the last frame of that rather than playing
@@ -368,15 +387,15 @@ public class GuiDeathScreen extends GuiGameOver {
         GL11.glPushMatrix();
         GL11.glTranslatef(centerX + this.sampledShake, centerY, 0.0F);
         GL11.glScalef(scale, scale, 1.0F);
-        int half = this.fontRendererObj.getStringWidth(title) / 2;
+        int half = this.fontRenderer.getStringWidth(title) / 2;
 
         // The channel copies are faint: they are a fringe on the white, not two more
         // headlines competing with it.
-        this.fontRendererObj.drawString(shown, (int) (-half - split), 0,
+        this.fontRenderer.drawString(shown, (int) (-half - split), 0,
                 Draw.withAlpha(theme.chromaRed, 0.45F * in));
-        this.fontRendererObj.drawString(shown, (int) (-half + split), 0,
+        this.fontRenderer.drawString(shown, (int) (-half + split), 0,
                 Draw.withAlpha(theme.chromaCyan, 0.45F * in));
-        this.fontRendererObj.drawString(shown, -half, 0, Draw.withAlpha(Theme.text, in));
+        this.fontRenderer.drawString(shown, -half, 0, Draw.withAlpha(Theme.text, in));
         GL11.glPopMatrix();
 
         // The rule under it opens outwards from the centre, the same gesture every
@@ -438,12 +457,15 @@ public class GuiDeathScreen extends GuiGameOver {
 
         String message = DeathScene.message();
         if (!message.isEmpty()) {
-            this.drawCenteredString(this.fontRendererObj, message, centerX, y,
+            this.drawCenteredString(this.fontRenderer, message, centerX, y,
                     Draw.withAlpha(Theme.text, 0.82F * in));
         }
         if (this.hardcore) {
-            this.drawCenteredString(this.fontRendererObj,
-                    I18n.format("deathScreen.hardcoreInfo"), centerX, y + 16,
+            // Our own key. 1.7.10's deathScreen.hardcoreInfo does not exist in 1.12.2
+            // — the whole line went when the death screen was rebuilt — so borrowing a
+            // vanilla one is not an option here.
+            this.drawCenteredString(this.fontRenderer,
+                    I18n.format("uky.death.hardcore"), centerX, y + 16,
                     Draw.withAlpha(DeathScene.theme().chromaRed, 0.85F * in));
         }
     }
@@ -461,10 +483,21 @@ public class GuiDeathScreen extends GuiGameOver {
             return;
         }
         float breathe = 0.62F + 0.30F * (float) Math.sin(t * 2.0F);
+        int y = (int) (this.height * 0.78F);
         String prompt = I18n.format(this.hardcore ? "uky.death.promptLeave" : "uky.death.prompt");
-        this.drawCenteredString(this.fontRendererObj, prompt, this.width / 2,
-                (int) (this.height * 0.78F),
+        this.drawCenteredString(this.fontRenderer, prompt, this.width / 2, y,
                 Draw.withAlpha(Theme.textDim, breathe * in));
+
+        // Hardcore has no way back into the body, but it does have a way to stay and
+        // look. Offered as a second line rather than folded into the first: leaving is
+        // still what any key does, and the one that does something else has to name
+        // itself. Not breathing with the line above — two things pulsing out of phase
+        // at the bottom of the screen reads as a fault rather than as a prompt.
+        if (this.hardcore) {
+            this.drawCenteredString(this.fontRenderer,
+                    I18n.format("uky.death.promptSpectate"), this.width / 2, y + 12,
+                    Draw.withAlpha(Theme.textDim, 0.55F * in));
+        }
     }
 
     // ------------------------------------------------------------------ input --
@@ -474,14 +507,21 @@ public class GuiDeathScreen extends GuiGameOver {
      * which vanilla also swallows here.
      */
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
-        if (canLeave()) {
-            this.leaving = 0.0F;
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
+        if (!canLeave()) {
+            return;
         }
+        // Enter is the one key that means something other than "leave", and only in
+        // hardcore. Everything else keeps the contract the prompt states.
+        if (this.hardcore && (keyCode == org.lwjgl.input.Keyboard.KEY_RETURN
+                || keyCode == org.lwjgl.input.Keyboard.KEY_NUMPADENTER)) {
+            this.spectating = true;
+        }
+        this.leaving = 0.0F;
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         if (canLeave()) {
             this.leaving = 0.0F;
         }
@@ -490,7 +530,10 @@ public class GuiDeathScreen extends GuiGameOver {
     /**
      * Back to the world, or out of it.
      *
-     * Hardcore has nothing to respawn into, so there the only way on is the way out.
+     * Hardcore has nothing to respawn into, so there the way on is out — unless the
+     * player asked to spectate, which takes the same respawn path. The server is what
+     * makes the difference: its respawn handler drops a hardcore player into spectator
+     * rather than reviving them, so the client asks for the same thing either way.
      * The scene itself is not ended here: the player is still dead until the server
      * says otherwise, and {@code DeathTracker} is what notices that it has.
      */
@@ -500,15 +543,15 @@ public class GuiDeathScreen extends GuiGameOver {
         }
         DeathScene.requestReturn();
 
-        if (!this.hardcore && this.mc.thePlayer != null) {
-            this.mc.thePlayer.respawnPlayer();
+        if ((!this.hardcore || this.spectating) && this.mc.player != null) {
+            this.mc.player.respawnPlayer();
             this.mc.displayGuiScreen(null);
             return;
         }
 
         DeathScene.end();
-        if (this.mc.theWorld != null) {
-            this.mc.theWorld.sendQuittingDisconnectingPacket();
+        if (this.mc.world != null) {
+            this.mc.world.sendQuittingDisconnectingPacket();
         }
         this.mc.loadWorld((WorldClient) null);
         this.mc.displayGuiScreen(null);

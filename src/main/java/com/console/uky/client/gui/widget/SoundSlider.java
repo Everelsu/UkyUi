@@ -4,7 +4,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.audio.SoundCategory;
+import net.minecraft.util.SoundCategory;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
@@ -38,7 +38,7 @@ public class SoundSlider extends MenuButton {
 
     /** "Music: 70%", or "Music: OFF" at zero, which is what the value means there. */
     private String label() {
-        String name = I18n.format("soundCategory." + this.category.getCategoryName(),
+        String name = I18n.format("soundCategory." + this.category.getName(),
                 new Object[0]);
         float value = level();
         String shown = value <= 0.0F
@@ -50,18 +50,18 @@ public class SoundSlider extends MenuButton {
     @Override
     public void advance(float deltaSeconds, float screenFade) {
         super.advance(deltaSeconds, screenFade);
-        float target = (this.field_146123_n || this.dragging) ? 1.0F : 0.0F;
+        float target = (this.hovered || this.dragging) ? 1.0F : 0.0F;
         this.knobScale = Ease.approach(this.knobScale, target, 0.05F, deltaSeconds);
     }
 
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY) {
+    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
         if (!this.visible) {
             return;
         }
-        this.field_146123_n = mouseX >= this.xPosition && mouseY >= this.yPosition
-                && mouseX < this.xPosition + this.width
-                && mouseY < this.yPosition + this.height;
+        this.hovered = mouseX >= this.x && mouseY >= this.y
+                && mouseX < this.x + this.width
+                && mouseY < this.y + this.height;
 
         if (this.dragging) {
             updateFromMouse(mouseX);
@@ -73,8 +73,8 @@ public class SoundSlider extends MenuButton {
         }
 
         float slide = (1.0F - this.entrance) * 14.0F;
-        float x1 = this.xPosition - slide;
-        float y1 = this.yPosition;
+        float x1 = this.x - slide;
+        float y1 = this.y;
         float x2 = x1 + this.width;
         float y2 = y1 + this.height;
 
@@ -110,7 +110,7 @@ public class SoundSlider extends MenuButton {
     }
 
     private void updateFromMouse(int mouseX) {
-        float raw = (float) (mouseX - (this.xPosition + 10)) / (float) (this.width - 20);
+        float raw = (float) (mouseX - (this.x + 10)) / (float) (this.width - 20);
         this.settings.setSoundLevel(this.category, Ease.clamp01(raw));
     }
 
@@ -119,9 +119,9 @@ public class SoundSlider extends MenuButton {
         if (!acceptsInput()) {
             return false;
         }
-        boolean hit = mouseX >= this.xPosition && mouseY >= this.yPosition
-                && mouseX < this.xPosition + this.width
-                && mouseY < this.yPosition + this.height;
+        boolean hit = mouseX >= this.x && mouseY >= this.y
+                && mouseX < this.x + this.width
+                && mouseY < this.y + this.height;
         if (hit) {
             this.dragging = true;
             updateFromMouse(mouseX);
@@ -137,6 +137,6 @@ public class SoundSlider extends MenuButton {
 
     /** Dragging would fire the click sound every frame. */
     @Override
-    public void func_146113_a(net.minecraft.client.audio.SoundHandler soundHandler) {
+    public void playPressSound(net.minecraft.client.audio.SoundHandler soundHandler) {
     }
 }

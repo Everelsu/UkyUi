@@ -12,11 +12,14 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiSnooper;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
+import net.minecraft.world.EnumDifficulty;
+import net.minecraft.world.storage.WorldInfo;
 
 /**
  * The full settings screen, organised into tabs.
@@ -39,6 +42,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int ID_SNOOPER = 104;
     private static final int ID_RESOURCE_PACKS = 105;
     private static final int ID_LANGUAGE = 102;
+    private static final int ID_DIFFICULTY = 111;
     private static final int ID_DONE = 200;
 
     private static final String[] TABS = {
@@ -261,7 +265,7 @@ public class GuiSettingsScreen extends MenuScreen {
             String label = I18n.format(TABS[i], new Object[0]);
             // The ghost style letter-spaces its label by a pixel a glyph, so the
             // plain string width is an under-measure.
-            this.tabWidth[i] = this.fontRendererObj.getStringWidth(label) + label.length()
+            this.tabWidth[i] = this.fontRenderer.getStringWidth(label) + label.length()
                     + labelPad * 2;
             total += this.tabWidth[i];
         }
@@ -311,11 +315,15 @@ public class GuiSettingsScreen extends MenuScreen {
                 // GUI Scale is back, and it now only affects the game's own HUD and
                 // vanilla screens — these menus lay themselves out independently of
                 // it. See MenuScreen.setWorldAndResolution.
+                // SHOW_CAPE went in 1.8, replaced by the per-part skin customisation
+                // screen; AUTO_JUMP takes its place as the general-tab row a 1.12.2
+                // player expects to find. Difficulty is no longer a GameSettings option
+                // at all — see DIFFICULTY_SOURCE.
                 y = flow(y,
-                        GameSettings.Options.FOV, GameSettings.Options.DIFFICULTY,
+                        GameSettings.Options.FOV, DIFFICULTY_SOURCE,
                         GameSettings.Options.SENSITIVITY, GameSettings.Options.GUI_SCALE,
                         GameSettings.Options.INVERT_MOUSE, GameSettings.Options.VIEW_BOBBING,
-                        GameSettings.Options.TOUCHSCREEN, GameSettings.Options.SHOW_CAPE);
+                        GameSettings.Options.TOUCHSCREEN, GameSettings.Options.AUTO_JUMP);
                 addLink(ID_CONTROLS, this.leftColumn, y, "options.controls");
                 addLink(ID_LANGUAGE, this.rightColumn, y, "options.language");
                 break;
@@ -326,7 +334,9 @@ public class GuiSettingsScreen extends MenuScreen {
                         GameSettings.Options.RENDER_CLOUDS, GameSettings.Options.PARTICLES,
                         GameSettings.Options.USE_FULLSCREEN, GameSettings.Options.ENABLE_VSYNC,
                         GameSettings.Options.GAMMA, GameSettings.Options.MIPMAP_LEVELS,
-                        GameSettings.Options.ANISOTROPIC_FILTERING);
+                        // ANISOTROPIC_FILTERING went in 1.9; ENTITY_SHADOWS is the row
+                        // vanilla's own video settings put in that part of the list.
+                        GameSettings.Options.ENTITY_SHADOWS);
                 // FBO_ENABLE is deliberately absent. Everything this mod draws goes
                 // through the framebuffer — the menus, the loading screen, the world
                 // preview that is read back out of it — so turning it off does not read
@@ -369,19 +379,101 @@ public class GuiSettingsScreen extends MenuScreen {
      * renderer already offers is not drawn twice, and with pairs its partner would have
      * been left sitting beside a hole.
      */
-    private int flow(int y, GameSettings.Options... options) {
+    private int flow(int y, Object... rows) {
         int column = 0;
-        for (GameSettings.Options option : options) {
-            if (isRendererOwned(option)) {
+        for (Object row : rows) {
+            // Rows are typed loosely on purpose. Nearly all of them are vanilla
+            // options, but 1.12 took difficulty out of that enum and gave it a screen
+            // of its own, and a setting that reads and writes somewhere else is still
+            // the same row to the player. MenuOptionButton.Source is what that looks
+            // like, so the flow takes either and the columns keep packing.
+            if (row instanceof GameSettings.Options) {
+                GameSettings.Options option = (GameSettings.Options) row;
+                if (isRendererOwned(option)) {
+                    continue;
+                }
+                addOption(option, columnX(column), y);
+            } else if (row instanceof MenuOptionButton.Source) {
+                addSourceRow((MenuOptionButton.Source) row, columnX(column), y);
+            } else {
                 continue;
             }
-            addOption(option, columnX(column), y);
             if (++column == this.columns) {
                 column = 0;
                 y += this.rowHeight + this.rowGap;
             }
         }
         return column == 0 ? y : y + this.rowHeight + this.rowGap;
+    }
+
+    /**
+     * The difficulty row.
+     *
+     * 1.7.10 had this as {@code GameSettings.Options.DIFFICULTY} and it worked from the
+     * main menu. 1.12 moved it onto the world: it lives in the loaded save's
+     * {@code WorldInfo}, which is why vanilla's own options screen greys the button out
+     * when no world is open and when the save is hardcore or has its difficulty locked.
+     * The same three conditions are what {@link MenuOptionButton.Source#available}
+     * reports here, so the row is present everywhere it used to be and simply says it
+     * cannot be changed when it cannot.
+     */
+    private static final MenuOptionButton.Source DIFFICULTY_SOURCE = new MenuOptionButton.Source() {
+
+        private WorldInfo info() {
+            Minecraft mc = Minecraft.getMinecraft();
+            return mc.world == null ? null : mc.world.getWorldInfo();
+        }
+
+        @Override
+        public String label() {
+            return I18n.format("options.difficulty", new Object[0]);
+        }
+
+        @Override
+        public String value() {
+            WorldInfo info = info();
+            EnumDifficulty difficulty = info == null
+                    ? Minecraft.getMinecraft().gameSettings.difficulty
+                    : info.getDifficulty();
+            return difficulty == null
+                    ? ""
+                    : I18n.format(difficulty.getTranslationKey(), new Object[0]);
+        }
+
+        @Override
+        public boolean toggle() {
+            return false;
+        }
+
+        @Override
+        public boolean on() {
+            return false;
+        }
+
+        @Override
+        public void cycle() {
+            WorldInfo info = info();
+            if (info == null) {
+                return;
+            }
+            // Wraps through the four in order, exactly as vanilla's button does.
+            info.setDifficulty(EnumDifficulty.byId(info.getDifficulty().getId() + 1));
+        }
+
+        @Override
+        public boolean available() {
+            WorldInfo info = info();
+            return info != null && !info.isHardcoreModeEnabled() && !info.isDifficultyLocked();
+        }
+    };
+
+    /** A row driven by something other than {@link GameSettings.Options}. */
+    private void addSourceRow(MenuOptionButton.Source source, int x, int y) {
+        MenuButton widget = new MenuOptionButton(ID_DIFFICULTY, x, y, rowWidth(),
+                this.rowHeight, source);
+        widget.entrance(stagger());
+        this.buttonList.add(widget);
+        this.contentRows.add(widget);
     }
 
     private int columnX(int column) {
@@ -414,12 +506,9 @@ public class GuiSettingsScreen extends MenuScreen {
         if (angelica().isEmpty()) {
             return false;
         }
-        // The one exception, and the reason it needs one: Sodium gives anisotropic
-        // filtering a key of its own rather than vanilla's, so outside English the two
-        // labels are different strings for the same setting and nothing above can see it.
-        if (option == GameSettings.Options.ANISOTROPIC_FILTERING) {
-            return true;
-        }
+        // 1.7.10 needed an exception here for anisotropic filtering, which Sodium named
+        // with a key of its own so the label match below could never see the pair.
+        // 1.9 removed that option from vanilla, so the exception went with it.
         if (this.rendererLabels == null) {
             this.rendererLabels = new java.util.HashSet<String>();
             for (AngelicaOptions.Section section : angelica()) {
@@ -429,7 +518,7 @@ public class GuiSettingsScreen extends MenuScreen {
             }
         }
         return this.rendererLabels.contains(
-                normalise(I18n.format(option.getEnumString(), new Object[0])));
+                normalise(I18n.format(option.getTranslation(), new Object[0])));
     }
 
     /** Case and punctuation carry no meaning here and the two mods differ on both. */
@@ -612,9 +701,9 @@ public class GuiSettingsScreen extends MenuScreen {
 
     private void addOption(GameSettings.Options option, int x, int y) {
         int width = rowWidth();
-        MenuButton widget = option.getEnumFloat()
-                ? new MenuSlider(option.returnEnumOrdinal(), x, y, width, this.rowHeight, option)
-                : new MenuOptionButton(option.returnEnumOrdinal(), x, y, width, this.rowHeight, option);
+        MenuButton widget = option.isFloat()
+                ? new MenuSlider(option.getOrdinal(), x, y, width, this.rowHeight, option)
+                : new MenuOptionButton(option.getOrdinal(), x, y, width, this.rowHeight, option);
         widget.entrance(stagger());
         this.buttonList.add(widget);
         this.contentRows.add(widget);
@@ -643,7 +732,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private void measureContent() {
         int bottom = this.contentTop;
         for (MenuButton row : this.contentRows) {
-            bottom = Math.max(bottom, row.yPosition + row.height);
+            bottom = Math.max(bottom, row.y + row.height);
         }
         // Headings count too. A tab could end on one — an empty section would — and
         // measuring only the rows would then let the last heading scroll out of reach.
@@ -654,7 +743,7 @@ public class GuiSettingsScreen extends MenuScreen {
 
         this.rowNominalY = new int[this.contentRows.size()];
         for (int i = 0; i < this.contentRows.size(); i++) {
-            this.rowNominalY[i] = this.contentRows.get(i).yPosition;
+            this.rowNominalY[i] = this.contentRows.get(i).y;
         }
 
         int visible = viewportHeight();
@@ -689,13 +778,13 @@ public class GuiSettingsScreen extends MenuScreen {
         for (int i = 0; i < this.contentRows.size(); i++) {
             MenuButton row = this.contentRows.get(i);
             int nominal = this.rowNominalY[i];
-            row.yPosition = nominal - offset;
+            row.y = nominal - offset;
             // Shown only when the row is *entirely* inside the viewport. Allowing a
             // partial one meant its visible half was still drawn, and with no clip
             // around the button pass it landed on top of the tab strip and the title.
             // Whole rows only is the version that needs no clipping to be correct.
-            row.visible = row.yPosition >= this.contentTop
-                    && row.yPosition + row.height <= this.footerRuleY - 4;
+            row.visible = row.y >= this.contentTop
+                    && row.y + row.height <= this.footerRuleY - 4;
         }
         for (Heading heading : this.headings) {
             heading.y = heading.nominalY - offset;
@@ -775,7 +864,7 @@ public class GuiSettingsScreen extends MenuScreen {
         drawGlassPanel();
         applyScroll();
 
-        this.fontRendererObj.drawString(I18n.format("options.title", new Object[0]),
+        this.fontRenderer.drawString(I18n.format("options.title", new Object[0]),
                 panelX1 + PADDING, panelY1 + 14, Draw.withAlpha(Theme.text, this.fadeAlpha));
 
         // Rule under the tab row, with the active tab's span picked out on it.
@@ -910,7 +999,7 @@ public class GuiSettingsScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         // Headings are drawn, not widgets, so they have to claim the click before the
         // button list gets it — and a fold rebuilds the rows the list is about to test.
         if (toggleHeadingAt(mouseX, mouseY)) {
@@ -920,7 +1009,7 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0 && maxScroll() > 0.0F) {
@@ -1018,7 +1107,7 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) { // Escape
             save();
             switchBack();

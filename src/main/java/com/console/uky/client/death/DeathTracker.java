@@ -1,11 +1,14 @@
 package com.console.uky.client.death;
 
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.audio.ISound;
+import net.minecraft.client.gui.GuiGameOver;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraftforge.client.event.sound.PlaySoundEvent17;
+import net.minecraft.init.SoundEvents;
+import net.minecraftforge.client.event.sound.PlaySoundEvent;
 
 /**
  * Works out what killed the player, from the client's side of the wire.
@@ -44,14 +47,22 @@ public class DeathTracker {
             return;
         }
         Minecraft mc = Minecraft.getMinecraft();
-        EntityPlayer player = mc.thePlayer;
-        if (player == null || mc.theWorld == null) {
+        EntityPlayer player = mc.player;
+        if (player == null || mc.world == null) {
             DeathScene.end();
             reset();
             return;
         }
 
-        if (player.getHealth() > 0.0F) {
+        // The open death screen is what says a death is in progress, not the health
+        // value. 1.7.10 could trust the health: Minecraft.runTick put the screen up
+        // only once getHealth() had reached zero, so the two could never disagree.
+        // 1.12.2 opens it from the combat-event packet instead, which arrives on its
+        // own schedule — for a tick or more the screen is up while the client still
+        // holds the old health, and reading that as "alive again" ended the scene on
+        // its very first tick. The clock then read zero forever: nothing faded in and
+        // the way out never unlocked, because both are driven by the elapsed time.
+        if (player.getHealth() > 0.0F && !(mc.currentScreen instanceof GuiGameOver)) {
             // Alive again — whatever was on screen belongs to a death that is over.
             DeathScene.end();
             sample(player);
@@ -61,7 +72,7 @@ public class DeathTracker {
 
     /** Notes anything true this tick that could still be the cause a second later. */
     private static void sample(EntityPlayer player) {
-        if (player.isBurning() || player.isInsideOfMaterial(Material.lava)) {
+        if (player.isBurning() || player.isInsideOfMaterial(Material.LAVA)) {
             burning = now;
         }
         if (player.getAir() <= 0) {
@@ -85,17 +96,22 @@ public class DeathTracker {
      * tells the client to make the noise and the particles. The noise will do.
      */
     @SubscribeEvent
-    public void onSound(PlaySoundEvent17 event) {
-        if (event.sound == null || !"random.explode".equals(event.name)) {
+    public void onSound(PlaySoundEvent event) {
+        ISound sound = event.getSound();
+        // "random.explode" on 1.7.10; the whole sound registry was renamed in 1.9.
+        // Compared against the registry constant rather than a literal so a further
+        // rename is a compile error rather than a scene that silently stops firing.
+        if (sound == null || !SoundEvents.ENTITY_GENERIC_EXPLODE.getSoundName()
+                .equals(sound.getSoundLocation())) {
             return;
         }
-        EntityPlayer player = Minecraft.getMinecraft().thePlayer;
+        EntityPlayer player = Minecraft.getMinecraft().player;
         if (player == null) {
             return;
         }
-        double dx = event.sound.getXPosF() - player.posX;
-        double dy = event.sound.getYPosF() - player.posY;
-        double dz = event.sound.getZPosF() - player.posZ;
+        double dx = sound.getXPosF() - player.posX;
+        double dy = sound.getYPosF() - player.posY;
+        double dz = sound.getZPosF() - player.posZ;
         if (dx * dx + dy * dy + dz * dz <= BLAST_RANGE * BLAST_RANGE) {
             blast = now;
         }

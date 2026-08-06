@@ -73,18 +73,18 @@ public class MenuSlider extends MenuButton {
             this.displayString = this.source.caption();
         }
         super.advance(deltaSeconds, screenFade);
-        float target = (this.field_146123_n || this.dragging) ? 1.0F : 0.0F;
+        float target = (this.hovered || this.dragging) ? 1.0F : 0.0F;
         this.knobScale = Ease.approach(this.knobScale, target, 0.05F, deltaSeconds);
     }
 
     @Override
-    public void drawButton(Minecraft mc, int mouseX, int mouseY) {
+    public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
         if (!this.visible) {
             return;
         }
-        this.field_146123_n = mouseX >= this.xPosition && mouseY >= this.yPosition
-                && mouseX < this.xPosition + this.width
-                && mouseY < this.yPosition + this.height;
+        this.hovered = mouseX >= this.x && mouseY >= this.y
+                && mouseX < this.x + this.width
+                && mouseY < this.y + this.height;
 
         if (this.dragging) {
             updateFromMouse(mc, mouseX);
@@ -96,8 +96,8 @@ public class MenuSlider extends MenuButton {
         }
 
         float slide = (1.0F - this.entrance) * 14.0F;
-        float x1 = this.xPosition - slide;
-        float y1 = this.yPosition;
+        float x1 = this.x - slide;
+        float y1 = this.y;
         float x2 = x1 + this.width;
         float y2 = y1 + this.height;
 
@@ -141,7 +141,7 @@ public class MenuSlider extends MenuButton {
     }
 
     private void updateFromMouse(Minecraft mc, int mouseX) {
-        float raw = (float) (mouseX - (this.xPosition + 10)) / (float) (this.width - 20);
+        float raw = (float) (mouseX - (this.x + 10)) / (float) (this.width - 20);
         this.source.setNormalized(Ease.clamp01(raw));
         // Re-read: the option may snap to a step, and both the knob and the label must
         // show the snapped value rather than the pointer's position.
@@ -186,9 +186,9 @@ public class MenuSlider extends MenuButton {
         if (!acceptsInput()) {
             return false;
         }
-        boolean hit = mouseX >= this.xPosition && mouseY >= this.yPosition
-                && mouseX < this.xPosition + this.width
-                && mouseY < this.yPosition + this.height;
+        boolean hit = mouseX >= this.x && mouseY >= this.y
+                && mouseX < this.x + this.width
+                && mouseY < this.y + this.height;
         if (hit) {
             this.dragging = true;
             updateFromMouse(mc, mouseX);
@@ -204,7 +204,7 @@ public class MenuSlider extends MenuButton {
 
     /** Sliders act on drag, so the click sound would fire continuously. */
     @Override
-    public void func_146113_a(net.minecraft.client.audio.SoundHandler soundHandler) {
+    public void playPressSound(net.minecraft.client.audio.SoundHandler soundHandler) {
     }
 
     /**

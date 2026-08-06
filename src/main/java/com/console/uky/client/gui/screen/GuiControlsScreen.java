@@ -102,7 +102,7 @@ public class GuiControlsScreen extends MenuScreen {
         this.panelY2 = this.height - Math.max(10, (int) (this.height * 0.07F));
 
         String previous = this.search == null ? "" : this.search.getText();
-        this.search = new GuiTextField(this.fontRendererObj,
+        this.search = new GuiTextField(0, this.fontRenderer,
                 this.panelX1 + 15, this.panelY1 + 36, panelWidth - 30, 16);
         this.search.setMaxStringLength(48);
         this.search.setEnableBackgroundDrawing(false);
@@ -202,7 +202,8 @@ public class GuiControlsScreen extends MenuScreen {
     /** Display name for a key code, including mouse buttons and "unbound". */
     private static String keyName(int code) {
         if (code == 0) {
-            return I18n.format("key.unbound", new Object[0]);
+            // 1.7.10 had key.unbound; 1.12.2 dropped it and says "None" instead.
+            return I18n.format("gui.none", new Object[0]);
         }
         if (code < 0) {
             // Mouse buttons are stored as -100 + button.
@@ -252,7 +253,7 @@ public class GuiControlsScreen extends MenuScreen {
 
         drawGlassPanel();
 
-        this.fontRendererObj.drawString(
+        this.fontRenderer.drawString(
                 I18n.format("controls.title", new Object[0]).toUpperCase(),
                 this.panelX1 + 15, this.panelY1 + 14,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
@@ -261,8 +262,8 @@ public class GuiControlsScreen extends MenuScreen {
         // gives no clue that it is waiting for input.
         if (this.capturing != null) {
             String hint = I18n.format("uky.controls.press", new Object[0]);
-            this.fontRendererObj.drawString(hint,
-                    this.panelX2 - 15 - this.fontRendererObj.getStringWidth(hint),
+            this.fontRenderer.drawString(hint,
+                    this.panelX2 - 15 - this.fontRenderer.getStringWidth(hint),
                     this.panelY1 + 14, Draw.withAlpha(Theme.accent, 0.95F * this.fadeAlpha));
         }
 
@@ -285,19 +286,19 @@ public class GuiControlsScreen extends MenuScreen {
     }
 
     private void drawSearchBox() {
-        int x1 = this.search.xPosition - 5;
-        int x2 = this.search.xPosition + this.search.width + 5;
-        int y1 = this.search.yPosition - 4;
-        int y2 = this.search.yPosition + 12;
+        int x1 = this.search.x - 5;
+        int x2 = this.search.x + this.search.width + 5;
+        int y1 = this.search.y - 4;
+        int y2 = this.search.y + 12;
 
         Draw.rect(x1, y1, x2, y2, Draw.withAlpha(Theme.surface, 0.55F * this.fadeAlpha));
         Draw.rect(x1, y2 - 1, x2, y2,
                 Draw.withAlpha(this.search.isFocused() ? Theme.accent : Theme.separator,
                         this.fadeAlpha));
         if (this.search.getText().isEmpty()) {
-            this.fontRendererObj.drawString(
+            this.fontRenderer.drawString(
                     I18n.format("uky.controls.search", new Object[0]),
-                    this.search.xPosition, this.search.yPosition,
+                    this.search.x, this.search.y,
                     Draw.withAlpha(Theme.textDim, 0.5F * this.fadeAlpha));
         }
         this.search.drawTextBox();
@@ -333,11 +334,11 @@ public class GuiControlsScreen extends MenuScreen {
     private void drawHeaderRow(Header header, int rowX, int rowY, int rowWidth, int rowHeight,
                                float alpha) {
         int textY = rowY + (rowHeight - 8) / 2;
-        this.fontRendererObj.drawString(header.label.toUpperCase(), rowX + 2, textY,
+        this.fontRenderer.drawString(header.label.toUpperCase(), rowX + 2, textY,
                 Draw.withAlpha(Theme.accent, 0.85F * alpha));
         // Rule running from the label to the right edge, so the grouping reads without
         // a heavy band behind it.
-        int labelEnd = rowX + 6 + this.fontRendererObj.getStringWidth(header.label.toUpperCase());
+        int labelEnd = rowX + 6 + this.fontRenderer.getStringWidth(header.label.toUpperCase());
         Draw.gradientH(labelEnd, textY + 3, rowX + rowWidth, textY + 4,
                 Draw.withAlpha(Theme.accent, 0.35F * alpha),
                 Draw.withAlpha(Theme.accent, 0.0F));
@@ -357,7 +358,7 @@ public class GuiControlsScreen extends MenuScreen {
         }
 
         String label = I18n.format(binding.getKeyDescription(), new Object[0]);
-        this.fontRendererObj.drawString(
+        this.fontRenderer.drawString(
                 fit(label, rowWidth - 108),
                 rowX + 6, rowY + (rowHeight - 8) / 2,
                 Draw.withAlpha(conflict ? Theme.danger : Theme.text, alpha));
@@ -383,8 +384,8 @@ public class GuiControlsScreen extends MenuScreen {
         int keyColour = capturingThis ? Theme.accent
                 : (conflict ? Theme.danger : (binding.getKeyCode() == 0 ? Theme.textDisabled
                         : Theme.text));
-        this.fontRendererObj.drawString(key,
-                boxX + (boxWidth - this.fontRendererObj.getStringWidth(key)) / 2,
+        this.fontRenderer.drawString(key,
+                boxX + (boxWidth - this.fontRenderer.getStringWidth(key)) / 2,
                 boxY + (boxH - 8) / 2, Draw.withAlpha(keyColour, alpha));
 
         // Reset arrow, shown only where there is something to reset.
@@ -413,7 +414,7 @@ public class GuiControlsScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
 
@@ -461,13 +462,13 @@ public class GuiControlsScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+    protected void mouseReleased(int mouseX, int mouseY, int state) {
         this.list.mouseReleased();
-        super.mouseMovedOrUp(mouseX, mouseY, state);
+        super.mouseReleased(mouseX, mouseY, state);
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0) {
@@ -476,7 +477,7 @@ public class GuiControlsScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (this.capturing != null) {
             // Escape clears the binding rather than leaving capture, matching vanilla.
             applyKey(keyCode == Keyboard.KEY_ESCAPE ? 0 : keyCode);

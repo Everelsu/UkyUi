@@ -4,7 +4,7 @@ import com.console.uky.UkyUI;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
-import cpw.mods.fml.client.GuiNotification;
+import net.minecraftforge.fml.client.GuiNotification;
 import net.minecraft.client.LoadingScreenRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
@@ -74,19 +74,21 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
         super.resetProgressAndMessage(message);
     }
 
+    /** The headline again, on the way out — 1.7.10 called this displayProgressMessage. */
     @Override
-    public void displayProgressMessage(String message) {
+    public void displaySavingString(String message) {
         this.headline = message == null ? "" : message;
         beginIfNeeded();
-        super.displayProgressMessage(message);
+        super.displaySavingString(message);
     }
 
+    /** The second line. 1.7.10 called this resetProgresAndWorkingMessage. */
     @Override
-    public void resetProgresAndWorkingMessage(String message) {
+    public void displayLoadingString(String message) {
         this.detail = message == null ? "" : message;
         beginIfNeeded();
         // Calls setLoadingProgress(-1) virtually, so the paint below still runs.
-        super.resetProgresAndWorkingMessage(message);
+        super.displayLoadingString(message);
     }
 
     @Override
@@ -136,15 +138,20 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
      * else for this thread to be doing.
      *
      * @return true if a question was handled and no loading art should be drawn
+     * @throws java.io.IOException from {@code handleInput}, which 1.12.2 declares.
+     *         Left to propagate: {@link #setLoadingProgress} catches it, latches
+     *         {@code broken} and hands the screen back to vanilla — and a client that
+     *         cannot read its own input queues is exactly when the question is better
+     *         drawn by the code FML expects to be drawing it.
      */
-    private boolean pumpStartupQuery() {
+    private boolean pumpStartupQuery() throws java.io.IOException {
         Minecraft mc = this.mc;
         if (this.pumping || !(mc.currentScreen instanceof GuiNotification)) {
             return false;
         }
         // Every call below goes to GL or to LWJGL's input queues, neither of which
         // may be touched from the server thread.
-        if (!mc.func_152345_ab()) {
+        if (!mc.isCallingFromMinecraftThread()) {
             return false;
         }
 
@@ -181,7 +188,7 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
     /** One frame of whatever query screen is up, set up and presented by hand. */
     private void drawQueryFrame(GuiScreen screen) {
         ScaledResolution resolution =
-                new ScaledResolution(this.mc, this.mc.displayWidth, this.mc.displayHeight);
+                new ScaledResolution(this.mc);
         int width = resolution.getScaledWidth();
         int height = resolution.getScaledHeight();
 
@@ -216,7 +223,7 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
             target.unbindFramebuffer();
             target.framebufferRender(this.mc.displayWidth, this.mc.displayHeight);
         }
-        this.mc.func_147120_f();
+        this.mc.updateDisplay();
     }
 
     /** Picks up the picture and the clock on the first message of a load. */
@@ -264,7 +271,7 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
         this.elapsed = (System.nanoTime() - this.startedAt) / 1_000_000_000.0F;
 
         ScaledResolution resolution =
-                new ScaledResolution(this.mc, this.mc.displayWidth, this.mc.displayHeight);
+                new ScaledResolution(this.mc);
         int width = resolution.getScaledWidth();
         int height = resolution.getScaledHeight();
 
@@ -301,7 +308,7 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
             target.unbindFramebuffer();
             target.framebufferRender(this.mc.displayWidth, this.mc.displayHeight);
         }
-        this.mc.func_147120_f();
+        this.mc.updateDisplay();
 
         // Vanilla yields here so the server thread it is waiting on can make
         // progress. Dropping that would starve the very load being drawn.
