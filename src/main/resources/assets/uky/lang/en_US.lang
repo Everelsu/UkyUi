@@ -52,6 +52,11 @@ uky.modSettings.defaults=Reset section
 uky.modSettings.list=list
 uky.settings.videoTakeover=Open the renderer's own screen...
 uky.settings.renderer=Renderer
+uky.settings.optifine.quality=Quality
+uky.settings.optifine.details=Details
+uky.settings.optifine.performance=Performance
+uky.settings.optifine.animations=Animations
+uky.settings.optifine.other=Other
 uky.settings.shaderPacks=Shader packs
 uky.settings.shaderPacks.open=Choose a shader pack...
 

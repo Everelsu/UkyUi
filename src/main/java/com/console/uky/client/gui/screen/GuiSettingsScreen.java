@@ -2,6 +2,7 @@ package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.mods.AngelicaOptions;
+import com.console.uky.client.mods.OptifineOptions;
 import com.console.uky.client.mods.ModConfigCatalog;
 import com.console.uky.client.mods.VideoSettingsTakeover;
 import com.console.uky.client.gui.widget.MenuButton;
@@ -308,7 +309,7 @@ public class GuiSettingsScreen extends MenuScreen {
         this.rowIndex = 0;
         // One column wherever the renderer's settings are in play; its labels are
         // sentences, not words, and half a panel truncated most of them.
-        this.columns = activeTab == 1 && !angelica().isEmpty() ? 1 : 2;
+        this.columns = activeTab == 1 && hasRendererSections() ? 1 : 2;
 
         switch (activeTab) {
             case 0:
@@ -503,6 +504,13 @@ public class GuiSettingsScreen extends MenuScreen {
         if (option == null) {
             return true;
         }
+        // OptiFine is asked by identity, not by label. Its settings are entries in this
+        // very enum, so a row that appears both here and on one of its pages is provably
+        // one setting — no normalising, no chance of two different settings that happen
+        // to translate alike being taken for each other.
+        if (OptifineOptions.owns(option)) {
+            return true;
+        }
         if (angelica().isEmpty()) {
             return false;
         }
@@ -557,6 +565,30 @@ public class GuiSettingsScreen extends MenuScreen {
      */
     private void buildRendererContent(int y) {
         java.util.List<AngelicaOptions.Section> sections = angelica();
+        java.util.List<OptifineOptions.Section> optifine = optifine();
+
+        if (!optifine.isEmpty() && OptifineOptions.hasShaders()) {
+            // Same reasoning as Iris's link below: shader packs are what anyone opening
+            // this part of the settings is most often after, and they are the one thing
+            // here that is a screen rather than a model.
+            y = heading(shaderPacksLabel(), y, false, false);
+            addLink(ID_SHADER_PACKS, this.leftColumn, y, "uky.settings.shaderPacks.open");
+            y += this.rowHeight + this.rowGap;
+        }
+
+        // OptiFine's pages need no adapter: every row on them is a vanilla option, so
+        // they go through the same addOption the rest of this screen uses.
+        for (OptifineOptions.Section section : optifine) {
+            boolean open = expanded.contains(section.name());
+            y = heading(section.name(), y, true, !open);
+            if (!open) {
+                continue;
+            }
+            for (GameSettings.Options option : section.options()) {
+                addOption(option, this.leftColumn, y);
+                y += this.rowHeight + this.rowGap;
+            }
+        }
 
         if (!sections.isEmpty() && AngelicaOptions.hasShaderPacks()) {
             // First, above the sections. Shader packs are the one thing here that
@@ -585,16 +617,18 @@ public class GuiSettingsScreen extends MenuScreen {
             }
         }
 
-        if (!sections.isEmpty()) {
+        if (!sections.isEmpty() || !optifine.isEmpty()) {
             return;
         }
 
         // Nothing was read, yet something out there owns the video settings. Rather than
         // leave the player with no way at all to reach the renderer's options — which is
         // the state this whole section exists to fix — hand back the door to its own
-        // screen. Covers Angelica changing shape under us, and equally a claimant that
-        // was never one of Sodium's to begin with.
-        if (VideoSettingsTakeover.isClaimed()) {
+        // screen. Covers Angelica changing shape under us, a claimant that was never one
+        // of Sodium's to begin with, and an OptiFine whose pages moved: the vanilla video
+        // screen is the one OptiFine patches its own buttons into, so that link lands on
+        // its menus rather than on a bare vanilla list.
+        if (VideoSettingsTakeover.isClaimed() || OptifineOptions.isInstalled()) {
             y = heading(I18n.format("uky.settings.renderer", new Object[0]), y, false, false);
             addLink(ID_VIDEO, this.leftColumn, y, "uky.settings.videoTakeover");
         }
@@ -720,6 +754,22 @@ public class GuiSettingsScreen extends MenuScreen {
             this.angelica = AngelicaOptions.read();
         }
         return this.angelica;
+    }
+
+    /**
+     * OptiFine's pages, read the same way and for the same reason.
+     *
+     * Not cached on the instance the way Angelica's are: {@link OptifineOptions} caches
+     * them statically because an OptiFine option is a vanilla enum constant that writes
+     * through on click, so there is no pending state on this screen to preserve.
+     */
+    private java.util.List<OptifineOptions.Section> optifine() {
+        return OptifineOptions.read();
+    }
+
+    /** Whether some renderer has settings of its own to fold into the Graphics tab. */
+    private boolean hasRendererSections() {
+        return !angelica().isEmpty() || !optifine().isEmpty();
     }
 
     /**
@@ -1061,7 +1111,12 @@ public class GuiSettingsScreen extends MenuScreen {
                 openSub(VideoSettingsTakeover.open(this, this.settings));
                 break;
             case ID_SHADER_PACKS:
-                GuiScreen shaders = AngelicaOptions.shaderPackScreen(this);
+                // Whichever renderer is installed owns this door. They are alternatives
+                // to each other in practice, so asking Iris first and OptiFine second is
+                // an order and not a choice.
+                GuiScreen shaders = AngelicaOptions.hasShaderPacks()
+                        ? AngelicaOptions.shaderPackScreen(this)
+                        : OptifineOptions.shadersScreen(this, this.settings);
                 if (shaders != null) {
                     openSub(shaders);
                 }

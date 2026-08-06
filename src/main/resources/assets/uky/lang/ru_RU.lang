@@ -45,6 +45,11 @@ uky.modSettings.defaults=Сбросить раздел
 uky.modSettings.list=список
 uky.settings.videoTakeover=Открыть экран рендера...
 uky.settings.renderer=Рендер
+uky.settings.optifine.quality=Качество
+uky.settings.optifine.details=Детализация
+uky.settings.optifine.performance=Производительность
+uky.settings.optifine.animations=Анимации
+uky.settings.optifine.other=Прочее
 uky.settings.shaderPacks=Шейдерные пакеты
 uky.settings.shaderPacks.open=Выбрать шейдерный пакет...
 
