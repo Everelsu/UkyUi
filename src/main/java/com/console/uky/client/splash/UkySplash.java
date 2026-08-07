@@ -1,9 +1,9 @@
 package com.console.uky.client.splash;
 
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.client.SplashProgress;
-import cpw.mods.fml.common.ProgressManager;
-import cpw.mods.fml.common.ProgressManager.ProgressBar;
+import net.minecraftforge.fml.client.SplashProgress;
+import net.minecraftforge.fml.common.ProgressManager;
+import net.minecraftforge.fml.common.ProgressManager.ProgressBar;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.LWJGLException;
@@ -72,7 +72,7 @@ public final class UkySplash {
      */
     public static boolean start() {
         try {
-            UiConfig.loadEarly(Minecraft.getMinecraft().mcDataDir);
+            UiConfig.loadEarly(Minecraft.getMinecraft().gameDir);
             if (!UiConfig.customSplash) {
                 return false;
             }
@@ -98,11 +98,6 @@ public final class UkySplash {
             }
         });
         thread.setDaemon(true);
-        // Below the loading thread. Everything this thread does is decoration, and on
-        // a machine whose cores are all busy classloading, decoration should be what
-        // gives way — a loading screen that renders a frame late costs nothing, a
-        // load that finishes later costs exactly what this change is about.
-        thread.setPriority(Thread.NORM_PRIORITY - 1);
         thread.start();
 
         running = true;
@@ -130,72 +125,6 @@ public final class UkySplash {
 
     public static boolean isRunning() {
         return running;
-    }
-
-    /**
-     * Frames a second while the game loads.
-     *
-     * This is a progress bar and a line of text, not a game. Every frame costs a
-     * full-screen redraw and a buffer swap on a context the loading thread's own
-     * texture uploads are queued behind, and the difference between 60 and 30 of them
-     * is not something anybody has ever noticed on a loading screen.
-     */
-    private static final int LOADING_FPS = 30;
-    /** Ticks a second while paused: nothing is drawn, so this is only a poll. */
-    private static final int PAUSED_FPS = 20;
-
-    /**
-     * Set while something needs the graphics driver to itself.
-     *
-     * {@code SplashProgress.pause} is a public API for mods that are about to modify
-     * GL state during loading — "call resume() when you're done". FML itself never
-     * calls it (checked: no call sites anywhere in FML or Forge), so this is not on
-     * the path of a normal start-up and buys nothing there. It is honoured because a
-     * mod that does call it is about to do exactly the thing this screen must not be
-     * drawing through, and taking the screen over leaves FML's {@code enabled} flag
-     * false, so its own pause would ignore such a mod outright.
-     *
-     * <p>Deliberately only a flag, where FML hands the GL context back and forth under
-     * a lock. Handing a context between threads is worth the complexity when the other
-     * thread cannot proceed without it, and the loading thread here can: it has been
-     * uploading textures alongside this screen all along. Simply drawing nothing gets
-     * out of the way with no handshake to deadlock on.
-     */
-    private static volatile boolean paused;
-    /** When the current pause began, for {@link #PAUSE_LIMIT_NANOS}. */
-    private static volatile long pausedAt;
-
-    /**
-     * How long a pause is believed before the screen starts drawing again.
-     *
-     * A pause is only ever ended by whoever started it, and "whoever" here is
-     * arbitrary third-party code that may throw between its two calls. Without a
-     * bound, one lost {@code resume} freezes the loading screen for the rest of the
-     * launch — a far worse outcome than the contention the pause avoids, and one that
-     * would look exactly like the mod having hung. Anything legitimate is a few
-     * frames of GL setup, so a second is generous by orders of magnitude.
-     */
-    private static final long PAUSE_LIMIT_NANOS = 1_000_000_000L;
-
-    /** Called on the main thread when something wants the driver to itself. */
-    public static void pause() {
-        pausedAt = System.nanoTime();
-        paused = true;
-    }
-
-    public static void resume() {
-        paused = false;
-    }
-
-    private static boolean isPaused() {
-        if (!paused) {
-            return false;
-        }
-        if (System.nanoTime() - pausedAt > PAUSE_LIMIT_NANOS) {
-            paused = false;
-            return false;
-        }
-        return true;
     }
 
     /**
@@ -259,18 +188,18 @@ public final class UkySplash {
      * a null classpath resource for images that only exist as an override.
      */
     private static InputStream open(String classpathResource, String overrideName) throws IOException {
-        File override = new File(Minecraft.getMinecraft().mcDataDir, OVERRIDE_DIR + "/" + overrideName);
+        File override = new File(Minecraft.getMinecraft().gameDir, OVERRIDE_DIR + "/" + overrideName);
         if (override.isFile()) {
             return new FileInputStream(override);
         }
         if (classpathResource == null) {
             return null;
         }
-        // Null rather than an exception when the mod ships no such image. The logo is
-        // optional by design and none is bundled, so throwing here logged "could not
-        // load splash image logo.png" on every single launch — an error line, for the
-        // expected case, in the one file anybody reads when start-up misbehaves.
-        return UkySplash.class.getResourceAsStream(classpathResource);
+        InputStream stream = UkySplash.class.getResourceAsStream(classpathResource);
+        if (stream == null) {
+            throw new IOException("Missing splash resource " + classpathResource);
+        }
+        return stream;
     }
 
     private static SplashTexture load(String classpathResource, String overrideName, boolean smooth) {
@@ -326,16 +255,10 @@ public final class UkySplash {
 
                 startNanos = System.nanoTime();
                 while (!done) {
-                    if (isPaused()) {
-                        // Not a single GL call while the loading thread has the driver.
-                        // The picture stays on screen; nothing else happens.
-                        Display.sync(PAUSED_FPS);
-                        continue;
-                    }
                     elapsed = (System.nanoTime() - startNanos) / 1_000_000_000.0F;
                     drawFrame();
                     present();
-                    Display.sync(LOADING_FPS);
+                    Display.sync(60);
                 }
             } finally {
                 deleteTextures();
@@ -346,7 +269,7 @@ public final class UkySplash {
         private void loadFont() {
             InputStream stream = null;
             try {
-                stream = Minecraft.getMinecraft().mcDefaultResourcePack.getInputStream(FONT_LOCATION);
+                stream = Minecraft.getMinecraft().defaultResourcePack.getInputStream(FONT_LOCATION);
                 fontTexture = new SplashTexture(stream, false);
                 font = new SplashFont(fontTexture, FONT_LOCATION);
             } catch (Throwable t) {
@@ -532,50 +455,16 @@ public final class UkySplash {
             float y = h * 0.62F;
             float spacing = 26.0F;
 
-            if (first == null) {
-                // Nothing is reporting progress, and that is not the same as nothing
-                // happening. Mod discovery, class transformation and the long stretch
-                // before FML opens its first bar are exactly that: on a small pack
-                // they pass in a blink, on a large one they are tens of seconds during
-                // which this screen has no bar, no logo (it is optional and often
-                // missing), no tips (off by default) and nothing but a wordmark on
-                // black — which reads, correctly, as a hung game.
-                //
-                // An indeterminate sweep says the one thing that is actually known:
-                // it is still working.
-                drawSweep(barX, y, barWidth, alpha);
-                return;
+            if (first != null) {
+                drawBar(first, barX, y, barWidth, alpha, shownProgress);
+                y += spacing;
             }
-
-            drawBar(first, barX, y, barWidth, alpha, shownProgress);
-            y += spacing;
             if (penult != null) {
                 drawBar(penult, barX, y, barWidth, alpha * 0.75F, progressOf(penult));
                 y += spacing;
             }
             if (last != null) {
                 drawBar(last, barX, y, barWidth, alpha * 0.75F, progressOf(last));
-            }
-        }
-
-        /**
-         * The indeterminate sweep, for when there is no progress to report.
-         *
-         * Same shape as the track a real bar draws, so the moment FML opens its first
-         * bar the sweep is replaced in place rather than the layout jumping.
-         */
-        private void drawSweep(float x, float y, float width, float alpha) {
-            rectRGBA(x, y, x + width, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.18F * alpha);
-
-            float sweep = width * 0.26F;
-            float t = (elapsed * 0.5F) % 1.0F;
-            // Eased, so it slows at the ends instead of wrapping at full speed.
-            float eased = t < 0.5F ? 2.0F * t * t : 1.0F - 2.0F * (1.0F - t) * (1.0F - t);
-            float head = x - sweep + (width + sweep) * eased;
-            float from = Math.max(x, head);
-            float to = Math.min(x + width, head + sweep);
-            if (to > from) {
-                rectRGBA(from, y, to, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.9F * alpha);
             }
         }
 
@@ -756,10 +645,6 @@ public final class UkySplash {
             }
             if (fontTexture != null) {
                 fontTexture.delete();
-            }
-            if (font != null) {
-                // The unicode pages the font loaded on demand are its own textures.
-                font.delete();
             }
         }
     }

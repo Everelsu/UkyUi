@@ -1,7 +1,7 @@
 package com.console.uky.mixins;
 
 import com.console.uky.client.splash.UkySplash;
-import cpw.mods.fml.client.SplashProgress;
+import net.minecraftforge.fml.client.SplashProgress;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -41,34 +41,6 @@ public abstract class MixinSplashProgress {
     private static void uky$suppressVanillaScreen(CallbackInfo ci) {
         if (UkySplash.isRunning()) {
             ci.cancel();
-        }
-    }
-
-    /**
-     * The pause the game takes when it wants the graphics driver to itself.
-     *
-     * FML calls these around the texture stitch and the resource reload — the heavy
-     * GL phases, and most of a big pack's start-up. Its own loading screen stops
-     * drawing for the duration; ours never heard about it, because cancelling
-     * {@code start} leaves {@code enabled} false and both of these then return before
-     * doing anything. Hooked at HEAD, so they are seen whatever that flag says.
-     *
-     * <p>Not cancellable, and no need: with the flag false the rest of the method is
-     * a no-op anyway, so letting it run changes nothing. {@code require = 0} because
-     * these two are an optimisation rather than the takeover itself — on a Forge
-     * build that has moved them, the screen should go on working, not refuse to load.
-     */
-    @Inject(method = "pause", at = @At("HEAD"), remap = false, require = 0)
-    private static void uky$pause(CallbackInfo ci) {
-        if (UkySplash.isRunning()) {
-            UkySplash.pause();
-        }
-    }
-
-    @Inject(method = "resume", at = @At("HEAD"), remap = false, require = 0)
-    private static void uky$resume(CallbackInfo ci) {
-        if (UkySplash.isRunning()) {
-            UkySplash.resume();
         }
     }
 }
