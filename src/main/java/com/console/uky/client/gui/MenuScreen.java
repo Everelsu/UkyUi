@@ -7,6 +7,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
+import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
@@ -272,8 +273,41 @@ public abstract class MenuScreen extends GuiScreen {
 
     // ------------------------------------------------------------- lifecycle --
 
+    /**
+     * The size {@link #initGui()} last ran at, or -1 if it has never run.
+     *
+     * Forge lets any mod cancel {@code GuiScreenEvent.InitGuiEvent.Pre}, and
+     * {@code GuiScreen.setWorldAndResolution} then sets the width, the height and the
+     * font renderer and <em>skips {@code initGui} entirely</em>. Everything a screen
+     * builds there — the widgets, the layout, the text fields — is simply never
+     * built, and the first frame dereferences a null. It is not hypothetical: a pack
+     * with a hundred mods in it has one that does this, and the crash it produces
+     * names us, because we are what was drawing.
+     *
+     * <p>So the initialisation is no longer allowed to depend on being called. See
+     * {@link #ensureInitialised()}.
+     */
+    private int laidOutWidth = -1;
+    private int laidOutHeight = -1;
+
+    /**
+     * Runs the initialisation if nothing else did.
+     *
+     * Cheap enough to sit at the top of the draw: two integer comparisons on a frame
+     * where everything is in order, and on the frame where it is not, exactly the work
+     * that was skipped. Keyed on the size rather than on a bare flag so that a resize
+     * whose init was also cancelled is caught by the same test.
+     */
+    private void ensureInitialised() {
+        if (this.laidOutWidth != this.width || this.laidOutHeight != this.height) {
+            initGui();
+        }
+    }
+
     @Override
     public void initGui() {
+        this.laidOutWidth = this.width;
+        this.laidOutHeight = this.height;
         this.buttonList.clear();
         this.lastFrameNanos = System.nanoTime();
         this.elapsed = 0.0F;
@@ -346,6 +380,7 @@ public abstract class MenuScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        ensureInitialised();
         tickTiming();
         syncScale();
 
@@ -459,7 +494,7 @@ public abstract class MenuScreen extends GuiScreen {
         float zoom = 1.06F;
         float panX = 0.0F;
         float panY = 0.0F;
-        if (UiConfig.backgroundDrift) {
+        if (Quality.backgroundDrift()) {
             // Two prime-ish periods keep the loop from feeling metronomic.
             zoom = 1.06F + (float) Math.sin(this.elapsed * 0.07F) * 0.035F;
             panX = (float) Math.sin(this.elapsed * 0.043F) * 0.6F;
@@ -565,15 +600,15 @@ public abstract class MenuScreen extends GuiScreen {
 
     /** Post-processing drawn over everything, widgets included. */
     protected void drawOverlay() {
-        if (UiConfig.vignette) {
+        if (Quality.vignette()) {
             Draw.vignette(this.width, this.height, 0.85F * this.fadeAlpha, 0xFF000000);
         }
         // Grain over the starfield just turns it to mush — the black hole already
         // supplies all the texture the backdrop needs.
-        if (UiConfig.filmGrain && !isBlackHoleBackground()) {
+        if (Quality.filmGrain() && !isBlackHoleBackground()) {
             drawFilmGrain();
         }
-        if (UiConfig.scanlines) {
+        if (Quality.scanlines()) {
             Draw.scanlines(this.width, this.height, 3.0F, Draw.withAlpha(0x000000, 0.10F * this.fadeAlpha));
         }
 
@@ -615,6 +650,17 @@ public abstract class MenuScreen extends GuiScreen {
     }
 
     // ----------------------------------------------------------------- input --
+
+    /**
+     * Input reaches a screen before its first frame does, so the same guard is needed
+     * here — a click landing on a screen that was never initialised would otherwise
+     * be handled against a layout that does not exist yet.
+     */
+    @Override
+    public void handleInput() {
+        ensureInitialised();
+        super.handleInput();
+    }
 
     @Override
     protected void actionPerformed(GuiButton button) {

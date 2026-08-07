@@ -59,13 +59,26 @@ public class GuiEventHandler {
         // costs one field read on a screen change rather than every tick.
         UkyMusicTicker.ensureInstalled(Minecraft.getMinecraft());
 
-        keepLatinCrisp();
-        UkyFontRenderer.install(Minecraft.getMinecraft());
-
         if (event.gui == null) {
             return;
         }
         Class<?> type = event.gui.getClass();
+
+        // Nothing touches the font while the game is still loading.
+        //
+        // These two rebuild and reconfigure the game's font renderer, and they used to
+        // run at the top of this method — that is, on every screen FML puts up during
+        // mod loading, when the resource system is half-built and the loading screen
+        // still owns the GL context. Building a font renderer there is how the splash
+        // font took Angelica's unicode pages down with it, and there is no reason to
+        // do it that early: nothing before the title screen is drawn by this mod.
+        //
+        // FML's own screens are the ones that appear during loading, and they are
+        // already recognised further down by their package.
+        if (!isLoadingScreen(type)) {
+            keepLatinCrisp();
+            UkyFontRenderer.install(Minecraft.getMinecraft());
+        }
 
         if (UiConfig.replaceMainMenu && type == GuiMainMenu.class) {
             event.gui = new GuiTitleScreen();
@@ -138,7 +151,7 @@ public class GuiEventHandler {
         // FML's mid-load question. Restyled rather than replaced: it stays a
         // GuiNotification because that type is what FML's own draw-and-input path
         // looks for while the game loop is parked. See GuiStartupQueryScreen.
-        if (type.getName().startsWith("cpw.mods.fml.client.Gui")) {
+        if (isLoadingScreen(type)) {
             GuiScreen restyled = GuiStartupQueryScreen.wrap(event.gui);
             if (restyled != null) {
                 event.gui = restyled;
@@ -150,6 +163,17 @@ public class GuiEventHandler {
             event.gui = new GuiSettingsScreen(parentOf(event.gui),
                     Minecraft.getMinecraft().gameSettings);
         }
+    }
+
+    /**
+     * Whether this is one of FML's own screens, which only appear during loading.
+     *
+     * By package rather than by class: FML puts up several of these — the notification,
+     * the confirmation, the access-denied — and what they have in common is when they
+     * appear, which is the part that matters here.
+     */
+    private static boolean isLoadingScreen(Class<?> type) {
+        return type.getName().startsWith("cpw.mods.fml.client.Gui");
     }
 
     /**
@@ -195,6 +219,21 @@ public class GuiEventHandler {
     private static void keepLatinCrisp() {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.fontRenderer == null || mc.gameSettings == null) {
+            return;
+        }
+        // Hands off when something else lays text out.
+        //
+        // This overrides a *global* setting, every time any screen opens, and it does
+        // it on an assumption about what the flag means: vanilla reads it per
+        // character, so Latin comes from ascii.png and Cyrillic still falls through to
+        // the unicode pages. Angelica reads it as a choice of font provider, and with
+        // the flag forced off its Cyrillic has nowhere to come from — ascii.png does
+        // not contain a single Cyrillic glyph. The result is Russian rendered from the
+        // wrong set, everywhere, including screens this mod does not own.
+        //
+        // A cosmetic improvement to vanilla's text is not worth breaking somebody
+        // else's, so it applies only where the assumption it rests on is true.
+        if (UkyFontRenderer.rendererOwnsText()) {
             return;
         }
         boolean wanted = mc.gameSettings.forceUnicodeFont;
