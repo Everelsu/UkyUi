@@ -20,6 +20,7 @@ import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.storage.ISaveFormat;
 import net.minecraft.world.storage.SaveFormatComparator;
+import net.minecraft.world.storage.WorldInfo;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ public class GuiWorldsScreen extends MenuScreen {
     private static final int HIT_PLAY = 1;
     private static final int HIT_RENAME = 2;
     private static final int HIT_DELETE = 3;
+    private static final int HIT_RECREATE = 4;
 
     private static final int TILE_GAP = 10;
     private static final float TILE_ASPECT = 16.0F / 9.0F;
@@ -374,18 +376,31 @@ public class GuiWorldsScreen extends MenuScreen {
     private int hitTestActions(int mouseX, int mouseY, int cardX, float cardY) {
         float box = iconBox();
         float y0 = cardY + 4;
-        float renameX = cardX + this.tileWidth - box * 2 - 8;
-        float deleteX = cardX + this.tileWidth - box - 4;
 
         if (mouseY >= y0 && mouseY <= y0 + box) {
-            if (mouseX >= renameX && mouseX <= renameX + box) {
+            if (mouseX >= actionX(cardX, 0) && mouseX <= actionX(cardX, 0) + box) {
+                return HIT_DELETE;
+            }
+            if (mouseX >= actionX(cardX, 1) && mouseX <= actionX(cardX, 1) + box) {
                 return HIT_RENAME;
             }
-            if (mouseX >= deleteX && mouseX <= deleteX + box) {
-                return HIT_DELETE;
+            if (mouseX >= actionX(cardX, 2) && mouseX <= actionX(cardX, 2) + box) {
+                return HIT_RECREATE;
             }
         }
         return HIT_PLAY;
+    }
+
+    /**
+     * Left edge of the card's {@code slot}-th icon button, counting from the right.
+     *
+     * One expression for both the draw and the hit test. They were written out twice
+     * with the same arithmetic, which held for two buttons and is exactly the kind of
+     * thing that stops holding when a third arrives.
+     */
+    private float actionX(int cardX, int slot) {
+        float box = iconBox();
+        return cardX + this.tileWidth - (box + 4) * (slot + 1);
     }
 
     private float iconBox() {
@@ -502,11 +517,13 @@ public class GuiWorldsScreen extends MenuScreen {
         Icons.play(cx + 1.0F, cy, box * 0.8F,
                 Draw.withAlpha(playHot ? Theme.textHover : Theme.text, a));
 
-        drawIconButton(x + this.tileWidth - box * 2 - 8, y + 4, box, a,
-                this.hoveredAction == HIT_RENAME && this.hoveredCard == index, false);
-        float binX = x + this.tileWidth - box - 4;
+        drawIconButton(actionX(x, 2), y + 4, box, a,
+                this.hoveredAction == HIT_RECREATE && this.hoveredCard == index, ICON_RECREATE);
+        drawIconButton(actionX(x, 1), y + 4, box, a,
+                this.hoveredAction == HIT_RENAME && this.hoveredCard == index, ICON_RENAME);
+        float binX = actionX(x, 0);
         drawIconButton(binX, y + 4, box, a,
-                this.hoveredAction == HIT_DELETE && this.hoveredCard == index, true);
+                this.hoveredAction == HIT_DELETE && this.hoveredCard == index, ICON_DELETE);
         if (this.holdCard == index && this.holdProgress > 0.0F) {
             drawHoldProgress(binX, y + 4, box, alpha);
         }
@@ -539,18 +556,27 @@ public class GuiWorldsScreen extends MenuScreen {
                 Draw.withAlpha(Draw.mix(Theme.danger, 0xFFFFFF, sweep), alpha));
     }
 
+    private static final int ICON_RENAME = 0;
+    private static final int ICON_DELETE = 1;
+    private static final int ICON_RECREATE = 2;
+
     private void drawIconButton(float x, float y, float box, float alpha, boolean hot,
-                                boolean destructive) {
-        int accent = destructive ? Theme.danger : Theme.accent;
+                                int icon) {
+        int accent = icon == ICON_DELETE ? Theme.danger : Theme.accent;
         Draw.rect(x, y, x + box, y + box, Draw.withAlpha(0x000000, (hot ? 0.7F : 0.45F) * alpha));
         Draw.border(x, y, x + box, y + box, 1.0F,
                 Draw.withAlpha(hot ? accent : Theme.separator, alpha));
 
         int colour = Draw.withAlpha(hot ? accent : Theme.textDim, alpha);
-        if (destructive) {
-            Icons.trash(x + box / 2.0F, y + box / 2.0F, box * 0.58F, colour);
+        float cx = x + box / 2.0F;
+        float cy = y + box / 2.0F;
+        if (icon == ICON_DELETE) {
+            Icons.trash(cx, cy, box * 0.58F, colour);
+        } else if (icon == ICON_RECREATE) {
+            // The same world again: a cycle, which is what it does to the seed.
+            Icons.refresh(cx, cy, box * 0.62F, colour);
         } else {
-            Icons.pencil(x + box / 2.0F, y + box / 2.0F, box * 0.55F, colour);
+            Icons.pencil(cx, cy, box * 0.55F, colour);
         }
     }
 
@@ -685,6 +711,9 @@ public class GuiWorldsScreen extends MenuScreen {
                     this.mc.displayGuiScreen(new GuiWorldPromptScreen(this,
                             GuiWorldPromptScreen.Mode.RENAME, world.getFileName()));
                     return;
+                case HIT_RECREATE:
+                    recreate(world);
+                    return;
                 case HIT_DELETE:
                     // Nothing on click. The bin is a hold, and a dialogue on top of a
                     // hold would be two confirmations for one action.
@@ -711,6 +740,28 @@ public class GuiWorldsScreen extends MenuScreen {
         if (wheel != 0) {
             this.scrollTarget -= (wheel > 0 ? 1 : -1) * (this.tileHeight + TILE_GAP) * 0.6F;
             clampScroll();
+        }
+    }
+
+    /**
+     * Opens world creation pre-filled from this world — vanilla's "Re-Create".
+     *
+     * The settings it copies live in the save's level.dat and nowhere the player can
+     * read them, so this is the only route to a second world on the same seed and the
+     * same generator options. Reading that file can fail — a save half-written by a
+     * crash, a folder that has been deleted since the list was built — and a button
+     * that quietly does nothing is better than one that takes the game down, so a
+     * failure leaves the list exactly where it was.
+     */
+    private void recreate(SaveFormatComparator world) {
+        WorldInfo info = null;
+        try {
+            info = this.mc.getSaveLoader().getWorldInfo(world.getFileName());
+        } catch (Throwable t) {
+            UkyUI.LOGGER.warn("Could not read {} to re-create it", world.getFileName(), t);
+        }
+        if (info != null) {
+            this.mc.displayGuiScreen(GuiCreateWorldScreen.recreating(this, info));
         }
     }
 
