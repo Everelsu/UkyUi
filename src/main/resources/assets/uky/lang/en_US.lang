@@ -43,6 +43,15 @@ uky.settings.renderer=Renderer
 uky.settings.shaderPacks=Shader packs
 uky.settings.shaderPacks.open=Choose a shader pack...
 
+# ---- graphics preset ----
+# One ceiling over everything this mod draws. It only ever lowers a setting, so
+# "maximum" is what the mod did before the preset existed.
+uky.settings.effects=UKY effects
+uky.settings.graphics=UKY graphics
+uky.graphics.minimal=Minimal
+uky.graphics.balanced=Balanced
+uky.graphics.maximum=Maximum
+
 # ---- death scene ----
 # Six lines per cause. The scene picks one at random and holds it for that death.
 uky.death.prompt=Press any key or click to return
