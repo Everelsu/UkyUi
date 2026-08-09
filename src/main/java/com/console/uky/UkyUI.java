@@ -14,9 +14,9 @@ import org.apache.logging.log4j.Logger;
 public class UkyUI {
 
     public static final String MODID = "uky";
-    public static final String NAME = "UltraKill Yourself UI";
+    public static final String NAME = "UltraKill YouI";
     /** Must match {@code version} in build.gradle.kts; see the note there. */
-    public static final String VERSION = "0.5.0";
+    public static final String VERSION = "0.5.1";
 
     public static final Logger LOGGER = LogManager.getLogger(NAME);
 

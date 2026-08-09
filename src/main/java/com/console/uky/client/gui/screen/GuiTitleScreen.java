@@ -673,6 +673,27 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
+    /**
+     * The wordmark's letters, once somebody has knocked one loose.
+     *
+     * Rebuilt whenever the title changes, which is also what puts every letter back
+     * after the config is edited in game.
+     */
+    private FallingLetters letters;
+    /** Screen-space left edge and width of each glyph, from the last frame drawn. */
+    private float[] glyphX = new float[0];
+    private float[] glyphWidth = new float[0];
+    private float glyphTop;
+    private float glyphBottom;
+
+    private FallingLetters letters() {
+        String text = UiConfig.title == null ? "" : UiConfig.title;
+        if (this.letters == null || !this.letters.matches(text)) {
+            this.letters = new FallingLetters(text);
+        }
+        return this.letters;
+    }
+
     /** Title text at 2x with a letter-spaced, shadowed look. */
     private void drawWordmark(String text, int centerX, int y) {
         final float scale = 2.0F;
@@ -700,13 +721,33 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         int shadow = Draw.withAlpha(0x000000, 0.6F * this.contentAlpha);
         int color = Draw.withAlpha(Theme.text, this.contentAlpha);
 
+        FallingLetters loose = letters();
+        if (this.glyphX.length != text.length()) {
+            this.glyphX = new float[text.length()];
+            this.glyphWidth = new float[text.length()];
+        }
+        this.glyphTop = y;
+        this.glyphBottom = y + 8 * scale;
+
         for (int i = 0; i < text.length(); i++) {
-            String ch = String.valueOf(text.charAt(i));
-            this.fontRendererObj.drawString(ch, (int) (cursor + 1), (int) (baseY + 1), shadow, false);
-            this.fontRendererObj.drawString(ch, (int) cursor, (int) baseY, color, false);
-            cursor += this.fontRendererObj.getCharWidth(text.charAt(i)) + tracking;
+            char glyph = text.charAt(i);
+            int width = this.fontRendererObj.getCharWidth(glyph);
+            // Recorded in screen space so a click can be tested against it without
+            // reproducing the scale and the tracking at the other end.
+            this.glyphX[i] = cursor * scale;
+            this.glyphWidth[i] = width * scale;
+
+            if (loose.isInPlace(i)) {
+                String ch = String.valueOf(glyph);
+                this.fontRendererObj.drawString(ch, (int) (cursor + 1), (int) (baseY + 1), shadow, false);
+                this.fontRendererObj.drawString(ch, (int) cursor, (int) baseY, color, false);
+            }
+            cursor += width + tracking;
         }
         GL11.glPopMatrix();
+
+        loose.update(this.delta, this.holeCenterX, this.holeCenterY, this.holeRadius);
+        loose.draw(this.fontRendererObj, this.contentAlpha);
 
         // Accent rule under the wordmark, growing outwards from the centre.
         float grow = Ease.outCubic((this.elapsed - 0.25F) / 0.8F);
@@ -801,7 +842,36 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             this.intro.skip();
             return;
         }
+        if (knockOutLetter(mouseX, mouseY)) {
+            return;
+        }
         super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /**
+     * Frees the wordmark letter under the pointer, if there is one.
+     *
+     * @return true when a letter was hit, so the click goes no further
+     */
+    private boolean knockOutLetter(int mouseX, int mouseY) {
+        if (mouseY < this.glyphTop || mouseY > this.glyphBottom) {
+            return false;
+        }
+        for (int i = 0; i < this.glyphX.length; i++) {
+            float left = this.glyphX[i];
+            float right = left + this.glyphWidth[i];
+            if (mouseX < left || mouseX > right || !letters().isInPlace(i)) {
+                continue;
+            }
+            float centreX = (left + right) / 2.0F;
+            // Which side of the letter was struck decides which way it is pushed, and
+            // that sideways speed is what turns the fall into an orbit rather than a
+            // drop. Hitting it dead centre would send it straight down the throat.
+            float away = mouseX < centreX ? -1.0F : 1.0F;
+            letters().knockOut(i, centreX, this.glyphTop + 8.0F, away);
+            return true;
+        }
+        return false;
     }
 
     @Override
