@@ -43,6 +43,7 @@ uky.settings.shaderPacks.open=Выбрать шейдерный пакет...
 # поэтому «Максимально» — это то, как мод работал до появления пресета.
 uky.settings.effects=Эффекты UKY
 uky.settings.graphics=Графика UKY
+uky.graphics.potato=Картошка
 uky.graphics.minimal=Минимально
 uky.graphics.balanced=Средне
 uky.graphics.maximum=Максимально
@@ -105,3 +106,13 @@ uky.server.status.pinging=Опрашиваем сервер...
 uky.server.status.unresolved=Адрес не найден
 uky.server.status.unreachable=Нет соединения
 uky.server.status.timedOut=Сервер не ответил
+
+uky.welcome.title=Добро пожаловать
+uky.welcome.body=Этот пак заменяет меню Minecraft. Всё, что здесь есть, можно изменить позже в настройках.
+uky.welcome.quality=Насколько сильно нагружать меню?
+uky.welcome.settings=Все настройки...
+uky.welcome.start=Начать
+uky.graphics.potato.hint=Без чёрной дыры. Фон — сплошной цвет, остальное меню без изменений.
+uky.graphics.minimal.hint=Дыра считается мелко и редко. Для слабых или старых видеокарт.
+uky.graphics.balanced.hint=Полное разрешение без суперсэмплинга. В движении почти неотличимо от максимума.
+uky.graphics.maximum.hint=Без ограничений. Всё рисуется как настроено.

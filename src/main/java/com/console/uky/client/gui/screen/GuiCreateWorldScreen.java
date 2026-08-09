@@ -244,7 +244,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
                 ? this.nameField.getText()
                 : (this.initialName != null
                         ? this.initialName
-                        : I18n.format("selectWorld.newWorld", new Object[0]));
+                        : unusedDefaultName());
         String seed = this.seedField != null
                 ? this.seedField.getText()
                 : (this.initialSeed != null ? this.initialSeed : "");
@@ -1081,6 +1081,51 @@ public class GuiCreateWorldScreen extends MenuScreen {
 
         this.mc.displayGuiScreen(null);
         this.mc.launchIntegratedServer(folder, name, settings);
+    }
+
+    /**
+     * The default name, with a number on it if worlds by that name already exist.
+     *
+     * Vanilla offers "New World" every time and only ever de-duplicates the folder on
+     * disk, so a player who creates several worlds without renaming ends up with a
+     * list where every entry reads the same and the only way to tell them apart is to
+     * remember the order they were made in. The number goes in the field before the
+     * world is created, not silently at creation, so it is visible and still editable.
+     *
+     * @return the base name, or the base name followed by the first free number
+     */
+    private String unusedDefaultName() {
+        String base = I18n.format("selectWorld.newWorld", new Object[0]);
+
+        java.util.Set<String> taken = new java.util.HashSet<String>();
+        try {
+            @SuppressWarnings("unchecked")
+            java.util.List<net.minecraft.world.storage.SaveFormatComparator> saves =
+                    this.mc.getSaveLoader().getSaveList();
+            for (int i = 0; i < saves.size(); i++) {
+                String existing = saves.get(i).getDisplayName();
+                if (existing != null) {
+                    taken.add(existing.trim());
+                }
+            }
+        } catch (Throwable t) {
+            // An unreadable saves folder is the world list's problem to report, not
+            // this field's. Without the list there is nothing to collide with.
+            return base;
+        }
+
+        if (!taken.contains(base)) {
+            return base;
+        }
+        // Starts at 2, so the first two worlds read "New World" and "New World 2"
+        // rather than "New World 1" and a bare one that looks like it came first.
+        for (int n = 2; n < 1000; n++) {
+            String candidate = base + " " + n;
+            if (!taken.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return base;
     }
 
     /**

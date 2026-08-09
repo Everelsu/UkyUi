@@ -530,7 +530,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         }
 
         this.intro.update(this.delta);
-        if ("solid".equals(UiConfig.background)) {
+        if ("solid".equals(UiConfig.background) || !Quality.blackHole()) {
             return;
         }
 
@@ -625,7 +625,9 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         // — Escape, Done, or the window's close button — still counts as having been
         // shown it, and none of those routes comes back through here.
         UiConfig.setShowSettingsOnFirstRun(false);
-        switchTo(GuiSettingsScreen.onVideoTab(this, this.mc.gameSettings));
+        // A screen that says what this is and asks the one question that matters,
+        // rather than the whole settings screen with no explanation attached.
+        switchTo(new GuiWelcomeScreen(this));
     }
 
     private void startMenuMusic() {

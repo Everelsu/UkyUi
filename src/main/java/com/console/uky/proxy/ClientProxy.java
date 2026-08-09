@@ -6,6 +6,7 @@ import com.console.uky.client.render.BlackHole;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkyMusicTicker;
 import com.console.uky.client.world.WorldEntryFade;
+import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import com.console.uky.handler.ConfigChangeHandler;
 import com.console.uky.handler.GuiEventHandler;
@@ -26,7 +27,9 @@ public class ClientProxy extends CommonProxy {
 
         // Tracing the lensing takes a second or two on a background thread. Kicking
         // it off here means it is done well before the title screen needs it.
-        if ("blackhole".equals(UiConfig.background)) {
+        // Nothing to warm up when the preset has taken the hole away entirely;
+        // that trace is a second or two of a background thread and a texture to hold.
+        if ("blackhole".equals(UiConfig.background) && Quality.blackHole()) {
             BlackHole.warmUp();
         }
 

@@ -93,6 +93,17 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     @Override
     protected void buildLayout() {
         if (this.servers == null) {
+            // Vanilla's multiplayer screen opens with this and it is not optional.
+            // FML keeps two maps of per-server data — what the server answered about
+            // its mod list, and whether it is blocked — and this call is the only
+            // thing that creates them; the fields have no initialiser. Skipping it
+            // left both null, and both are dereferenced on paths this screen uses:
+            // bindServerListData reads one on every ping reply, so no ping ever
+            // completed and every server eventually read as not answering, and
+            // connectToServer reads the other, so joining one died on an NPE that
+            // named this screen.
+            FMLClientHandler.instance().setupServerList();
+
             this.servers = new ServerList(this.mc);
             this.servers.loadServerList();
             this.pinger = new OldServerPinger();
@@ -157,7 +168,16 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private static final class Probe {
         /** Written by the ping thread, read every frame by the client thread. */
         volatile int state = PING_PENDING;
-        final long startedAt = System.currentTimeMillis();
+        /**
+         * When the probe actually began, not when it was queued.
+         *
+         * There are five threads for any number of servers, so a long list waits its
+         * turn. Timed from the queueing, an entry could burn its whole allowance
+         * sitting in that queue and be called unanswered before anything had asked
+         * it. Zero until a thread picks it up, which {@code stateOf} reads as "not
+         * started yet" and therefore never as late.
+         */
+        volatile long startedAt;
     }
 
     private Probe[] probes = new Probe[0];
@@ -197,6 +217,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             PINGERS.execute(new Runnable() {
                 @Override
                 public void run() {
+                    probe.startedAt = System.currentTimeMillis();
                     try {
                         GuiServersScreen.this.pinger.func_147224_a(data);
                     } catch (java.net.UnknownHostException e) {
@@ -503,7 +524,8 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         if (probe.state != PING_PENDING) {
             return probe.state;
         }
-        return System.currentTimeMillis() - probe.startedAt > PING_TIMEOUT_MS
+        long startedAt = probe.startedAt;
+        return startedAt != 0L && System.currentTimeMillis() - startedAt > PING_TIMEOUT_MS
                 ? PING_TIMED_OUT
                 : PING_PENDING;
     }

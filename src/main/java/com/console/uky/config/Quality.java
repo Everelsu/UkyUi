@@ -27,16 +27,18 @@ package com.console.uky.config;
 public final class Quality {
 
     /** Config values, as written in {@code uky.cfg}. */
+    public static final String POTATO = "potato";
     public static final String MINIMAL = "minimal";
     public static final String BALANCED = "balanced";
     public static final String MAXIMUM = "maximum";
 
     /** In the order the settings screen cycles them: cheapest first. */
-    public static final String[] LEVELS = { MINIMAL, BALANCED, MAXIMUM };
+    public static final String[] LEVELS = { POTATO, MINIMAL, BALANCED, MAXIMUM };
 
-    private static final int L_MINIMAL = 0;
-    private static final int L_BALANCED = 1;
-    private static final int L_MAXIMUM = 2;
+    private static final int L_POTATO = 0;
+    private static final int L_MINIMAL = 1;
+    private static final int L_BALANCED = 2;
+    private static final int L_MAXIMUM = 3;
 
     /**
      * Last string parsed and what it came out as.
@@ -60,7 +62,9 @@ public final class Quality {
         }
         String value = raw.trim().toLowerCase();
         int level;
-        if (MINIMAL.equals(value)) {
+        if (POTATO.equals(value)) {
+            level = L_POTATO;
+        } else if (MINIMAL.equals(value)) {
             level = L_MINIMAL;
         } else if (BALANCED.equals(value)) {
             level = L_BALANCED;
@@ -93,6 +97,20 @@ public final class Quality {
     // ------------------------------------------------------------ black hole --
 
     /**
+     * Whether the black hole is drawn at all.
+     *
+     * The one thing {@link #POTATO} takes away outright rather than turning down.
+     * Every other preset still traces it — that is the whole cost of this menu, a
+     * light path integrated per pixel per frame — and on hardware where even the
+     * cheapest trace is too much, the honest answer is not to draw it. The menus keep
+     * their layout, their panels and their type; the backdrop becomes the flat colour
+     * the {@code solid} background already offers, which costs one quad.
+     */
+    public static boolean blackHole() {
+        return level() > L_POTATO;
+    }
+
+    /**
      * Trace resolution, as a percentage of the window, after the cap.
      *
      * The single most expensive number in the mod: the shader runs once per pixel of
@@ -103,6 +121,7 @@ public final class Quality {
     public static int blackHoleResolution() {
         int configured = Math.min(200, Math.max(50, UiConfig.blackHoleResolution));
         switch (level()) {
+            case L_POTATO:
             case L_MINIMAL: return Math.min(configured, 50);
             case L_BALANCED: return Math.min(configured, 100);
             default: return configured;
@@ -115,6 +134,7 @@ public final class Quality {
         switch (level()) {
             // 200 is the floor the config itself enforces — below it the photon ring
             // never closes and the hole reads as a dark blob rather than a cheap one.
+            case L_POTATO:
             case L_MINIMAL: return Math.min(configured, 200);
             case L_BALANCED: return Math.min(configured, 260);
             default: return configured;
@@ -134,6 +154,7 @@ public final class Quality {
      */
     public static long traceIntervalNanos(boolean moving) {
         switch (level()) {
+            case L_POTATO:
             case L_MINIMAL: return moving ? 110_000_000L : 260_000_000L;
             case L_BALANCED: return moving ? 70_000_000L : 190_000_000L;
             default: return moving ? 50_000_000L : 140_000_000L;
@@ -149,6 +170,7 @@ public final class Quality {
      */
     public static int starCount(int max) {
         switch (level()) {
+            case L_POTATO: return 0;
             case L_MINIMAL: return Math.min(max, 140);
             case L_BALANCED: return Math.min(max, 280);
             default: return max;
@@ -158,6 +180,7 @@ public final class Quality {
     /** Infalling stars drawn, out of the {@code max} seeded. None at minimal. */
     public static int infallCount(int max) {
         switch (level()) {
+            case L_POTATO:
             case L_MINIMAL: return 0;
             case L_BALANCED: return Math.min(max, 8);
             default: return max;
@@ -220,6 +243,7 @@ public final class Quality {
      */
     public static float deathIntensity() {
         switch (level()) {
+            case L_POTATO: return 0.25F;
             case L_MINIMAL: return 0.45F;
             case L_BALANCED: return 0.80F;
             default: return 1.0F;

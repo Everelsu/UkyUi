@@ -1,5 +1,6 @@
 package com.console.uky.handler;
 
+import com.console.uky.client.gui.PlayerListOverlay;
 import com.console.uky.client.gui.screen.GuiConnectingScreen;
 import com.console.uky.client.render.UkyFontRenderer;
 import com.console.uky.client.gui.screen.GuiCreateWorldScreen;
@@ -30,6 +31,7 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.util.IChatComponent;
 import net.minecraftforge.client.event.GuiOpenEvent;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -46,6 +48,30 @@ public class GuiEventHandler {
 
     /** Cached parent-screen field per screen class; see {@link #parentOf}. */
     private static final Map<Class<?>, Field> PARENT_FIELDS = new HashMap<Class<?>, Field>();
+
+    /**
+     * Replaces the Tab player list with ours.
+     *
+     * The list is not a screen, so it cannot be swapped like the others: vanilla draws
+     * it inline in {@code GuiIngame.renderGameOverlay}. Forge announces it as its own
+     * overlay element first, though, and cancelling that is enough to stop vanilla
+     * drawing it — leaving the space to draw in without touching {@code GuiIngame}.
+     */
+    @SubscribeEvent
+    public void onRenderOverlay(RenderGameOverlayEvent.Pre event) {
+        if (event.type != RenderGameOverlayEvent.ElementType.PLAYER_LIST) {
+            return;
+        }
+        if (!UiConfig.replacePlayerList) {
+            return;
+        }
+        Minecraft mc = Minecraft.getMinecraft();
+        if (!PlayerListOverlay.shouldDraw(mc)) {
+            return;
+        }
+        event.setCanceled(true);
+        PlayerListOverlay.draw(mc, event.resolution);
+    }
 
     @SubscribeEvent
     public void onGuiOpen(GuiOpenEvent event) {

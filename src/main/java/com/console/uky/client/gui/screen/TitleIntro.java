@@ -39,6 +39,14 @@ public final class TitleIntro {
 
     /** Call from initGui. Returns true if the intro will actually run. */
     public boolean begin() {
+        // Already running on this screen: a second call is a re-layout, not a second
+        // opening. initGui runs again on every resize, and at start-up the window
+        // settles into its size while the title screen is already up — so the intro
+        // began, the resize called this a moment later, and the branch below cancelled
+        // it. The animation simply never appeared, and the flag said it had played.
+        if (this.active) {
+            return true;
+        }
         if (playedThisSession || !Quality.intro()) {
             this.active = false;
             return false;

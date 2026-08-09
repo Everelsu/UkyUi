@@ -536,7 +536,9 @@ public abstract class MenuScreen extends GuiScreen {
     }
 
     protected boolean isBlackHoleBackground() {
-        return "blackhole".equals(UiConfig.background);
+        // The preset has the last word over the background setting, not the other way
+        // round: potato exists for hardware where the cheapest trace is still too much.
+        return "blackhole".equals(UiConfig.background) && Quality.blackHole();
     }
 
     /** Cached across screens: probing the resource manager every frame is wasteful. */

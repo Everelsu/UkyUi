@@ -48,6 +48,7 @@ uky.settings.shaderPacks.open=Choose a shader pack...
 # "maximum" is what the mod did before the preset existed.
 uky.settings.effects=UKY effects
 uky.settings.graphics=UKY graphics
+uky.graphics.potato=Potato
 uky.graphics.minimal=Minimal
 uky.graphics.balanced=Balanced
 uky.graphics.maximum=Maximum
@@ -113,3 +114,13 @@ uky.server.status.pinging=Asking the server...
 uky.server.status.unresolved=Address not found
 uky.server.status.unreachable=No connection
 uky.server.status.timedOut=No answer
+
+uky.welcome.title=Welcome
+uky.welcome.body=This pack replaces Minecraft's menus. Everything here can be changed later, in Settings.
+uky.welcome.quality=How hard should the menu work?
+uky.welcome.settings=All settings...
+uky.welcome.start=Start
+uky.graphics.potato.hint=No black hole. The backdrop is a flat colour and the menus keep everything else.
+uky.graphics.minimal.hint=The hole is traced small and slowly. For weak or old cards.
+uky.graphics.balanced.hint=Full resolution, no supersampling. Hard to tell from maximum in motion.
+uky.graphics.maximum.hint=No ceiling. Everything is drawn as configured.

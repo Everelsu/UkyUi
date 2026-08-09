@@ -53,6 +53,7 @@ public final class UiConfig {
     public static boolean replaceWorldList = true;
     public static boolean replaceLoadingScreen = true;
     public static boolean replaceDeathScreen = true;
+    public static boolean replacePlayerList = true;
     /**
      * Open the settings once, the first time the title screen is reached.
      *
@@ -323,6 +324,12 @@ public final class UiConfig {
                 "Replace the death screen with the death scene: the picture cuts out, "
                         + "the tape fails, a heart winds down. No buttons — any key or "
                         + "click comes back once it has played.");
+        replacePlayerList = bool(CAT_SCREENS, "replacePlayerList", replacePlayerList,
+                "Replace the Tab player list. Vanilla sizes its box by the server's "
+                        + "player cap rather than by who is actually online, so one "
+                        + "player on a sixty-slot server gets a screen-high panel of "
+                        + "empty rows. This one is as tall as the names in it, sorts "
+                        + "them, shows the ping as a number and marks your own row.");
         showSettingsOnFirstRun = bool(CAT_SCREENS, "showSettingsOnFirstRun", showSettingsOnFirstRun,
                 "Open the settings screen by itself the first time you reach the "
                         + "title screen, so the graphics preset and the rest are found "
@@ -360,6 +367,10 @@ public final class UiConfig {
                         + "at half resolution and four times a second, the intro, the "
                         + "particles, the grain and the background drift are off, and "
                         + "the death scene is toned down. Roughly a fifth of the cost.\n"
+                        + "    potato   - no black hole at all. Every other preset "
+                        + "still traces it, and that trace is the entire cost of this "
+                        + "menu; where even the cheapest one is too much the backdrop "
+                        + "becomes a flat colour and the menus keep everything else.\n"
                         + "This can only ever lower a setting, never raise one: "
                         + "anything you have already turned off stays off at every "
                         + "level, and 'maximum' does not undo your own choices. It is "
