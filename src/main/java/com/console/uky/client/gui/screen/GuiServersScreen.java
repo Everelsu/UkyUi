@@ -1,5 +1,6 @@
 package com.console.uky.client.gui.screen;
 
+import cpw.mods.fml.client.FMLClientHandler;
 import com.console.uky.UkyUI;
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.gui.Transitions;
@@ -11,7 +12,6 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiYesNo;
 import net.minecraft.client.gui.GuiYesNoCallback;
-import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
 import net.minecraft.client.network.OldServerPinger;
@@ -123,25 +123,105 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         clampScroll();
     }
 
+    // ------------------------------------------------------------------ ping --
+
+    private static final int PING_PENDING = 0;
+    private static final int PING_ONLINE = 1;
+    /** The address does not resolve: a typo, or a host that no longer exists. */
+    private static final int PING_UNRESOLVED = 2;
+    /** The address resolves but nothing answered: down, firewalled, wrong port. */
+    private static final int PING_UNREACHABLE = 3;
+    /** Answered nothing at all within {@link #PING_TIMEOUT_MS}. */
+    private static final int PING_TIMED_OUT = 4;
+
+    /**
+     * How long an entry may sit unanswered before it is called a failure.
+     *
+     * {@code OldServerPinger} has no timeout of its own: a host that accepts the
+     * connection and then says nothing leaves the entry pending for as long as the
+     * screen is open. Ten seconds is well past a working server on a bad line.
+     */
+    private static final long PING_TIMEOUT_MS = 10000L;
+
+    /**
+     * One entry's ping, as this screen sees it.
+     *
+     * {@link ServerData} cannot answer the question on its own.
+     * {@code OldServerPinger.func_147224_a} sets {@code pingToServer = -1} at the
+     * <em>start</em> of a probe, not only when one fails, so a negative ping means
+     * "pending or failed" and nothing can tell those apart — every server on the
+     * screen read as unreachable for as long as it was being asked. It also cannot
+     * distinguish a name that does not resolve from a host that does not answer,
+     * which are different problems with different fixes.
+     */
+    private static final class Probe {
+        /** Written by the ping thread, read every frame by the client thread. */
+        volatile int state = PING_PENDING;
+        final long startedAt = System.currentTimeMillis();
+    }
+
+    private Probe[] probes = new Probe[0];
+
+    /**
+     * Five threads, shared and reused, the way vanilla's own server list does it.
+     *
+     * A thread per entry meant a list of forty servers spawned forty threads, and
+     * every press of refresh spawned forty more — none of them bounded by anything.
+     */
+    private static final java.util.concurrent.ExecutorService PINGERS =
+            java.util.concurrent.Executors.newFixedThreadPool(5,
+                    new java.util.concurrent.ThreadFactory() {
+                        @Override
+                        public Thread newThread(Runnable task) {
+                            Thread thread = new Thread(task, "UKY Server Pinger");
+                            // Daemon: a probe against a black-holed address must never
+                            // be the reason the game will not close.
+                            thread.setDaemon(true);
+                            return thread;
+                        }
+                    });
+
     /** Kicks off a ping for every entry; results land asynchronously. */
     private void pingAll() {
-        for (int i = 0; i < this.servers.countServers(); i++) {
+        int count = this.servers.countServers();
+        Probe[] fresh = new Probe[count];
+        for (int i = 0; i < count; i++) {
             final ServerData data = this.servers.getServerData(i);
+            final Probe probe = new Probe();
+            fresh[i] = probe;
+
             data.pingToServer = -2L;
             data.serverMOTD = "";
             data.populationInfo = "";
-            new Thread(new Runnable() {
+
+            PINGERS.execute(new Runnable() {
                 @Override
                 public void run() {
                     try {
                         GuiServersScreen.this.pinger.func_147224_a(data);
+                    } catch (java.net.UnknownHostException e) {
+                        probe.state = PING_UNRESOLVED;
+                        data.populationInfo = "";
                     } catch (Exception e) {
-                        data.pingToServer = -1L;
+                        probe.state = PING_UNREACHABLE;
                         data.populationInfo = "";
                     }
                 }
-            }, "UKY Server Pinger").start();
+            });
         }
+        this.probes = fresh;
+    }
+
+    /**
+     * The probe for an entry, or null if the list has grown since the last ping.
+     *
+     * The array is replaced wholesale rather than resized, so a card drawn between a
+     * server being added and the next ping has nothing to look at. That is a missing
+     * status line for one frame, not an exception.
+     */
+    private Probe probeFor(int index) {
+        Probe[] snapshot = this.probes;
+        return index >= 0 && index < snapshot.length ? snapshot[index] : null;
     }
 
     private int rowCount() {
@@ -314,7 +394,9 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
 
         ServerData data = this.servers.getServerData(index);
-        float hover = this.hoverAmount[index];
+        // The hover array is sized by the layout; a server added since then is drawn
+        // unhighlighted rather than taking the screen down on an index.
+        float hover = index < this.hoverAmount.length ? this.hoverAmount[index] : 0.0F;
         float alpha = this.fadeAlpha;
         float x2 = x + this.tileWidth;
         float y2 = y + this.tileHeight;
@@ -337,12 +419,17 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         this.fontRendererObj.drawString(name, x + 6, (int) (y2 - 28),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
 
-        String motd = data.serverMOTD == null ? "" : data.serverMOTD.replace('\n', ' ');
+        // Blank until the server has actually said something. The pinger writes its
+        // own untranslated "Pinging..." into the MOTD the moment a probe starts, and
+        // that is the status line's job to say, in the player's language.
+        String motd = stateOf(data, index) == PING_ONLINE
+                ? strip(data.serverMOTD).replace('\n', ' ')
+                : "";
         this.fontRendererObj.drawString(
                 fit(motd, this.tileWidth - 12),
                 x + 6, (int) (y2 - 18), Draw.withAlpha(Theme.textDim, 0.85F * alpha));
 
-        drawStatus(data, x + 6, (int) (y2 - 9), alpha);
+        drawStatus(data, index, x + 6, (int) (y2 - 9), alpha);
 
         if (hover > 0.02F) {
             drawCardActions(index, x, y, hover, alpha);
@@ -351,27 +438,79 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
-    /** Ping and population, with a dot coloured by how healthy the ping is. */
-    private void drawStatus(ServerData data, int x, int y, float alpha) {
+    /**
+     * Ping and population, with a dot coloured by how healthy the ping is.
+     *
+     * Every failure says what actually went wrong, in the player's own language.
+     * This used to ask for {@code multiplayer.status.cannot_connect}, which is a 1.8
+     * key: 1.7.10 has no {@code multiplayer.status.*} at all, so what a player saw
+     * on a server that was merely still being asked was the literal untranslated
+     * string "multiplayer.status.cannot_connect" across the card.
+     */
+    private void drawStatus(ServerData data, int index, int x, int y, float alpha) {
         String text;
         int dot;
-        if (data.pingToServer == -2L) {
-            text = "...";
-            dot = Theme.textDim;
-        } else if (data.pingToServer < 0L) {
-            text = I18n.format("multiplayer.status.cannot_connect", new Object[0]);
-            dot = Theme.danger;
-        } else {
-            text = data.pingToServer + " ms";
-            if (data.populationInfo != null && !data.populationInfo.isEmpty()) {
-                text = text + "   " + data.populationInfo.replaceAll("§.", "");
-            }
-            dot = data.pingToServer < 150L ? 0xFF6ECB63
-                    : (data.pingToServer < 400L ? Theme.accent : Theme.danger);
+        int state = stateOf(data, index);
+
+        switch (state) {
+            case PING_ONLINE:
+                text = data.pingToServer + " ms";
+                String population = strip(data.populationInfo);
+                if (!population.isEmpty()) {
+                    text = text + "   " + population;
+                }
+                dot = data.pingToServer < 150L ? 0xFF6ECB63
+                        : (data.pingToServer < 400L ? Theme.accent : Theme.danger);
+                break;
+            case PING_UNRESOLVED:
+                text = I18n.format("uky.server.status.unresolved", new Object[0]);
+                dot = Theme.danger;
+                break;
+            case PING_TIMED_OUT:
+                text = I18n.format("uky.server.status.timedOut", new Object[0]);
+                dot = Theme.danger;
+                break;
+            case PING_UNREACHABLE:
+                text = I18n.format("uky.server.status.unreachable", new Object[0]);
+                dot = Theme.danger;
+                break;
+            default:
+                text = I18n.format("uky.server.status.pinging", new Object[0]);
+                dot = Theme.textDim;
+                break;
         }
+
         Draw.rect(x, y + 1, x + 3, y + 4, Draw.withAlpha(dot, alpha));
-        this.fontRendererObj.drawString(text, x + 7, y,
+        this.fontRendererObj.drawString(fit(text, this.tileWidth - 18), x + 7, y,
                 Draw.withAlpha(Theme.textDim, 0.8F * alpha));
+    }
+
+    /**
+     * What this entry's ping amounts to right now.
+     *
+     * A successful reply is recognised by the ping going non-negative rather than by
+     * the worker reporting it: the reply is handled on the netty thread inside
+     * {@code OldServerPinger}, which has no idea this screen exists.
+     */
+    private int stateOf(ServerData data, int index) {
+        if (data.pingToServer >= 0L) {
+            return PING_ONLINE;
+        }
+        Probe probe = probeFor(index);
+        if (probe == null) {
+            return PING_PENDING;
+        }
+        if (probe.state != PING_PENDING) {
+            return probe.state;
+        }
+        return System.currentTimeMillis() - probe.startedAt > PING_TIMEOUT_MS
+                ? PING_TIMED_OUT
+                : PING_PENDING;
+    }
+
+    /** Colour codes are section signs in this font; the card wants the words only. */
+    private static String strip(String text) {
+        return text == null ? "" : text.replaceAll("§.", "");
     }
 
     private void drawCardActions(int index, int x, float y, float hover, float alpha) {
@@ -420,14 +559,17 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             return null;
         }
         String key = data.serverIP + '|' + encoded.hashCode();
-        ResourceLocation cached = this.icons.get(key);
-        if (cached != null) {
-            return cached;
+        // containsKey, not a null check: a failed decode is cached as null on purpose,
+        // and asking again would re-run ImageIO and re-log the warning every frame for
+        // as long as the screen is open.
+        if (this.icons.containsKey(key)) {
+            return this.icons.get(key);
         }
         try {
             byte[] bytes = Base64.decodeBase64(encoded.getBytes("UTF-8"));
             BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
             if (image == null) {
+                this.icons.put(key, null);
                 return null;
             }
             ResourceLocation location = new ResourceLocation("uky",
@@ -492,8 +634,24 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
+    /**
+     * Joins a server the way FML requires, rather than the way it looks like it works.
+     *
+     * Constructing {@code GuiConnecting} and displaying it is what vanilla appears to
+     * do and is not enough. {@code FMLClientHandler.connectToServer} creates the
+     * {@code playClientBlock} latch as well, and FML's handshake waits on that latch
+     * from the Netty thread the moment login succeeds. Without it,
+     * {@code waitForPlayClient} dereferences null: the handshake dies with an NPE that
+     * never reaches the player, FML falls back to "Unexpected packet during modded
+     * negotiation - assuming vanilla", and the client sits on the connecting screen
+     * until it times out. Every modded server, every time.
+     *
+     * <p>It also does the blocked-server check that puts up {@code GuiAccessDenied},
+     * which going around it silently skipped, and it displays the screen itself — so
+     * there is nothing left for this method to do but hand over.
+     */
     private void join(ServerData data) {
-        this.mc.displayGuiScreen(new GuiConnecting(this, this.mc, data));
+        FMLClientHandler.instance().connectToServer(this, data);
     }
 
     // ---- adding, editing, connecting ----------------------------------------

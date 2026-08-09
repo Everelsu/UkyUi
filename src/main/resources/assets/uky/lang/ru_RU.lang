@@ -38,6 +38,15 @@ uky.settings.renderer=Рендер
 uky.settings.shaderPacks=Шейдерные пакеты
 uky.settings.shaderPacks.open=Выбрать шейдерный пакет...
 
+# ---- пресет графики ----
+# Один потолок над всем, что рисует мод. Он только понижает настройки,
+# поэтому «Максимально» — это то, как мод работал до появления пресета.
+uky.settings.effects=Эффекты UKY
+uky.settings.graphics=Графика UKY
+uky.graphics.minimal=Минимально
+uky.graphics.balanced=Средне
+uky.graphics.maximum=Максимально
+
 # ---- сцена смерти ----
 # По шесть строк на причину. Сцена выбирает одну на всю смерть.
 uky.death.prompt=Нажми любую клавишу или кликни, чтобы вернуться
@@ -91,3 +100,8 @@ uky.death.mob.3=Тебя посчитали, а не победили.
 uky.death.mob.4=Оно всё ещё там.
 uky.death.mob.5=Удар прошёл. Больше ничего.
 uky.death.mob.6=Ты сам дал последнюю щель.
+
+uky.server.status.pinging=Опрашиваем сервер...
+uky.server.status.unresolved=Адрес не найден
+uky.server.status.unreachable=Нет соединения
+uky.server.status.timedOut=Сервер не ответил

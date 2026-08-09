@@ -396,7 +396,7 @@ public final class UkySplash {
 
         /** Type-only header used when the pack ships no logo image. */
         private void drawWordmark(float w, float h, float alpha) {
-            String text = UiConfig.title;
+            String text = UiConfig.splashSafe(UiConfig.title);
             if (font == null || text == null || text.isEmpty()) {
                 return;
             }
@@ -470,7 +470,10 @@ public final class UkySplash {
 
         private void drawBar(ProgressBar bar, float x, float y, float width, float alpha, float progress) {
             if (font != null) {
-                drawCentered(describe(bar), x + width / 2.0F, y - 12.0F, 0xFFFFFF, 0.75F * alpha);
+                // Guarded too: a bar's caption is another mod's name, and nothing stops
+                // a mod being called something this font sheet has no glyphs for.
+                drawCentered(UiConfig.splashSafe(describe(bar)),
+                        x + width / 2.0F, y - 12.0F, 0xFFFFFF, 0.75F * alpha);
             }
             // Track: a hairline so the full length always reads, even at 0%.
             rectRGBA(x, y, x + width, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.18F * alpha);
@@ -497,7 +500,8 @@ public final class UkySplash {
             float phase = (elapsed % period) / period;
             float tipAlpha = clamp01(Math.min(phase / 0.15F, (1.0F - phase) / 0.15F));
 
-            drawCentered(tips[index], w / 2.0F, h - 26.0F, 0xFFFFFF, tipAlpha * 0.5F * alpha);
+            drawCentered(UiConfig.splashSafe(tips[index]), w / 2.0F, h - 26.0F,
+                    0xFFFFFF, tipAlpha * 0.5F * alpha);
         }
 
         private static String describe(ProgressBar bar) {

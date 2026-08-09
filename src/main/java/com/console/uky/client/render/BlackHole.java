@@ -1,6 +1,7 @@
 package com.console.uky.client.render;
 
 import com.console.uky.UkyUI;
+import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ResourceLocation;
@@ -444,7 +445,7 @@ public final class BlackHole {
         float halfH = shadow * FRAME_HALF_H;
         float halfW = shadow * FRAME_HALF_W;
 
-        int percent = Math.min(200, Math.max(50, UiConfig.blackHoleResolution));
+        int percent = Quality.blackHoleResolution();
         // Always through the buffer now, even at 100%. It costs one full-screen blit
         // and buys the ability to keep last frame's trace — see traceIsStale.
         if (offscreen.isUsable()
@@ -457,23 +458,21 @@ public final class BlackHole {
     // ---- trace rate ----------------------------------------------------------
 
     /**
-     * Gap between traces on a settled menu.
+     * Gap between traces, idle and while the camera is moving.
      *
      * The trace is the whole cost of this effect — tens of milliseconds of it — so
      * what governs the load is how often it runs, not how fast it is. Seven times a
      * second is enough to carry the disk's drift once the dissolve is smoothing
      * between them, and it is roughly a seventh of the work of tracing every frame.
+     * A screen change swings the pose over a few hundred milliseconds, and dissolving
+     * across that at the idle rate reads as the hole lagging behind the screen, so the
+     * rate goes up for as long as the movement lasts and drops back after.
+     *
+     * <p>Both numbers come from {@link Quality}: they are the cheapest of the three
+     * factors in this effect's cost to spend, so they are the first thing the graphics
+     * preset lowers.
      */
     private static final long TRACE_INTERVAL_NANOS = 140_000_000L;
-
-    /**
-     * Gap while the camera is still easing to a new framing.
-     *
-     * A screen change swings the pose over a few hundred milliseconds. Dissolving
-     * across that at the idle rate reads as the hole lagging behind the screen, so
-     * the rate goes up for as long as the movement lasts and drops back after.
-     */
-    private static final long TRACE_INTERVAL_MOVING_NANOS = 50_000_000L;
 
     /** Pose change per trace above which the camera counts as still moving. */
     private static final float POSE_MOVING_EPSILON = 0.0015F;
@@ -526,7 +525,7 @@ public final class BlackHole {
 
         boolean moving = !Float.isNaN(lastTracePose)
                 && Math.abs(pose - lastTracePose) > POSE_MOVING_EPSILON;
-        long interval = moving ? TRACE_INTERVAL_MOVING_NANOS : TRACE_INTERVAL_NANOS;
+        long interval = Quality.traceIntervalNanos(moving);
 
         if (Float.isNaN(lastTracePose) || now - lastTraceNanos >= interval) {
             lastTraceNanos = now;
@@ -742,7 +741,7 @@ public final class BlackHole {
         shader.set("uSpin", this.spin);
         shader.set("uIntensity", intensity);
         shader.set("uGain", DISK_GAIN * SHADER_GAIN_TRIM);
-        shader.set("uSteps", UiConfig.blackHoleQuality);
+        shader.set("uSteps", Quality.blackHoleQuality());
 
         setColour("uHot", UiConfig.colorBlackHoleHot);
         setColour("uMid", UiConfig.colorBlackHoleMid);
@@ -914,9 +913,10 @@ public final class BlackHole {
      */
     private void drawStars(float cx, float cy, float shadow, float einstein, float intensity) {
         float scale = this.height;
+        int stars = Quality.starCount(STAR_COUNT);
 
         GL11.glBegin(GL11.GL_QUADS);
-        for (int i = 0; i < STAR_COUNT; i++) {
+        for (int i = 0; i < stars; i++) {
             float sx = (starX[i] + drift) % 3.0F;
             if (sx > 1.5F) {
                 sx -= 3.0F;
@@ -983,8 +983,12 @@ public final class BlackHole {
     // ---- infall overlay ------------------------------------------------------
 
     private void drawInfall(float cx, float cy, float shadow, float intensity) {
+        int count = Quality.infallCount(INFALL_COUNT);
+        if (count <= 0) {
+            return;
+        }
         GL11.glBegin(GL11.GL_QUADS);
-        for (int i = 0; i < INFALL_COUNT; i++) {
+        for (int i = 0; i < count; i++) {
             float r = fallR[i];
             float tilt = INFALL_TILT + (1.0F - INFALL_TILT) * fallIncline[i];
             float cos = (float) Math.cos(fallTheta[i]);
