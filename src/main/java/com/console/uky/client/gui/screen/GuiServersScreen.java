@@ -1,6 +1,5 @@
 package com.console.uky.client.gui.screen;
 
-import cpw.mods.fml.client.FMLClientHandler;
 import com.console.uky.UkyUI;
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.gui.Transitions;
@@ -12,6 +11,7 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiYesNo;
 import net.minecraft.client.gui.GuiYesNoCallback;
+import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
 import net.minecraft.client.network.OldServerPinger;
@@ -492,24 +492,8 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
-    /**
-     * Joins a server the way FML requires, rather than the way it looks like it works.
-     *
-     * Constructing {@code GuiConnecting} and displaying it is what vanilla appears to
-     * do and is not enough. {@code FMLClientHandler.connectToServer} creates the
-     * {@code playClientBlock} latch as well, and FML's handshake waits on that latch
-     * from the Netty thread the moment login succeeds. Without it,
-     * {@code waitForPlayClient} dereferences null: the handshake dies with an NPE that
-     * never reaches the player, FML falls back to "Unexpected packet during modded
-     * negotiation - assuming vanilla", and the client sits on the connecting screen
-     * until it times out. Every modded server, every time.
-     *
-     * <p>It also does the blocked-server check that puts up {@code GuiAccessDenied},
-     * which going around it silently skipped, and it displays the screen itself — so
-     * there is nothing left for this method to do but hand over.
-     */
     private void join(ServerData data) {
-        FMLClientHandler.instance().connectToServer(this, data);
+        this.mc.displayGuiScreen(new GuiConnecting(this, this.mc, data));
     }
 
     // ---- adding, editing, connecting ----------------------------------------

@@ -10,7 +10,6 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.client.splash.UkySplash;
-import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import cpw.mods.fml.client.GuiModList;
 import net.minecraft.client.gui.GuiButton;
@@ -537,7 +536,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         float zoom = 1.10F;
         float panX = this.parallaxX * 0.35F;
         float panY = this.parallaxY * 0.25F;
-        if (Quality.backgroundDrift()) {
+        if (UiConfig.backgroundDrift) {
             zoom += (float) Math.sin(this.elapsed * 0.06F) * 0.03F;
             panX += (float) Math.sin(this.elapsed * 0.041F) * 0.25F;
             panY += (float) Math.cos(this.elapsed * 0.029F) * 0.18F;
@@ -582,50 +581,6 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             }
             drawCorners();
         }
-    }
-
-    /**
-     * On the tick rather than in the draw, so the one place this screen replaces
-     * itself is not in the middle of its own frame.
-     */
-    @Override
-    public void updateScreen() {
-        super.updateScreen();
-        offerFirstRunSettings();
-    }
-
-    /** True once this launch has done it, so it cannot fire twice in a session. */
-    private static boolean firstRunSettingsOffered;
-
-    /**
-     * Hands a brand new install the settings screen, once.
-     *
-     * There is a good deal in here that nobody would think to go looking for — the
-     * graphics preset most of all, which is the thing somebody on a weak card needs
-     * before they have formed an opinion about whether the menu is worth keeping. A
-     * screen shown once beats a settings screen nobody opens.
-     *
-     * <p>Held until the intro has finished and the menu has arrived, rather than
-     * fired from {@code initGui}: opening it over a title screen that has not
-     * appeared yet reads as the game having started somewhere else. By this point the
-     * player has seen where they are, and the settings then slide in over it in the
-     * same seamless move any other menu change uses.
-     */
-    private void offerFirstRunSettings() {
-        if (firstRunSettingsOffered
-                || !UiConfig.showSettingsOnFirstRun
-                || this.intro.isActive()
-                || this.contentAlpha < 0.85F
-                || Transitions.isBusy()
-                || isClosing()) {
-            return;
-        }
-        firstRunSettingsOffered = true;
-        // Recorded before the screen opens, not after it closes: leaving by any route
-        // — Escape, Done, or the window's close button — still counts as having been
-        // shown it, and none of those routes comes back through here.
-        UiConfig.setShowSettingsOnFirstRun(false);
-        switchTo(GuiSettingsScreen.onVideoTab(this, this.mc.gameSettings));
     }
 
     private void startMenuMusic() {

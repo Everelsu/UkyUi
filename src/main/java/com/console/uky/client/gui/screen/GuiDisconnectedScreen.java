@@ -34,9 +34,6 @@ public class GuiDisconnectedScreen extends GuiScreen {
     private int panelY1;
     private int panelX2;
     private int panelY2;
-    /** Size the layout above was computed for; -1 until it has been. */
-    private int laidOutWidth = -1;
-    private int laidOutHeight = -1;
 
     private long lastFrameNanos = System.nanoTime();
     private float fade;
@@ -52,62 +49,21 @@ public class GuiDisconnectedScreen extends GuiScreen {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void initGui() {
         this.buttonList.clear();
-        layout();
-    }
-
-    /**
-     * Lays the panel out, if that has not already happened at this size.
-     *
-     * Called from the draw and from the click rather than only from {@code initGui},
-     * because {@code initGui} is not guaranteed to run at all: Forge lets any mod
-     * cancel {@code GuiScreenEvent.InitGuiEvent.Pre}, and
-     * {@code GuiScreen.setWorldAndResolution} then fills in the width, the height and
-     * the font renderer and skips it. This screen came up on a lost connection with
-     * {@code lines} still null and took the game down on its first frame — and the
-     * crash report named this mod, since this mod is what was drawing.
-     *
-     * <p>The layout depends on nothing but the size and the kick message, so
-     * recomputing it whenever the size has changed is both the fix and the resize
-     * handling, and it costs two integer comparisons a frame.
-     */
-    private void ensureLayout() {
-        if (this.laidOutWidth != this.width || this.laidOutHeight != this.height) {
-            layout();
-        }
-    }
-
-    private void layout() {
-        this.laidOutWidth = this.width;
-        this.laidOutHeight = this.height;
 
         int panelWidth = Math.min((int) (this.width * 0.66F), 380);
         this.panelX1 = (this.width - panelWidth) / 2;
         this.panelX2 = this.panelX1 + panelWidth;
 
         String text = this.reason == null ? "" : this.reason.getFormattedText();
-        // Never below a width the wrapper can work with: a tiny window would
-        // otherwise ask it to fit text into nothing.
-        this.lines = font().listFormattedStringToWidth(text, Math.max(20, panelWidth - 36));
+        this.lines = this.fontRendererObj.listFormattedStringToWidth(text, panelWidth - 36);
 
         int body = Math.max(1, this.lines.size()) * 10;
         int panelHeight = 44 + body + 46;
         this.panelY1 = Math.max(20, (this.height - panelHeight) / 2);
         this.panelY2 = this.panelY1 + panelHeight;
-    }
-
-    /**
-     * The font renderer, from the game if this screen was never handed one.
-     *
-     * Same reason as {@link #ensureLayout}: {@code fontRendererObj} is assigned in
-     * {@code setWorldAndResolution}, and a screen can reach a draw without that
-     * having happened in the order it expects.
-     */
-    private net.minecraft.client.gui.FontRenderer font() {
-        return this.fontRendererObj != null
-                ? this.fontRendererObj
-                : net.minecraft.client.Minecraft.getMinecraft().fontRenderer;
     }
 
     private int buttonY() {
@@ -116,7 +72,6 @@ public class GuiDisconnectedScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        ensureLayout();
         this.mouseX = mouseX;
         this.mouseY = mouseY;
 
@@ -140,16 +95,16 @@ public class GuiDisconnectedScreen extends GuiScreen {
         Draw.border(this.panelX1, this.panelY1, this.panelX2, this.panelY2, 1.0F,
                 Draw.withAlpha(Theme.text, 0.10F * a));
 
-        int headingWidth = font().getStringWidth(this.heading);
-        font().drawString(this.heading,
+        int headingWidth = this.fontRendererObj.getStringWidth(this.heading);
+        this.fontRendererObj.drawString(this.heading,
                 (this.width - headingWidth) / 2, this.panelY1 + 16,
                 Draw.withAlpha(Theme.danger, 0.95F * a));
 
         int y = this.panelY1 + 40;
         for (int i = 0; i < this.lines.size(); i++) {
             String line = String.valueOf(this.lines.get(i));
-            int width = font().getStringWidth(line);
-            font().drawString(line, (this.width - width) / 2, y + i * 10,
+            int width = this.fontRendererObj.getStringWidth(line);
+            this.fontRendererObj.drawString(line, (this.width - width) / 2, y + i * 10,
                     Draw.withAlpha(Theme.text, 0.85F * a));
         }
 
@@ -169,14 +124,13 @@ public class GuiDisconnectedScreen extends GuiScreen {
         Draw.rect(x, y, x + width, y + 20,
                 Draw.withAlpha(fill, (0.62F + this.backHover * 0.18F) * this.fade));
         String label = I18n.format("gui.toMenu", new Object[0]);
-        int labelWidth = font().getStringWidth(label);
-        font().drawString(label, x + (width - labelWidth) / 2, y + 6,
+        int labelWidth = this.fontRendererObj.getStringWidth(label);
+        this.fontRendererObj.drawString(label, x + (width - labelWidth) / 2, y + 6,
                 Draw.withAlpha(0x0B0B0E, this.fade));
     }
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
-        ensureLayout();
         int width = this.panelX2 - 18 - (this.panelX1 + 18);
         int x = this.panelX1 + 18;
         int y = buttonY();

@@ -38,15 +38,6 @@ uky.settings.renderer=Рендер
 uky.settings.shaderPacks=Шейдерные пакеты
 uky.settings.shaderPacks.open=Выбрать шейдерный пакет...
 
-# ---- пресет графики ----
-# Один потолок над всем, что рисует мод. Он только понижает настройки,
-# поэтому «Максимально» — это то, как мод работал до появления пресета.
-uky.settings.effects=Эффекты UKY
-uky.settings.graphics=Графика UKY
-uky.graphics.minimal=Минимально
-uky.graphics.balanced=Средне
-uky.graphics.maximum=Максимально
-
 # ---- сцена смерти ----
 # По шесть строк на причину. Сцена выбирает одну на всю смерть.
 uky.death.prompt=Нажми любую клавишу или кликни, чтобы вернуться

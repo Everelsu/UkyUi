@@ -18,9 +18,9 @@ import net.minecraft.client.resources.I18n;
 import net.minecraft.util.ChatAllowedCharacters;
 import net.minecraft.world.WorldSettings;
 import net.minecraft.world.WorldType;
-import net.minecraft.world.storage.WorldInfo;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -67,22 +67,6 @@ public class GuiCreateWorldScreen extends MenuScreen {
     private int selectedType;
     private final List<Integer> types = new ArrayList<Integer>();
 
-    /**
-     * Which page of world types is on screen.
-     *
-     * A pack with a worldgen mod or three can register a dozen creatable types, and
-     * they all have to be reachable — a type you cannot select is a type the mod
-     * might as well not have registered. The grid below shows as many as the space
-     * honestly holds and pages through the rest.
-     */
-    private int typePage;
-    private int typeColumns = 1;
-    private int typeRows = 1;
-    /** Height of one row of type tiles; {@link #typeHeight} is the whole block. */
-    private int typeRowHeight;
-    private int typePerPage = 1;
-    private int typePageCount = 1;
-
     private boolean generateStructures = true;
     private boolean bonusChest;
     private boolean allowCheats;
@@ -109,8 +93,6 @@ public class GuiCreateWorldScreen extends MenuScreen {
     private float createHover;
     private float backHover;
     private float customizeHover;
-    private float prevPageHover;
-    private float nextPageHover;
 
     /**
      * Eased weight of the hardcore mood, 0 to 1.
@@ -125,53 +107,8 @@ public class GuiCreateWorldScreen extends MenuScreen {
     private int mouseX;
     private int mouseY;
 
-    /**
-     * Name and seed to open with, when this screen was not opened blank.
-     *
-     * The fields themselves are built in {@link #buildLayout()}, which runs after the
-     * constructor and again on every resize, so a value set on the widget here would
-     * be thrown away before it was ever seen.
-     */
-    private String initialName;
-    private String initialSeed;
-
     public GuiCreateWorldScreen(GuiScreen parent) {
         super(parent);
-    }
-
-    /**
-     * World creation pre-filled from an existing world — vanilla's "Re-Create".
-     *
-     * The stock world list has this button and ours had dropped it, which is a
-     * capability lost rather than a control moved: it is the only way to get a second
-     * world on the same seed and the same generator settings without writing the seed
-     * down by hand first, and the settings it copies (generator options above all) are
-     * not shown anywhere a player could copy them from.
-     *
-     * <p>The mapping is vanilla's own, from {@code GuiCreateWorld.func_146318_a},
-     * including the copy-of name — this should produce the same world the stock button
-     * would, or it is not the same feature.
-     */
-    public static GuiCreateWorldScreen recreating(GuiScreen parent, WorldInfo info) {
-        GuiCreateWorldScreen screen = new GuiCreateWorldScreen(parent);
-        screen.initialName = I18n.format("selectWorld.newWorld.copyOf",
-                new Object[] { info.getWorldName() });
-        screen.initialSeed = String.valueOf(info.getSeed());
-        screen.selectedType = info.getTerrainType().getWorldTypeID();
-        screen.generatorOptions = info.getGeneratorOptions();
-        screen.generateStructures = info.isMapFeaturesEnabled();
-        screen.allowCheats = info.areCommandsAllowed();
-
-        if (info.isHardcoreModeEnabled()) {
-            screen.selectedMode = 1;
-        } else if (info.getGameType().isCreative()) {
-            screen.selectedMode = 2;
-        } else {
-            screen.selectedMode = 0;
-        }
-        // The bonus chest is deliberately not carried over, exactly as in vanilla: it
-        // is a one-off at spawn rather than a property of the world being copied.
-        return screen;
     }
 
     @Override
@@ -210,18 +147,15 @@ public class GuiCreateWorldScreen extends MenuScreen {
         int bottomLimit = this.height - 20;
         int actionHeight = 20;
 
-        // Name and seed fields take a fixed strip; the three tile sections share the
+        // Name and seed fields take a fixed strip; the three tile rows share the
         // rest in a 5 : 4 : 3 ratio, which keeps the mode tiles readable when space
-        // is tight. The 4 is one row of world types; layoutTypeGrid then spends any
-        // slack left over on further rows of them, and pages whatever still does not
-        // fit rather than growing past the space.
+        // is tight.
         int fields = 44;
         int available = Math.max(80, bottomLimit - headerBottom - fields - actionHeight - 24);
 
         this.modeHeight = clamp(available * 5 / 12, 34, 62);
-        this.typeRowHeight = clamp(available * 4 / 12, 24, 40);
+        this.typeHeight = clamp(available * 4 / 12, 26, 44);
         this.toggleHeight = clamp(available * 3 / 12, 18, 26);
-        layoutTypeGrid(available);
 
         int tiles = this.modeHeight + this.typeHeight + this.toggleHeight;
         int gap = clamp((available - tiles) / 2, 10, 30);
@@ -242,12 +176,8 @@ public class GuiCreateWorldScreen extends MenuScreen {
         int fieldWidth = (this.contentWidth - 12) / 2;
         String name = this.nameField != null
                 ? this.nameField.getText()
-                : (this.initialName != null
-                        ? this.initialName
-                        : I18n.format("selectWorld.newWorld", new Object[0]));
-        String seed = this.seedField != null
-                ? this.seedField.getText()
-                : (this.initialSeed != null ? this.initialSeed : "");
+                : I18n.format("selectWorld.newWorld", new Object[0]);
+        String seed = this.seedField != null ? this.seedField.getText() : "";
 
         this.nameField = new GuiTextField(this.fontRendererObj,
                 this.contentX + 1, blockTop + 13, fieldWidth - 2, 16);
@@ -266,62 +196,6 @@ public class GuiCreateWorldScreen extends MenuScreen {
 
     private static int clamp(int value, int min, int max) {
         return value < min ? min : (value > max ? max : value);
-    }
-
-    /**
-     * Shapes the world-type grid: how many columns, how many rows, how many pages.
-     *
-     * This used to be one row of at most four, with the leftovers reachable only by
-     * clicking the tile that was already selected — which rotated the row. Nothing on
-     * screen said so, so a modded type past the fourth was, in practice, unselectable:
-     * you had to guess that a tile doing nothing visible was in fact a paging control.
-     * Now the grid takes as many rows as the space genuinely holds, and anything still
-     * left over is paged with arrows that are drawn, labelled and countable.
-     *
-     * @param available vertical space the three tile rows share
-     */
-    private void layoutTypeGrid(int available) {
-        int count = this.types.size();
-
-        // Roughly 150 units is what a type tile needs before its label starts being
-        // cut; below two columns the grid is not a grid and the tiles look like a
-        // list that lost its rows.
-        this.typeColumns = clamp(this.contentWidth / 150, 2, 4);
-        this.typeColumns = Math.max(1, Math.min(this.typeColumns, count));
-
-        // What is left for the type block once the other two rows and the minimum air
-        // between them are taken out. Rows are added only while they actually fit —
-        // a second row squeezed into a first row's space is worse than a page arrow.
-        int spare = available - this.modeHeight - this.toggleHeight - 20;
-        int fits = Math.max(1, (spare + TILE_GAP) / (this.typeRowHeight + TILE_GAP));
-        int wanted = (count + this.typeColumns - 1) / this.typeColumns;
-        this.typeRows = Math.max(1, Math.min(Math.min(fits, wanted), 3));
-
-        this.typeHeight = this.typeRows * this.typeRowHeight
-                + (this.typeRows - 1) * TILE_GAP;
-
-        this.typePerPage = Math.max(1, this.typeColumns * this.typeRows);
-        this.typePageCount = Math.max(1, (count + this.typePerPage - 1) / this.typePerPage);
-
-        // Open on the page the current selection is on. Anything else means the screen
-        // can come back from a resize showing a page the selected type is not on, with
-        // no tile lit anywhere.
-        int slot = this.types.indexOf(Integer.valueOf(this.selectedType));
-        this.typePage = slot < 0 ? 0 : slot / this.typePerPage;
-    }
-
-    /** Width of one type tile in the current grid. */
-    private int typeTileWidth() {
-        return (this.contentWidth - TILE_GAP * (this.typeColumns - 1)) / this.typeColumns;
-    }
-
-    /** Screen rect of the tile in grid cell {@code cell}, as {x, y}. */
-    private int typeTileX(int cell) {
-        return this.contentX + (cell % this.typeColumns) * (typeTileWidth() + TILE_GAP);
-    }
-
-    private int typeTileY(int cell) {
-        return this.typeY + (cell / this.typeColumns) * (this.typeRowHeight + TILE_GAP);
     }
 
     /** Every world type that can actually be created, mods included. */
@@ -553,127 +427,48 @@ public class GuiCreateWorldScreen extends MenuScreen {
 
     private void drawTypes() {
         drawSectionLabel(I18n.format("selectWorld.mapType", new Object[0]), this.typeY - 12);
-        drawTypePager();
 
         int count = this.types.size();
-        int first = this.typePage * this.typePerPage;
-        int tileWidth = typeTileWidth();
+        int columns = Math.min(4, Math.max(1, count));
+        int tileWidth = (this.contentWidth - TILE_GAP * (columns - 1)) / columns;
 
-        for (int cell = 0; cell < this.typePerPage; cell++) {
-            int slot = first + cell;
-            if (slot >= count) {
-                break;
-            }
-            int typeIndex = this.types.get(slot).intValue();
+        for (int i = 0; i < count && i < columns; i++) {
+            int typeIndex = this.types.get(i).intValue();
             WorldType type = WorldType.worldTypes[typeIndex];
-            int x = typeTileX(cell);
-            int y = typeTileY(cell);
-            boolean over = inside(x, y, tileWidth, this.typeRowHeight);
-            this.typeHover[slot] = Ease.approach(this.typeHover[slot], over ? 1.0F : 0.0F,
+            int x = this.contentX + i * (tileWidth + TILE_GAP);
+            boolean over = inside(x, this.typeY, tileWidth, this.typeHeight);
+            this.typeHover[i] = Ease.approach(this.typeHover[i], over ? 1.0F : 0.0F,
                     0.05F, this.delta);
 
             boolean selected = typeIndex == this.selectedType;
-            drawTile(x, y, tileWidth, this.typeRowHeight, this.typeHover[slot],
+            drawTile(x, this.typeY, tileWidth, this.typeHeight, this.typeHover[i],
                     selected, false, true);
 
             int tint = Draw.withAlpha(selected ? Theme.accent
-                    : Draw.mix(Theme.textDim, Theme.accent, this.typeHover[slot]), this.fadeAlpha);
-            float cy = y + this.typeRowHeight * 0.5F;
-            float iconSize = Math.min(14.0F, this.typeRowHeight * 0.5F);
-            String name = type.getWorldTypeName().toLowerCase();
-            if (name.contains("flat")) {
+                    : Draw.mix(Theme.textDim, Theme.accent, this.typeHover[i]), this.fadeAlpha);
+            float cy = this.typeY + this.typeHeight * 0.5F;
+            float iconSize = Math.min(14.0F, this.typeHeight * 0.5F);
+            if (type.getWorldTypeName().toLowerCase().contains("flat")) {
                 Icons.flat(x + 13, cy, iconSize, tint);
-            } else if (name.contains("large") || name.contains("amplified")) {
+            } else if (type.getWorldTypeName().toLowerCase().contains("large")) {
                 Icons.globe(x + 13, cy, iconSize, tint);
             } else {
                 Icons.terrain(x + 13, cy, iconSize, tint);
             }
 
-            String label = fit(typeLabel(type), tileWidth - 30);
+            String label = fit(
+                    I18n.format(type.getTranslateName(), new Object[0]), tileWidth - 30);
             this.fontRendererObj.drawString(label, x + 24, (int) (cy - 4),
                     Draw.withAlpha(selected ? Theme.textHover : Theme.text, this.fadeAlpha));
         }
-    }
 
-    /**
-     * What to call a world type.
-     *
-     * Vanilla's own types have a translation; a mod's frequently does not, and
-     * {@code I18n.format} hands back the untranslated key when it finds no entry —
-     * so the tile would read "generator.mymod.skyland" instead of a name. The
-     * registered type name is at least a word, which is the whole point of showing it.
-     */
-    private static String typeLabel(WorldType type) {
-        String key = type.getTranslateName();
-        String translated = I18n.format(key, new Object[0]);
-        return translated.equals(key) ? type.getWorldTypeName() : translated;
-    }
-
-    /**
-     * "&lt; 2/3 &gt;" beside the section heading, when there is more than one page.
-     *
-     * Drawn on the heading's own line rather than under the grid: that is where the
-     * eye already is when it is reading what this row of tiles is, and it puts the
-     * count — the part that says there is more to see — next to the words rather than
-     * at the bottom of a block the player has already decided is all of it.
-     */
-    private void drawTypePager() {
-        if (this.typePageCount <= 1) {
-            return;
+        // More types than fit on one row is a modded situation; the extras are
+        // reachable by clicking the row, which cycles.
+        if (count > columns) {
+            this.fontRendererObj.drawString("+" + (count - columns),
+                    this.contentX + this.contentWidth - 14, this.typeY - 12,
+                    Draw.withAlpha(Theme.textDim, 0.8F * this.fadeAlpha));
         }
-        int y = this.typeY - 12;
-        boolean overPrev = isOverPrevPage();
-        boolean overNext = isOverNextPage();
-        this.prevPageHover = Ease.approach(this.prevPageHover, overPrev ? 1.0F : 0.0F,
-                0.05F, this.delta);
-        this.nextPageHover = Ease.approach(this.nextPageHover, overNext ? 1.0F : 0.0F,
-                0.05F, this.delta);
-
-        String counter = (this.typePage + 1) + "/" + this.typePageCount;
-        int counterWidth = this.fontRendererObj.getStringWidth(counter);
-        int right = this.contentX + this.contentWidth;
-
-        this.fontRendererObj.drawString(counter, right - PAGER_ARROW_ROOM - counterWidth, y,
-                Draw.withAlpha(Theme.textDim, 0.9F * this.fadeAlpha));
-        Icons.back(right - PAGER_ARROW_ROOM - counterWidth - 10, y + 4, 8,
-                Draw.withAlpha(Draw.mix(Theme.textDim, Theme.accent, this.prevPageHover),
-                        this.fadeAlpha));
-        Icons.forward(right - 5, y + 4, 8,
-                Draw.withAlpha(Draw.mix(Theme.textDim, Theme.accent, this.nextPageHover),
-                        this.fadeAlpha));
-    }
-
-    /** Space kept clear to the right of the page counter for the forward arrow. */
-    private static final int PAGER_ARROW_ROOM = 14;
-
-    private boolean isOverPrevPage() {
-        if (this.typePageCount <= 1) {
-            return false;
-        }
-        String counter = (this.typePage + 1) + "/" + this.typePageCount;
-        int right = this.contentX + this.contentWidth
-                - PAGER_ARROW_ROOM - this.fontRendererObj.getStringWidth(counter);
-        // Generous: the arrow itself is eight units across, which is not a target.
-        return this.mouseX >= right - 18 && this.mouseX <= right - 2
-                && this.mouseY >= this.typeY - 16 && this.mouseY <= this.typeY - 2;
-    }
-
-    private boolean isOverNextPage() {
-        if (this.typePageCount <= 1) {
-            return false;
-        }
-        int right = this.contentX + this.contentWidth;
-        return this.mouseX >= right - 14 && this.mouseX <= right
-                && this.mouseY >= this.typeY - 16 && this.mouseY <= this.typeY - 2;
-    }
-
-    /** Moves the grid {@code step} pages along, wrapping at either end. */
-    private void turnTypePage(int step) {
-        if (this.typePageCount <= 1) {
-            return;
-        }
-        this.typePage = (this.typePage + step + this.typePageCount) % this.typePageCount;
-        click();
     }
 
     private void drawToggles() {
@@ -899,31 +694,24 @@ public class GuiCreateWorldScreen extends MenuScreen {
     }
 
     private boolean clickedType() {
-        if (isOverPrevPage()) {
-            turnTypePage(-1);
-            return true;
-        }
-        if (isOverNextPage()) {
-            turnTypePage(1);
-            return true;
-        }
-
         int count = this.types.size();
-        int first = this.typePage * this.typePerPage;
-        int tileWidth = typeTileWidth();
+        int columns = Math.min(4, Math.max(1, count));
+        int tileWidth = (this.contentWidth - TILE_GAP * (columns - 1)) / columns;
 
-        for (int cell = 0; cell < this.typePerPage; cell++) {
-            int slot = first + cell;
-            if (slot >= count) {
-                break;
-            }
-            if (!inside(typeTileX(cell), typeTileY(cell), tileWidth, this.typeRowHeight)) {
+        for (int i = 0; i < count && i < columns; i++) {
+            int x = this.contentX + i * (tileWidth + TILE_GAP);
+            if (!inside(x, this.typeY, tileWidth, this.typeHeight)) {
                 continue;
             }
-            // A tile does one thing and it is the obvious one. Clicking the selected
-            // tile used to rotate the row, which is how the extra types were reached;
-            // the pager does that now, visibly.
-            this.selectedType = this.types.get(slot).intValue();
+            int typeIndex = this.types.get(i).intValue();
+            if (typeIndex == this.selectedType && count > columns) {
+                // Clicking the tile that is already selected pages the row along,
+                // so extra modded types stay reachable. Rotating rather than
+                // swapping keeps every entry in the list exactly once.
+                Collections.rotate(this.types, -columns);
+                typeIndex = this.types.get(i).intValue();
+            }
+            this.selectedType = typeIndex;
             click();
             return true;
         }
@@ -979,28 +767,6 @@ public class GuiCreateWorldScreen extends MenuScreen {
         }
         this.nameField.textboxKeyTyped(typedChar, keyCode);
         this.seedField.textboxKeyTyped(typedChar, keyCode);
-    }
-
-    /**
-     * The wheel turns the type pages while the pointer is over them.
-     *
-     * The arrows are the discoverable control; this is the one anybody who has already
-     * worked out that the grid has pages will reach for first.
-     */
-    @Override
-    public void handleMouseInput() {
-        super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
-        if (wheel == 0 || this.typePageCount <= 1) {
-            return;
-        }
-        boolean overGrid = this.mouseX >= this.contentX
-                && this.mouseX <= this.contentX + this.contentWidth
-                && this.mouseY >= this.typeY - 16
-                && this.mouseY <= this.typeY + this.typeHeight;
-        if (overGrid) {
-            turnTypePage(wheel > 0 ? -1 : 1);
-        }
     }
 
     @Override

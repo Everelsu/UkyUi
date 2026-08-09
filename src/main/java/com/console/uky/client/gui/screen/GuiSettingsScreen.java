@@ -12,7 +12,6 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import com.console.uky.config.Quality;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiSnooper;
@@ -54,7 +53,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int COLUMN_GAP = 22;
 
     /** Rows each tab lays out, used to size the whole grid so it always fits. */
-    private static final int[] TAB_ROWS = {5, 7, 4, 3};
+    private static final int[] TAB_ROWS = {5, 6, 4, 3};
 
     private final GameSettings settings;
     /** Remembered across openings: coming back to the tab you left is the least surprising. */
@@ -169,18 +168,6 @@ public class GuiSettingsScreen extends MenuScreen {
     public GuiSettingsScreen(GuiScreen parent, GameSettings settings) {
         super(parent);
         this.settings = settings;
-    }
-
-    /**
-     * The settings, opened on the tab this mod's own graphics preset is on.
-     *
-     * For the one-off first-run showing: the screen normally reopens on whichever tab
-     * was last used, and on a first run there is no such tab — landing on General
-     * would put the one setting worth showing somebody two clicks away.
-     */
-    public static GuiSettingsScreen onVideoTab(GuiScreen parent, GameSettings settings) {
-        activeTab = 1;
-        return new GuiSettingsScreen(parent, settings);
     }
 
     // ---------------------------------------------------------------- layout --
@@ -333,12 +320,6 @@ public class GuiSettingsScreen extends MenuScreen {
                 addLink(ID_LANGUAGE, this.rightColumn, y, "options.language");
                 break;
             case 1:
-                // First on the tab, above the game's own. It is the setting somebody
-                // opens this tab to find when the menu itself is what runs badly, and
-                // below fifty vanilla and renderer rows it would never be found at all.
-                y = heading(I18n.format("uky.settings.effects", new Object[0]), y, false, false);
-                addGraphicsPreset(this.leftColumn, y);
-                y += this.rowHeight + this.rowGap;
                 y = flow(y,
                         GameSettings.Options.GRAPHICS, GameSettings.Options.RENDER_DISTANCE,
                         GameSettings.Options.FRAMERATE_LIMIT, GameSettings.Options.AMBIENT_OCCLUSION,
@@ -467,7 +448,6 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int ID_MOD_SETTINGS = 108;
     private static final int ID_VIDEO = 109;
     private static final int ID_SHADER_PACKS = 110;
-    private static final int ID_GRAPHICS_PRESET = 111;
     /**
      * Every renderer option shares one id.
      *
@@ -628,57 +608,6 @@ public class GuiSettingsScreen extends MenuScreen {
      */
     private float stagger() {
         return 0.06F + Math.min(this.rowIndex++, 14) * 0.02F;
-    }
-
-    /**
-     * This mod's own graphics ceiling, as one cycling row.
-     *
-     * Everything it governs already has a setting in {@code uky.cfg}, and that is
-     * where it stays — this is not a second copy of those values, it is a cap over
-     * them. See {@link Quality}. One row rather than a section of them on purpose:
-     * anybody who wants the individual knobs has the config screen, and anybody who
-     * came here came because the menu is stuttering and wants that to stop.
-     */
-    private void addGraphicsPreset(int x, int y) {
-        // Full width even on a two-column tab. It is one row under a heading of its
-        // own, so there is no partner to sit beside it, and "Максимально" beside its
-        // label does not go in half a panel without an ellipsis.
-        int width = this.panelX2 - PADDING - x;
-        MenuButton widget = new MenuOptionButton(ID_GRAPHICS_PRESET, x, y, width,
-                this.rowHeight, new MenuOptionButton.Source() {
-                    @Override
-                    public String label() {
-                        return I18n.format("uky.settings.graphics", new Object[0]);
-                    }
-
-                    @Override
-                    public String value() {
-                        return I18n.format(Quality.label(), new Object[0]);
-                    }
-
-                    @Override
-                    public boolean toggle() {
-                        return false;
-                    }
-
-                    @Override
-                    public boolean on() {
-                        return false;
-                    }
-
-                    @Override
-                    public void cycle() {
-                        Quality.cycle();
-                    }
-
-                    @Override
-                    public boolean available() {
-                        return true;
-                    }
-                });
-        widget.entrance(stagger());
-        this.buttonList.add(widget);
-        this.contentRows.add(widget);
     }
 
     private void addOption(GameSettings.Options option, int x, int y) {

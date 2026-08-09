@@ -4,7 +4,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
-import com.console.uky.config.Quality;
+import com.console.uky.config.UiConfig;
 
 /**
  * The one-shot opening of the title screen: black, a hit, then the black hole
@@ -39,7 +39,7 @@ public final class TitleIntro {
 
     /** Call from initGui. Returns true if the intro will actually run. */
     public boolean begin() {
-        if (playedThisSession || !Quality.intro()) {
+        if (playedThisSession || !UiConfig.introEnabled) {
             this.active = false;
             return false;
         }

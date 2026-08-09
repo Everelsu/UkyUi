@@ -1,6 +1,6 @@
 package com.console.uky.client.render;
 
-import com.console.uky.config.Quality;
+import com.console.uky.config.UiConfig;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -37,10 +37,10 @@ public final class AmbientParticles {
         this.width = width;
         this.height = height;
         particles.clear();
-        int budget = Quality.particleBudget();
-        if (budget <= 0) {
+        if (!UiConfig.ambientParticles) {
             return;
         }
+        int budget = UiConfig.ambientParticleBudget;
         for (int i = 0; i < budget; i++) {
             P p = spawn(true);
             // stagger initial lifetimes so nothing pops in all at once
@@ -50,7 +50,7 @@ public final class AmbientParticles {
     }
 
     public void update(float deltaSeconds) {
-        if (!Quality.ambientParticles() || width == 0) {
+        if (!UiConfig.ambientParticles || width == 0) {
             return;
         }
         Iterator<P> it = particles.iterator();
@@ -73,14 +73,14 @@ public final class AmbientParticles {
             }
         }
 
-        int budget = Quality.particleBudget();
+        int budget = UiConfig.ambientParticleBudget;
         while (particles.size() < budget) {
             particles.add(spawn(false));
         }
     }
 
     public void render(float alpha) {
-        if (!Quality.ambientParticles() || alpha <= 0.01F) {
+        if (!UiConfig.ambientParticles || alpha <= 0.01F) {
             return;
         }
         for (P p : particles) {

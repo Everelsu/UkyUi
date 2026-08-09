@@ -53,15 +53,6 @@ public final class UiConfig {
     public static boolean replaceWorldList = true;
     public static boolean replaceLoadingScreen = true;
     public static boolean replaceDeathScreen = true;
-    /**
-     * Open the settings once, the first time the title screen is reached.
-     *
-     * Both the switch and the marker: it is turned off the moment it fires, and
-     * turning it back on by hand makes it happen again. One key rather than a
-     * preference plus a hidden "already done" flag, because the second one is a piece
-     * of state nobody can guess the meaning of in a file meant to be read.
-     */
-    public static boolean showSettingsOnFirstRun = true;
 
     // ---- death ----
     public static double deathSceneSeconds = 3.0D;
@@ -71,17 +62,7 @@ public final class UiConfig {
     public static boolean deathSounds = true;
     public static double deathVolume = 0.85D;
 
-
     // ---- effects ----
-    /**
-     * Ceiling on everything below it: {@code minimal}, {@code balanced} or
-     * {@code maximum}. See {@link Quality}, which is what actually reads it.
-     *
-     * Defaults to maximum because that is what this mod did before the setting
-     * existed, and a config that silently downgrades an existing install is a bug
-     * report about the menu looking worse after an update.
-     */
-    public static String graphics = Quality.MAXIMUM;
     public static boolean ambientParticles = true;
     public static int ambientParticleBudget = 40;
     public static boolean vignette = true;
@@ -273,11 +254,6 @@ public final class UiConfig {
                 "Replace the death screen with the death scene: the picture cuts out, "
                         + "the tape fails, a heart winds down. No buttons — any key or "
                         + "click comes back once it has played.");
-        showSettingsOnFirstRun = bool(CAT_SCREENS, "showSettingsOnFirstRun", showSettingsOnFirstRun,
-                "Open the settings screen by itself the first time you reach the "
-                        + "title screen, so the graphics preset and the rest are found "
-                        + "rather than looked for. Turns itself off once it has "
-                        + "happened; set it back to true to see it again.");
 
         deathSceneSeconds = dbl(CAT_DEATH, "sceneSeconds", deathSceneSeconds, 0.0D, 30.0D,
                 "Seconds of scene before a key or a click will bring the player back. "
@@ -296,28 +272,8 @@ public final class UiConfig {
         deathVolume = dbl(CAT_DEATH, "volume", deathVolume, 0.0D, 1.0D,
                 "Volume of those two, on top of the game's master slider.");
 
-        graphics = str(CAT_EFFECTS, "graphics", graphics,
-                "One ceiling over everything else in this section, for people who "
-                        + "would rather pick a word than tune eight numbers:\n"
-                        + "    maximum  - no ceiling. Every setting below is used as "
-                        + "written, which is what this mod did before this option "
-                        + "existed. The default.\n"
-                        + "    balanced - the black hole is traced at native "
-                        + "resolution rather than supersampled, a little less often, "
-                        + "and the film grain goes. Roughly half the GPU cost of "
-                        + "maximum, and hard to tell apart in motion.\n"
-                        + "    minimal  - for weak or old cards. The hole is traced "
-                        + "at half resolution and four times a second, the intro, the "
-                        + "particles, the grain and the background drift are off, and "
-                        + "the death scene is toned down. Roughly a fifth of the cost.\n"
-                        + "This can only ever lower a setting, never raise one: "
-                        + "anything you have already turned off stays off at every "
-                        + "level, and 'maximum' does not undo your own choices. It is "
-                        + "also on the Video tab of the in-game settings, so it can "
-                        + "be changed without editing this file.");
         ambientParticles = bool(CAT_EFFECTS, "ambientParticles", ambientParticles,
-                "Drifting dust/ember particles behind the menus. Off entirely at "
-                        + "graphics=minimal.");
+                "Drifting dust/ember particles behind the menus.");
         ambientParticleBudget = clampInt(CAT_EFFECTS, "ambientParticleBudget", ambientParticleBudget, 0, 400,
                 "Maximum simultaneous ambient particles. Lower this on weak machines.");
         vignette = bool(CAT_EFFECTS, "vignette", vignette, "Darkened screen edges.");
@@ -465,36 +421,6 @@ public final class UiConfig {
 
     public static void save() {
         if (config != null && config.hasChanged()) {
-            config.save();
-        }
-    }
-    /**
-     * Writes the graphics preset, from the in-game settings screen.
-     *
-     * Straight to the file rather than only to the field. This is the one setting in
-     * here with a control on a vanilla-style settings screen, and every other control
-     * on that screen persists the moment it is changed — a preset that reverted on the
-     * next launch would read as it not having worked at all.
-     */
-    public static void setGraphics(String value) {
-        graphics = value;
-        if (config != null) {
-            config.get(CAT_EFFECTS, "graphics", value).set(value);
-            config.save();
-        }
-    }
-
-    /**
-     * Records that the one-off settings screen has been shown.
-     *
-     * Written through to the file straight away rather than at shutdown, so a crash
-     * — or a player who alt-F4s out of the settings screen they were just handed —
-     * does not get shown it again on the next launch.
-     */
-    public static void setShowSettingsOnFirstRun(boolean value) {
-        showSettingsOnFirstRun = value;
-        if (config != null) {
-            config.get(CAT_SCREENS, "showSettingsOnFirstRun", value).set(value);
             config.save();
         }
     }

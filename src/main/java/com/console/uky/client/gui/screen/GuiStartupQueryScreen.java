@@ -4,7 +4,7 @@ import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
-import com.console.uky.config.Quality;
+import com.console.uky.config.UiConfig;
 import cpw.mods.fml.client.FMLClientHandler;
 import cpw.mods.fml.client.GuiNotification;
 import cpw.mods.fml.common.StartupQuery;
@@ -89,30 +89,9 @@ public class GuiStartupQueryScreen extends GuiNotification {
         return null;
     }
 
-    /** Size {@link #initGui()} last ran at; -1 until it has run. */
-    private int laidOutWidth = -1;
-    private int laidOutHeight = -1;
-
-    /**
-     * Runs the layout if nothing else did.
-     *
-     * Forge lets a mod cancel {@code GuiScreenEvent.InitGuiEvent.Pre}, and
-     * {@code setWorldAndResolution} then skips {@code initGui} outright. Here that
-     * would leave a startup question with no text and no buttons, at a point in the
-     * launch where the game loop is parked waiting for an answer that can no longer
-     * be given.
-     */
-    private void ensureLayout() {
-        if (this.laidOutWidth != this.width || this.laidOutHeight != this.height) {
-            initGui();
-        }
-    }
-
     @Override
     @SuppressWarnings("unchecked")
     public void initGui() {
-        this.laidOutWidth = this.width;
-        this.laidOutHeight = this.height;
         this.buttonList.clear();
         splitText();
 
@@ -190,7 +169,6 @@ public class GuiStartupQueryScreen extends GuiNotification {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        ensureLayout();
         long now = System.nanoTime();
         float delta = Math.min((now - this.lastFrameNanos) / 1_000_000_000.0F, 0.1F);
         this.lastFrameNanos = now;
@@ -205,10 +183,10 @@ public class GuiStartupQueryScreen extends GuiNotification {
         drawHeading(fade);
         drawBody(fade);
 
-        if (Quality.vignette()) {
+        if (UiConfig.vignette) {
             Draw.vignette(this.width, this.height, 0.8F * fade, 0xFF000000);
         }
-        if (Quality.scanlines()) {
+        if (UiConfig.scanlines) {
             Draw.scanlines(this.width, this.height, 3.0F, Draw.withAlpha(0x000000, 0.10F * fade));
         }
 
