@@ -2,6 +2,7 @@ package com.console.uky.proxy;
 
 import com.console.uky.client.WindowBranding;
 import com.console.uky.client.death.DeathTracker;
+import com.console.uky.client.mods.QuestBookTransition;
 import com.console.uky.client.render.BlackHole;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkyMusicTicker;
@@ -52,6 +53,12 @@ public class ClientProxy extends CommonProxy {
         // Draws the tail of the arrival dissolve, after the loading screen is gone
         // and there is no screen left to draw it from. RenderTickEvent is FML's.
         FMLCommonHandler.instance().bus().register(new WorldEntryFade.Handler());
+
+        // The scrim under the quest book. Both buses again: the draw events it hangs
+        // the scrim on are Forge's, the render tick that lifts it afterwards is FML's.
+        QuestBookTransition.Handler questBook = new QuestBookTransition.Handler();
+        MinecraftForge.EVENT_BUS.register(questBook);
+        FMLCommonHandler.instance().bus().register(questBook);
     }
 
     @Override

@@ -1,10 +1,12 @@
 package com.console.uky.client.gui.screen;
 
+import com.console.uky.UkyUI;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.Quality;
+import com.console.uky.config.UiConfig;
 
 /**
  * The one-shot opening of the title screen: black, a hit, then the black hole
@@ -26,8 +28,22 @@ public final class TitleIntro {
     private static final float FORM = 2.30F;
     private static final float TOTAL = SILENCE + FLASH + FORM;
 
+    /**
+     * How long the intro refuses to be skipped.
+     *
+     * A click or a key press skips it, and a queued one arriving on the first frame
+     * skips it before a single pixel of it has been drawn. That is not hypothetical:
+     * a pack this size takes minutes to load, people click around while they wait,
+     * and LWJGL hands the whole backlog to the first screen that asks for input —
+     * which is this one. Three tenths of a second is under the reaction time of
+     * somebody who meant it and well over the age of anything left in the buffer.
+     */
+    private static final float SKIP_GRACE = 0.30F;
+
     /** Only the first title screen of a session gets the intro. */
     private static boolean playedThisSession;
+    /** Whether the log has already said something about the intro this session. */
+    private static boolean reported;
 
     private float time;
     private boolean active;
@@ -48,14 +64,34 @@ public final class TitleIntro {
             return true;
         }
         if (playedThisSession || !Quality.intro()) {
+            report(playedThisSession
+                    ? "Title intro: already played this session"
+                    : "Title intro: off (mainmenu.intro=" + UiConfig.introEnabled
+                            + ", effects.graphics=" + UiConfig.graphics + ")");
             this.active = false;
             return false;
         }
-        playedThisSession = true;
+        report("Title intro: starting");
+        // Deliberately not claiming the session here; see update().
         this.active = true;
         this.time = 0.0F;
         this.impactFired = false;
         return true;
+    }
+
+    /**
+     * One line per session about what the intro did.
+     *
+     * It earns its place. "The intro does not play" has no other symptom, no error and
+     * no crash, and every explanation for it — a preset that caps it, a screen that
+     * consumed it, an input that skipped it — is invisible from the outside. One line
+     * turns the next report of it into an answer instead of a guess.
+     */
+    private static void report(String message) {
+        if (!reported) {
+            reported = true;
+            UkyUI.LOGGER.info(message);
+        }
     }
 
     public boolean isActive() {
@@ -70,6 +106,18 @@ public final class TitleIntro {
 
         if (!this.impactFired && this.time >= SILENCE) {
             this.impactFired = true;
+            // The session's one intro is claimed here, at the hit — not in begin(),
+            // and not on the first frame either.
+            //
+            // begin() is called from initGui, and a title screen can be built, have
+            // its initGui run, and be gone again before anybody sees it: in a pack
+            // this size the main menu is constructed more than once on the way to the
+            // one that stays, because several mods open a screen of their own during
+            // start-up. Claiming it there spent the intro on a screen nobody looked
+            // at. Claiming it at the hit means an intro that was interrupted during
+            // its silent opening — which is indistinguishable from not having played
+            // at all — is still owed to the player.
+            playedThisSession = true;
             UkySounds.play(UkySounds.INTRO_IMPACT, 1.0F, 1.0F);
         }
         if (this.time >= TOTAL) {
@@ -79,9 +127,13 @@ public final class TitleIntro {
 
     /** Jumps to the end, leaving the menu in its resting state. */
     public void skip() {
-        if (!this.active) {
+        // Not in the first moments; see SKIP_GRACE.
+        if (!this.active || this.time < SKIP_GRACE) {
             return;
         }
+        // Skipping is a decision, so it counts as having been shown even if the hit
+        // has not landed yet and update() has therefore not claimed it.
+        playedThisSession = true;
         this.time = TOTAL;
         this.active = false;
     }

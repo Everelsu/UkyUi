@@ -11,6 +11,10 @@ import java.util.Map;
  * FML core plugin. Its only job is to declare our early mixin config so the
  * SpongePowered Mixin subsystem (provided by UniMixins) applies it before the
  * game classes are loaded — which is what lets us reskin the FML splash screen.
+ *
+ * <p>Only the config that targets FML itself belongs here. Anything aimed at another
+ * mod has to be registered later, and registering it here does lasting damage rather
+ * than simply not working; see {@link LateMixins}.
  */
 @IFMLLoadingPlugin.MCVersion("1.7.10")
 @IFMLLoadingPlugin.Name("UKY Core")

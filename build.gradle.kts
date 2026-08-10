@@ -169,6 +169,11 @@ tasks.named<Jar>("jar").configure {
             "FMLCorePlugin" to "com.console.uky.core.UkyCore",
             "FMLCorePluginContainsFMLMod" to "true",
             "ForceLoadAsMod" to "true",
+            // Only the config that targets FML. mixins.uky.mods.client.json is
+            // deliberately absent: this attribute is read while core mods load, and a
+            // config registered then resolves its targets before ordinary mod jars are
+            // on the classpath — which permanently poisons LaunchWrapper's lookup for
+            // the class it failed to find. See LateMixins.
             "MixinConfigs" to "mixins.uky.early.client.json"
         )
     }

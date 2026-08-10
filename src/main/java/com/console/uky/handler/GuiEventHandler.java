@@ -13,6 +13,8 @@ import com.console.uky.client.gui.screen.GuiStartupQueryScreen;
 import com.console.uky.client.gui.screen.GuiPauseScreen;
 import com.console.uky.client.gui.screen.GuiWorldLoadingScreen;
 import com.console.uky.client.gui.screen.GuiWorldsScreen;
+import com.console.uky.client.mods.QuestBookTheme;
+import com.console.uky.client.mods.QuestBookTransition;
 import com.console.uky.client.sound.UkyMusicTicker;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
@@ -88,6 +90,11 @@ public class GuiEventHandler {
         keepLatinCrisp();
         UkyFontRenderer.install(Minecraft.getMinecraft());
 
+        // Before the null check below, because closing the quest book to no screen at
+        // all is exactly the change this needs to hear about. The screen being replaced
+        // is still the current one at this point; the event carries the new one.
+        QuestBookTransition.screenChanged(Minecraft.getMinecraft().currentScreen, event.gui);
+
         if (event.gui == null) {
             return;
         }
@@ -158,6 +165,13 @@ public class GuiEventHandler {
             // Wraps rather than replaces: the vanilla screen is what notices the
             // world is ready and hands control back.
             event.gui = new GuiWorldLoadingScreen(event.gui);
+            return;
+        }
+
+        // BetterQuesting's own screens, left exactly as they are and drawn in our
+        // palette. See QuestBookTheme for why this is the moment it is done.
+        if (type.getName().startsWith(QuestBookTheme.SCREEN_PREFIX)) {
+            QuestBookTheme.ensureApplied();
             return;
         }
 

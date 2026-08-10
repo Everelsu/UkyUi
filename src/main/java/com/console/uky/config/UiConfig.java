@@ -25,6 +25,7 @@ import java.io.File;
 public final class UiConfig {
 
     private static final String CAT_SCREENS = "screens";
+    private static final String CAT_MODS = "mods";
     private static final String CAT_EFFECTS = "effects";
     private static final String CAT_THEME = "theme";
     private static final String CAT_MENU = "mainmenu";
@@ -63,6 +64,33 @@ public final class UiConfig {
      * of state nobody can guess the meaning of in a file meant to be read.
      */
     public static boolean showSettingsOnFirstRun = true;
+
+    // ---- other mods ----
+    /**
+     * Draw Waila's block tooltip as one of our panels.
+     *
+     * Only the box and the text colour: what goes inside it is Waila's, down to the
+     * last provider a pack has registered. Nothing here knows what a tooltip says.
+     */
+    public static boolean restyleWaila = true;
+    /**
+     * Hand BetterQuesting a theme built from the palette below.
+     *
+     * The theme is registered whether or not this is on — it shows up in the quest
+     * book's own theme list either way. This only decides whether it is also
+     * *selected*, which is the part that overrules a choice made in that list.
+     */
+    public static boolean restyleQuestBook = true;
+    /**
+     * A scrim under the quest book, and the beat it takes to arrive.
+     *
+     * Separate from the theme because it is a different thing: the theme is what the
+     * book is drawn with, this is what happens around it, and either is worth having
+     * without the other.
+     */
+    public static boolean questBookTransition = true;
+    /** How dark the world goes behind the quest book; 0 leaves it alone. */
+    public static double questBookDim = 0.80D;
 
     // ---- death ----
     public static double deathSceneSeconds = 3.0D;
@@ -283,6 +311,11 @@ public final class UiConfig {
         config.setCategoryComment(CAT_SCREENS,
                 "Which vanilla screens this mod takes over. Turn one off and that "
                         + "screen goes back to vanilla; everything else keeps working.");
+        config.setCategoryComment(CAT_MODS,
+                "Interfaces belonging to other mods that this one restyles when they "
+                        + "are installed. Each entry does nothing at all when its mod "
+                        + "is absent, and none of them change what those mods do — "
+                        + "only what they look like.");
         config.setCategoryComment(CAT_MENU,
                 "The main menu: wordmark, which entries are shown, the music, and the "
                         + "link buttons underneath. See 'links' for how to add YouTube, "
@@ -335,6 +368,44 @@ public final class UiConfig {
                         + "title screen, so the graphics preset and the rest are found "
                         + "rather than looked for. Turns itself off once it has "
                         + "happened; set it back to true to see it again.");
+
+        restyleWaila = bool(CAT_MODS, "restyleWaila", restyleWaila,
+                "Draw Waila's block tooltip — the box naming whatever you are looking "
+                        + "at — as one of our panels: dark fill, hairline border, the "
+                        + "gold rail down the left, and the palette's text colour "
+                        + "instead of Waila's grey. The panel draws itself in from the "
+                        + "left over a sixth of a second, contents and all, whenever "
+                        + "you look at something new.\n"
+                        + "Progress bars inside it (a furnace burning, a machine "
+                        + "working) are ours too: they fill left to right from the "
+                        + "second accent to the first, with a highlight running along "
+                        + "the filled part while there is still work to do.\n"
+                        + "What the box says is untouched, including everything other "
+                        + "mods add to it.");
+        restyleQuestBook = bool(CAT_MODS, "restyleQuestBook", restyleQuestBook,
+                "Select the UKY theme in BetterQuesting's quest book. The theme is "
+                        + "built from the palette in [theme] below, so it follows the "
+                        + "rest of the interface rather than sitting beside it.\n"
+                        + "It is registered either way and can be picked by hand from "
+                        + "the quest book's Themes screen; turn this off if you would "
+                        + "rather that choice stuck, because with it on the theme is "
+                        + "re-selected every time a quest book screen opens.");
+        questBookTransition = bool(CAT_MODS, "questBookTransition", questBookTransition,
+                "Darken the world behind the quest book, and let the book arrive over "
+                        + "a fifth of a second instead of appearing between two frames. "
+                        + "The scrim lifts again after the book is closed.\n"
+                        + "Independent of restyleQuestBook: this is what happens around "
+                        + "the book rather than what it is drawn with, so it applies "
+                        + "whichever theme the book is using.");
+        questBookDim = dbl(CAT_MODS, "questBookDim", questBookDim, 0.0D, 1.0D,
+                "How dark the world goes behind the quest book. 1 is the backdrop "
+                        + "colour at full strength — the world is gone; 0 leaves it "
+                        + "untouched and the book floats on the landscape the way "
+                        + "BetterQuesting draws it by itself. Around 0.8 is dark "
+                        + "enough for a dark theme to keep its contrast without "
+                        + "pretending the world stopped existing.\n"
+                        + "Needs questBookTransition on: it is the same scrim that "
+                        + "fades in and out.");
 
         deathSceneSeconds = dbl(CAT_DEATH, "sceneSeconds", deathSceneSeconds, 0.0D, 30.0D,
                 "Seconds of scene before a key or a click will bring the player back. "
