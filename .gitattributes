@@ -1,0 +1,12 @@
+# The Gradle wrapper is a shell script, and the runner it has to run on is Linux.
+#
+# Checked out with CRLF endings it fails with "bad interpreter: /bin/sh^M", which is
+# the same class of problem as the missing executable bit that made the first release
+# run stop at "./gradlew: Permission denied" — a file committed from Windows arriving
+# on a machine that takes these things literally. The mode lives in git's index
+# (100755); the endings live here.
+gradlew text eol=lf
+gradle/wrapper/gradle-wrapper.properties text eol=lf
+
+# The other half of the pair is a batch file, which wants the opposite.
+*.bat text eol=crlf

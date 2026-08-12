@@ -56,6 +56,10 @@ jobs:
           # runner's JDK 21, and the toolchain line below is how it finds the 8.
           sed -i '/^org.gradle.java.home=/d' gradle.properties
           echo "org.gradle.java.installations.paths=$JAVA_HOME_8_X64" >> gradle.properties
+          # Belt and braces. The bit is set in git's index, but it only takes one
+          # commit made from Windows by a tool that does not carry file modes for the
+          # whole pipeline to stop at "Permission denied" again.
+          chmod +x gradlew
 
       - uses: gradle/actions/setup-gradle@v4
 
