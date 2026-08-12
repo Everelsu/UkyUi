@@ -302,7 +302,9 @@ modrinth {
     token.set(modrinthToken)
     projectId.set(modrinthProjectId)
     versionNumber.set(project.version.toString())
-    versionName.set("UKY UI ${project.version} for Minecraft 1.7.10")
+    // No versionName, for the same reason there is no displayName on the CurseForge
+    // side: left unset it falls back to the version number, and the file underneath it
+    // says the rest. A sentence there is a heading nobody asked for.
     versionType.set("release")
     // The task itself: Minotaur understands an archive task and takes the file off it,
     // which is one fewer thing to keep in step with where the build writes its jars.
@@ -342,7 +344,11 @@ tasks.register<TaskPublishCurseForge>("curseforge") {
     if (curseforgeProjectId.isNotEmpty()) {
         val main = upload(curseforgeProjectId, releaseJar.get())
         main.releaseType = "release"
-        main.displayName = "UKY UI ${project.version} for Minecraft 1.7.10"
+        // No displayName on purpose. Left unset, CurseForge shows the file's own name
+        // — "ukyui-1.7.10-0.5.2.jar" — which already says the mod, the Minecraft
+        // version and the mod version, in the form somebody downloading it is about to
+        // see on disk anyway. A sentence in its place reads as a heading over a
+        // download list that does not need one.
         main.changelog = releaseNotes
         main.changelogType = "markdown"
         main.addGameVersion("1.7.10")
