@@ -72,8 +72,17 @@ The workflow builds, checks the tag against the version, uploads to both stores 
 creates the GitHub release with the jar attached. A store whose token is not configured
 is skipped rather than failing the run.
 
-To rehearse without publishing, run the workflow by hand from the Actions tab and leave
-*publish* unticked: it builds and leaves the jar as a workflow artifact.
+### Publishing to one place at a time
+
+Running the workflow by hand from the Actions tab gives a tick box per destination —
+Modrinth, CurseForge, GitHub — and publishes only to the ones ticked. With none ticked
+it builds and leaves the jar as a workflow artifact, which is the way to rehearse.
+
+That split is there for the case that actually happens: one destination accepts the
+version and another rejects it. **An upload cannot be taken back** — a version that
+reached Modrinth is on Modrinth, and sending it again makes a duplicate rather than a
+correction. So finish a half-done release by re-running with only the destination that
+failed ticked; the tick boxes are the whole mechanism for not publishing twice.
 
 ## Publishing from this machine instead
 
@@ -94,7 +103,7 @@ fails in a second rather than at the end of a decompile.
 | The file           | `build/libs/ukyui-1.7.10-<version>.jar` — the reobfuscated jar, never the `-dev` one |
 | Version number     | `version` in `build.gradle.kts`                                     |
 | Changelog          | this version's section of `CHANGELOG.md`                            |
-| Game version       | `1.7.10`, Forge, Java 8                                             |
+| Game version       | `1.7.10`, Forge, Java 8, and on CurseForge the environment tag `Client` — without it the site rejects the upload with error 1021 |
 | Dependency         | UniMixins, required (Modrinth `ghjoiQAl`, CurseForge `unimixins`)   |
 | Modrinth page body | `store/modrinth-description.md`, pushed by `modrinthSyncBody`       |
 

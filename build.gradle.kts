@@ -346,6 +346,12 @@ tasks.register<TaskPublishCurseForge>("curseforge") {
         main.changelog = releaseNotes
         main.changelogType = "markdown"
         main.addGameVersion("1.7.10")
+        // CurseForge wants a tag from its "environment" group as well as a game
+        // version, and rejects the upload with error 1021 — "you must select at least
+        // one version from the environment group" — when there is none. Client,
+        // because that is what this mod is: it draws screens and touches no world
+        // data, so a server has nothing to do with it.
+        main.addEnvironment("Client")
         main.addModLoader("Forge")
         main.addJavaVersion("Java 8")
         main.addRequirement("unimixins")

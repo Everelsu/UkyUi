@@ -2,14 +2,19 @@
 ###
 ### Two ways in, and only one of them publishes by default:
 ###
-###   * pushing a tag "v0.5.1" — builds, checks that the tag agrees with the version
-###     in build.gradle.kts, and publishes everywhere
-###   * running it by hand from the Actions tab — builds and leaves the jar as a
-###     workflow artifact, unless "publish" is ticked
+###   * pushing a tag "v0.5.2" — builds, checks that the tag agrees with the version
+###     in build.gradle.kts, and publishes to all three
+###   * running it by hand from the Actions tab — builds, and publishes only to the
+###     destinations ticked; with none ticked it just leaves the jar as an artifact
 ###
-### A store is skipped when its token is not configured, rather than failing the run:
-### a repository with only one of the two set up should still be able to release to it.
-### See RELEASING.md for which secrets to add and where they come from.
+### The three destinations are separate on purpose. An upload cannot be taken back: a
+### version that reached Modrinth is on Modrinth, so a release that fails halfway —
+### CurseForge rejecting a file the other two already accepted, say — has to be
+### finishable without sending the same version anywhere twice.
+###
+### A store is also skipped when its token is not configured, rather than failing the
+### run: a repository with only one of the two set up should still release to it. See
+### RELEASING.md for which secrets to add and where they come from.
 name: Release
 
 on:
@@ -18,8 +23,16 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      publish:
-        description: "Publish to Modrinth and CurseForge (otherwise build only)"
+      modrinth:
+        description: "Upload to Modrinth"
+        type: boolean
+        default: false
+      curseforge:
+        description: "Upload to CurseForge"
+        type: boolean
+        default: false
+      github_release:
+        description: "Create the GitHub release"
         type: boolean
         default: false
 
@@ -30,10 +43,12 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      # Secrets cannot be read in an `if:` directly; this is the usual way round it.
-      HAS_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
-      HAS_CURSEFORGE: ${{ secrets.CURSEFORGE_TOKEN != '' }}
-      PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+      # One flag per destination, decided once here rather than in three `if:` lines.
+      # A tag publishes everywhere; a manual run publishes where it was told to. The
+      # token check is folded in because secrets cannot be read from an `if:` directly.
+      PUBLISH_MODRINTH: ${{ (github.event_name == 'push' || inputs.modrinth) && secrets.MODRINTH_TOKEN != '' }}
+      PUBLISH_CURSEFORGE: ${{ (github.event_name == 'push' || inputs.curseforge) && secrets.CURSEFORGE_TOKEN != '' }}
+      PUBLISH_GITHUB: ${{ github.event_name == 'push' || inputs.github_release }}
 
     steps:
       - uses: actions/checkout@v4
@@ -85,23 +100,27 @@ jobs:
         run: ./gradlew -q printReleaseNotes > release-notes.md
 
       - name: Publish to Modrinth
-        if: env.PUBLISH == 'true' && env.HAS_MODRINTH == 'true'
+        if: env.PUBLISH_MODRINTH == 'true'
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: ./gradlew modrinth
 
       - name: Publish to CurseForge
-        if: env.PUBLISH == 'true' && env.HAS_CURSEFORGE == 'true'
+        if: env.PUBLISH_CURSEFORGE == 'true'
         env:
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
         run: ./gradlew curseforge
 
+      # The tag is built from the version rather than taken from the ref, so that this
+      # also works on a manual run — gh creates the tag at this commit if it is not
+      # there yet. On a tag push the two are the same thing, which the step above has
+      # already checked.
       - name: Publish to GitHub
-        if: github.event_name == 'push'
+        if: env.PUBLISH_GITHUB == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "v${{ steps.version.outputs.value }}" \
             --title "UKY UI ${{ steps.version.outputs.value }}" \
             --notes-file release-notes.md \
             "build/libs/ukyui-1.7.10-${{ steps.version.outputs.value }}.jar"
