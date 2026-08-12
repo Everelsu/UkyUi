@@ -72,3 +72,8 @@ Thumbs.db
 ```
 /run/
 /.gradle/
+
+# Icon generator trace cache (art/generate_icon.py rebuilds it)
+/art/.hole-cache.npz
+/art
+/store

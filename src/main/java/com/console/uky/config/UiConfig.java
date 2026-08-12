@@ -25,6 +25,7 @@ import java.io.File;
 public final class UiConfig {
 
     private static final String CAT_SCREENS = "screens";
+    private static final String CAT_HUD = "hud";
     private static final String CAT_MODS = "mods";
     private static final String CAT_EFFECTS = "effects";
     private static final String CAT_THEME = "theme";
@@ -64,6 +65,50 @@ public final class UiConfig {
      * of state nobody can guess the meaning of in a file meant to be read.
      */
     public static boolean showSettingsOnFirstRun = true;
+
+    // ---- hud ----
+    /**
+     * Replace the achievement popup with ours.
+     *
+     * The vanilla one is a 160x32 slice of a texture that slides down from the top
+     * edge and back up again, and it has looked like that since 2011. Ours is the
+     * same idea drawn in the palette, with the arrival worth watching — see
+     * {@code AchievementToast}.
+     */
+    public static boolean achievementToast = true;
+    /** Play {@code achievement} the moment a toast arrives. */
+    public static boolean achievementSound = true;
+    public static double achievementVolume = 0.9D;
+    /**
+     * Rewrite the chat line an achievement produces.
+     *
+     * Vanilla's is a full sentence naming the player and the achievement in
+     * brackets; this cuts it to the achievement, marked, and makes it a link into
+     * the achievements list. Multiplayer keeps the name, because there it is the
+     * part that matters.
+     */
+    public static boolean achievementChatLink = true;
+    /**
+     * Draw the chat in this mod's own style instead of vanilla's grey boxes.
+     *
+     * Off by default and deliberately so: the chat is the one HUD element people
+     * read rather than glance at, and a pack author should opt into changing it.
+     */
+    public static boolean redesignChat = false;
+    /**
+     * Draw item tooltips as one of our panels, and make them fit the screen.
+     *
+     * The look is the smaller half of this. The rest is the part a modded pack needs:
+     * a line too long to fit is wrapped, a box too tall for the window is scaled to
+     * it, and one that is still too tall after that is cut and counted rather than
+     * drawn off the edge.
+     */
+    public static boolean restyleTooltips = true;
+    /**
+     * Width, in interface units, past which a tooltip line is re-flowed. 0 never
+     * wraps, which is what vanilla does.
+     */
+    public static int tooltipWidth = 220;
 
     // ---- other mods ----
     /**
@@ -311,6 +356,11 @@ public final class UiConfig {
         config.setCategoryComment(CAT_SCREENS,
                 "Which vanilla screens this mod takes over. Turn one off and that "
                         + "screen goes back to vanilla; everything else keeps working.");
+        config.setCategoryComment(CAT_HUD,
+                "What this mod draws over the game rather than instead of it: the "
+                        + "achievement popup, the chat line an achievement produces, "
+                        + "and the chat itself. Nothing here changes what the game "
+                        + "does — only how it is drawn and worded.");
         config.setCategoryComment(CAT_MODS,
                 "Interfaces belonging to other mods that this one restyles when they "
                         + "are installed. Each entry does nothing at all when its mod "
@@ -368,6 +418,58 @@ public final class UiConfig {
                         + "title screen, so the graphics preset and the rest are found "
                         + "rather than looked for. Turns itself off once it has "
                         + "happened; set it back to true to see it again.");
+
+        achievementToast = bool(CAT_HUD, "achievementToast", achievementToast,
+                "Replace the achievement popup — the box that drops in from the top "
+                        + "of the screen when you earn one. Ours is a slanted panel "
+                        + "that cuts in from the right: the item lands in its frame, "
+                        + "the name types itself out, and a hairline along the bottom "
+                        + "counts the time it has left. Earn several at once and they "
+                        + "queue rather than replacing each other.\n"
+                        + "Off puts vanilla's own box back.");
+        achievementSound = bool(CAT_HUD, "achievementSound", achievementSound,
+                "Play a sound when that panel arrives. Silence is the vanilla "
+                        + "behaviour; this is not.");
+        achievementVolume = dbl(CAT_HUD, "achievementVolume", achievementVolume, 0.0D, 1.0D,
+                "Volume of that sound, on top of the game's master slider.");
+        achievementChatLink = bool(CAT_HUD, "achievementChatLink", achievementChatLink,
+                "Shorten the chat line an achievement produces, and make it a link.\n"
+                        + "Vanilla writes a whole sentence — 'Player has just earned "
+                        + "the achievement [Taking Inventory]'. This cuts it to the "
+                        + "achievement itself, keeping the player's name only when "
+                        + "somebody else earned it. Clicking it opens the achievements "
+                        + "list scrolled to that entry with it picked out; hovering "
+                        + "still shows what it was for.");
+        restyleTooltips = bool(CAT_HUD, "restyleTooltips", restyleTooltips,
+                "Draw the box that appears over an item — its name, what it does, "
+                        + "everything every mod in the pack has added to it — as one "
+                        + "of our panels instead of vanilla's purple-bordered one.\n"
+                        + "The look is the smaller half. Vanilla's box is laid out on "
+                        + "the assumption that nothing will ever be very wide or very "
+                        + "tall, which is true of vanilla and not of a modded pack: a "
+                        + "machine listing its energy, its fluids and three lines of "
+                        + "lore produces a box taller than the window and drawn off "
+                        + "the end of it. This one wraps long lines to tooltipWidth "
+                        + "below, scales a box that is still too tall until it fits, "
+                        + "and only then cuts what is left over — saying how many "
+                        + "lines it cut.\n"
+                        + "What the lines say is untouched, including everything other "
+                        + "mods put in them.");
+        tooltipWidth = clampInt(CAT_HUD, "tooltipWidth", tooltipWidth, 0, 640,
+                "Width, in interface units, past which a tooltip line is re-flowed "
+                        + "onto the next. Around 220 is a comfortable paragraph and "
+                        + "roughly a third of the screen. 0 turns wrapping off and "
+                        + "leaves long lines to run as far as they like, which is "
+                        + "what vanilla does.\n"
+                        + "Needs restyleTooltips on.");
+        redesignChat = bool(CAT_HUD, "redesignChat", redesignChat,
+                "Draw the chat in this mod's style: each line on its own dark panel "
+                        + "with a rail down the left, new lines sliding in from the "
+                        + "left, and the input box below drawn as one of our fields.\n"
+                        + "Off by default. The chat is read rather than glanced at, "
+                        + "and every setting the game already has for it — scale, "
+                        + "width, height, opacity, visibility — is still obeyed either "
+                        + "way.");
 
         restyleWaila = bool(CAT_MODS, "restyleWaila", restyleWaila,
                 "Draw Waila's block tooltip — the box naming whatever you are looking "
@@ -612,6 +714,40 @@ public final class UiConfig {
         graphics = value;
         if (config != null) {
             config.get(CAT_EFFECTS, "graphics", value).set(value);
+            config.save();
+        }
+    }
+
+    /**
+     * Flips one of the HUD switches from the settings screen, file and all.
+     *
+     * Same reasoning as {@link #setGraphics}: these sit among vanilla options that
+     * persist the moment they are clicked, and one that reverted on the next launch
+     * would read as not having worked.
+     */
+    public static void setChatRedesign(boolean value) {
+        redesignChat = value;
+        write(CAT_HUD, "redesignChat", value);
+    }
+
+    public static void setAchievementToast(boolean value) {
+        achievementToast = value;
+        write(CAT_HUD, "achievementToast", value);
+    }
+
+    public static void setRestyleTooltips(boolean value) {
+        restyleTooltips = value;
+        write(CAT_HUD, "restyleTooltips", value);
+    }
+
+    public static void setAchievementChatLink(boolean value) {
+        achievementChatLink = value;
+        write(CAT_HUD, "achievementChatLink", value);
+    }
+
+    private static void write(String cat, String key, boolean value) {
+        if (config != null) {
+            config.get(cat, key, value).set(value);
             config.save();
         }
     }

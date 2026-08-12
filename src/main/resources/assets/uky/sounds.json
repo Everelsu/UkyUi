@@ -29,6 +29,12 @@
       { "name": "delete_break", "stream": false }
     ]
   },
+  "achievement": {
+    "category": "master",
+    "sounds": [
+      { "name": "achivement_bass", "stream": false }
+    ]
+  },
   "heartbeat": {
     "category": "master",
     "sounds": [

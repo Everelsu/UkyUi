@@ -2,6 +2,7 @@ package com.console.uky.proxy;
 
 import com.console.uky.client.WindowBranding;
 import com.console.uky.client.death.DeathTracker;
+import com.console.uky.client.gui.AchievementCommand;
 import com.console.uky.client.mods.QuestBookTransition;
 import com.console.uky.client.render.BlackHole;
 import com.console.uky.client.render.Theme;
@@ -9,6 +10,7 @@ import com.console.uky.client.sound.UkyMusicTicker;
 import com.console.uky.client.world.WorldEntryFade;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
+import com.console.uky.handler.AchievementChatHandler;
 import com.console.uky.handler.ConfigChangeHandler;
 import com.console.uky.handler.GuiEventHandler;
 import com.console.uky.handler.WorldCaptureHandler;
@@ -35,6 +37,10 @@ public class ClientProxy extends CommonProxy {
         }
 
         MinecraftForge.EVENT_BUS.register(new GuiEventHandler());
+
+        // The achievement chat line, shortened and turned into a link on the way in.
+        // ClientChatReceivedEvent is Forge's.
+        MinecraftForge.EVENT_BUS.register(new AchievementChatHandler());
 
         // Watches for what killed the player, and for the respawn that ends the
         // scene. Both buses: the tick is FML's, the explosion it listens for is a
@@ -75,6 +81,11 @@ public class ClientProxy extends CommonProxy {
         // Also not pre-init: startGame sets the title and the icon itself, and only
         // reaches mod loading afterwards. Doing this any earlier would be overwritten.
         WindowBranding.apply();
+
+        // The other end of an achievement link in chat. Registered here rather than in
+        // pre-init only for tidiness — the handler is a client command and nothing
+        // dispatches one until a world is joined.
+        AchievementCommand.register();
     }
 
 }

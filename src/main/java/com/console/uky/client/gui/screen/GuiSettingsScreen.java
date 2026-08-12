@@ -13,6 +13,7 @@ import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.Quality;
+import com.console.uky.config.UiConfig;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiSnooper;
@@ -54,7 +55,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int COLUMN_GAP = 22;
 
     /** Rows each tab lays out, used to size the whole grid so it always fits. */
-    private static final int[] TAB_ROWS = {5, 7, 4, 3};
+    private static final int[] TAB_ROWS = {5, 7, 7, 5};
 
     private final GameSettings settings;
     /** Remembered across openings: coming back to the tab you left is the least surprising. */
@@ -359,10 +360,11 @@ public class GuiSettingsScreen extends MenuScreen {
                 addLink(ID_SOUNDS, this.leftColumn, y, "options.sounds");
                 addLink(ID_CHAT, this.rightColumn, y, "options.chat.title");
                 y += this.rowHeight + this.rowGap;
-                flow(y,
+                y = flow(y,
                         GameSettings.Options.CHAT_SCALE, GameSettings.Options.CHAT_OPACITY,
                         GameSettings.Options.CHAT_VISIBILITY, GameSettings.Options.CHAT_COLOR,
                         GameSettings.Options.CHAT_LINKS, GameSettings.Options.CHAT_WIDTH);
+                buildUkyChatContent(y);
                 break;
             default:
                 addLink(ID_RESOURCE_PACKS, this.leftColumn, y, "options.resourcepack");
@@ -375,8 +377,24 @@ public class GuiSettingsScreen extends MenuScreen {
                     addLink(ID_MOD_SETTINGS, this.rightColumn, y, "uky.modSettings.title");
                 }
                 y += this.rowHeight + this.rowGap;
-                flow(y, GameSettings.Options.FORCE_UNICODE_FONT,
+                y = flow(y, GameSettings.Options.FORCE_UNICODE_FONT,
                         GameSettings.Options.SNOOPER_ENABLED);
+                // The tooltip switch lives here rather than beside the chat ones: it
+                // is neither chat nor graphics, and this is the tab for everything
+                // that is neither.
+                y = heading(I18n.format("uky.settings.tooltips", new Object[0]), y, false, false);
+                addFlag(ID_TOOLTIPS, this.leftColumn, y, "uky.settings.restyleTooltips",
+                        new Flag() {
+                            @Override
+                            boolean get() {
+                                return UiConfig.restyleTooltips;
+                            }
+
+                            @Override
+                            void set(boolean value) {
+                                UiConfig.setRestyleTooltips(value);
+                            }
+                        });
                 break;
         }
     }
@@ -468,6 +486,14 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int ID_VIDEO = 109;
     private static final int ID_SHADER_PACKS = 110;
     private static final int ID_GRAPHICS_PRESET = 111;
+    // These three act on their own source and want nothing from the switch in
+    // onAction — the cycling branch above it handles every MenuOptionButton — but
+    // they still need ids of their own, because a duplicate id is what makes two
+    // rows the same row as far as the base screen is concerned.
+    private static final int ID_CHAT_REDESIGN = 112;
+    private static final int ID_ACHIEVEMENT_TOAST = 113;
+    private static final int ID_ACHIEVEMENT_LINK = 114;
+    private static final int ID_TOOLTIPS = 115;
     /**
      * Every renderer option shares one id.
      *
@@ -631,6 +657,107 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     /**
+     * This mod's own chat and achievement switches, under the game's own chat ones.
+     *
+     * Below rather than above, unlike the graphics preset on the Video tab: none of
+     * these is what anybody opens this tab to find, and vanilla's chat settings are.
+     * They belong here all the same — a switch that decides how the chat is drawn
+     * wants to be beside the ones deciding how wide and how opaque it is, not in a
+     * config file two menus away.
+     */
+    private void buildUkyChatContent(int y) {
+        y = heading(I18n.format("uky.settings.chat", new Object[0]), y, false, false);
+
+        addFlag(ID_CHAT_REDESIGN, this.leftColumn, y, "uky.settings.redesignChat",
+                new Flag() {
+                    @Override
+                    boolean get() {
+                        return UiConfig.redesignChat;
+                    }
+
+                    @Override
+                    void set(boolean value) {
+                        UiConfig.setChatRedesign(value);
+                    }
+                });
+        addFlag(ID_ACHIEVEMENT_TOAST, this.rightColumn, y, "uky.settings.achievementToast",
+                new Flag() {
+                    @Override
+                    boolean get() {
+                        return UiConfig.achievementToast;
+                    }
+
+                    @Override
+                    void set(boolean value) {
+                        UiConfig.setAchievementToast(value);
+                    }
+                });
+        y += this.rowHeight + this.rowGap;
+
+        addFlag(ID_ACHIEVEMENT_LINK, this.leftColumn, y, "uky.settings.achievementChat",
+                new Flag() {
+                    @Override
+                    boolean get() {
+                        return UiConfig.achievementChatLink;
+                    }
+
+                    @Override
+                    void set(boolean value) {
+                        UiConfig.setAchievementChatLink(value);
+                    }
+                });
+    }
+
+    /** One of this mod's own booleans, as the same pill switch the game's use. */
+    private abstract static class Flag {
+
+        abstract boolean get();
+
+        abstract void set(boolean value);
+    }
+
+    private void addFlag(int id, int x, int y, final String labelKey, final Flag flag) {
+        MenuButton widget = new MenuOptionButton(id, x, y, rowWidth(), this.rowHeight,
+                new MenuOptionButton.Source() {
+                    @Override
+                    public String label() {
+                        return I18n.format(labelKey, new Object[0]);
+                    }
+
+                    @Override
+                    public String value() {
+                        return "";
+                    }
+
+                    @Override
+                    public boolean toggle() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean on() {
+                        return flag.get();
+                    }
+
+                    @Override
+                    public void cycle() {
+                        // Written straight through to the config file, like the
+                        // graphics preset and for the same reason: every other row on
+                        // this screen persists the moment it is clicked.
+                        flag.set(!flag.get());
+                    }
+
+                    @Override
+                    public boolean available() {
+                        return true;
+                    }
+                });
+        widget.entrance(stagger());
+        this.buttonList.add(widget);
+        this.contentRows.add(widget);
+    }
+
+    /**
      * This mod's own graphics ceiling, as one cycling row.
      *
      * Everything it governs already has a setting in {@code uky.cfg}, and that is
@@ -775,6 +902,21 @@ public class GuiSettingsScreen extends MenuScreen {
         }
     }
 
+    /** How much of the panel edge the scrollbar answers to; see {@code ScrollList}. */
+    private static final int SCROLLBAR_GRAB = 10;
+
+    private boolean scrollbarDragging;
+    private float scrollbarGrabOffset;
+
+    private float scrollbarTrackX() {
+        return this.panelX2 - PADDING + 6;
+    }
+
+    private float scrollbarThumbHeight() {
+        int visible = viewportHeight();
+        return Math.max(18.0F, visible * visible / (float) this.contentExtent);
+    }
+
     /** The scrollbar, shown only when there is something to scroll. */
     private void drawScrollbar(float alpha) {
         float max = maxScroll();
@@ -782,15 +924,58 @@ public class GuiSettingsScreen extends MenuScreen {
             return;
         }
         int visible = viewportHeight();
-        float trackX = this.panelX2 - PADDING + 6;
-        float thumbHeight = Math.max(18.0F, visible * visible / (float) this.contentExtent);
+        float trackX = scrollbarTrackX();
+        float thumbHeight = scrollbarThumbHeight();
         float travel = visible - thumbHeight;
         float thumbY = this.contentTop + travel * (this.scroll / max);
+        boolean hot = this.scrollbarDragging || overScrollbar(this.mouseX, this.mouseY);
 
         Draw.rect(trackX, this.contentTop, trackX + 2, this.contentTop + visible,
                 Draw.withAlpha(Theme.separator, 0.35F * alpha));
-        Draw.rect(trackX, thumbY, trackX + 2, thumbY + thumbHeight,
-                Draw.withAlpha(Theme.accent, 0.8F * alpha));
+        float grow = hot ? 1.5F : 0.0F;
+        Draw.rect(trackX - grow, thumbY, trackX + 2 + grow, thumbY + thumbHeight,
+                Draw.withAlpha(Theme.accent, (hot ? 1.0F : 0.8F) * alpha));
+    }
+
+    /**
+     * Whether the pointer is in the strip the scrollbar answers to.
+     *
+     * Wider than the two pixels it is drawn as, for the same reason the lists' one is:
+     * a bar that has to be hit exactly is a bar that gets missed.
+     */
+    private boolean overScrollbar(int pointerX, int pointerY) {
+        if (maxScroll() <= 0.5F) {
+            return false;
+        }
+        float trackX = scrollbarTrackX();
+        return pointerX >= trackX - SCROLLBAR_GRAB + 2 && pointerX <= trackX + SCROLLBAR_GRAB
+                && pointerY >= this.contentTop && pointerY <= this.contentTop + viewportHeight();
+    }
+
+    private void grabScrollbar(int pointerY) {
+        float max = maxScroll();
+        float thumbHeight = scrollbarThumbHeight();
+        float travel = viewportHeight() - thumbHeight;
+        float thumbY = this.contentTop + travel * (this.scroll / max);
+
+        this.scrollbarDragging = true;
+        this.scrollbarGrabOffset = pointerY >= thumbY && pointerY <= thumbY + thumbHeight
+                ? pointerY - thumbY
+                : thumbHeight * 0.5F;
+        dragScrollbar(pointerY);
+    }
+
+    private void dragScrollbar(int pointerY) {
+        float max = maxScroll();
+        float travel = viewportHeight() - scrollbarThumbHeight();
+        if (travel <= 0.0F) {
+            return;
+        }
+        float t = (pointerY - this.scrollbarGrabOffset - this.contentTop) / travel;
+        this.scrollTarget = max * Math.max(0.0F, Math.min(1.0F, t));
+        // Straight to the current position as well: the thumb has to sit under the
+        // pointer that is dragging it, not ease towards it.
+        this.scroll = this.scrollTarget;
     }
 
     private void addLink(int id, int x, int y, String langKey) {
@@ -982,12 +1167,33 @@ public class GuiSettingsScreen extends MenuScreen {
 
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int button) {
+        // The scrollbar first: it is drawn over the panel edge, and a click there is
+        // meant for it rather than for whatever row reaches that far.
+        if (button == 0 && overScrollbar(mouseX, mouseY)) {
+            grabScrollbar(mouseY);
+            return;
+        }
         // Headings are drawn, not widgets, so they have to claim the click before the
         // button list gets it — and a fold rebuilds the rows the list is about to test.
         if (toggleHeadingAt(mouseX, mouseY)) {
             return;
         }
         super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    protected void mouseClickMove(int mouseX, int mouseY, int button, long heldTime) {
+        if (this.scrollbarDragging) {
+            dragScrollbar(mouseY);
+            return;
+        }
+        super.mouseClickMove(mouseX, mouseY, button, heldTime);
+    }
+
+    @Override
+    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+        this.scrollbarDragging = false;
+        super.mouseMovedOrUp(mouseX, mouseY, state);
     }
 
     @Override

@@ -1,7 +1,9 @@
 package com.console.uky.handler;
 
+import com.console.uky.client.gui.ChatOverlay;
 import com.console.uky.client.gui.PlayerListOverlay;
 import com.console.uky.client.gui.screen.GuiConnectingScreen;
+import com.console.uky.client.gui.screen.GuiUkyChat;
 import com.console.uky.client.render.UkyFontRenderer;
 import com.console.uky.client.gui.screen.GuiCreateWorldScreen;
 import com.console.uky.client.gui.screen.GuiDeathScreen;
@@ -20,6 +22,7 @@ import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.GuiIngameMenu;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.gui.GuiCreateWorld;
@@ -34,6 +37,7 @@ import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.util.IChatComponent;
 import net.minecraftforge.client.event.GuiOpenEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
+import org.lwjgl.opengl.GL11;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -75,6 +79,31 @@ public class GuiEventHandler {
         PlayerListOverlay.draw(mc, event.resolution);
     }
 
+    /**
+     * Replaces the chat's own drawing with ours.
+     *
+     * Its own event, not the {@code Pre} above, because this one carries where the
+     * chat is about to be drawn — Forge posts it <em>before</em> applying that
+     * translation, so a listener that cancels the draw has to apply it itself.
+     */
+    @SubscribeEvent
+    public void onRenderChat(RenderGameOverlayEvent.Chat event) {
+        if (!UiConfig.redesignChat) {
+            return;
+        }
+        GL11.glPushMatrix();
+        GL11.glTranslatef(event.posX, event.posY, 0.0F);
+        boolean drawn;
+        try {
+            drawn = ChatOverlay.draw(Minecraft.getMinecraft(), event.posY);
+        } finally {
+            GL11.glPopMatrix();
+        }
+        if (drawn) {
+            event.setCanceled(true);
+        }
+    }
+
     @SubscribeEvent
     public void onGuiOpen(GuiOpenEvent event) {
         // The menu track follows the menus: it survives moving between title,
@@ -102,6 +131,13 @@ public class GuiEventHandler {
 
         if (UiConfig.replaceMainMenu && type == GuiMainMenu.class) {
             event.gui = new GuiTitleScreen();
+            return;
+        }
+
+        // Only when the redesign is on: with it off the chat screen is left entirely
+        // alone, which is one fewer vanilla screen this mod is standing in front of.
+        if (UiConfig.redesignChat && type == GuiChat.class) {
+            event.gui = new GuiUkyChat(defaultChatText(event.gui));
             return;
         }
 
@@ -190,6 +226,34 @@ public class GuiEventHandler {
             event.gui = new GuiSettingsScreen(parentOf(event.gui),
                     Minecraft.getMinecraft().gameSettings);
         }
+    }
+
+    /**
+     * The text a chat screen was opened pre-filled with, or "".
+     *
+     * Pressing the command key opens the chat with a "/" already typed, and that is
+     * carried in a private field — so replacing the screen without reading it turned
+     * the command key into a second chat key. Located by value rather than by name:
+     * the screen has two String fields, both empty at the moment it is handed to us,
+     * except the one that was constructed with something in it.
+     */
+    private static String defaultChatText(GuiScreen screen) {
+        for (Field candidate : screen.getClass().getDeclaredFields()) {
+            if (candidate.getType() != String.class
+                    || java.lang.reflect.Modifier.isStatic(candidate.getModifiers())) {
+                continue;
+            }
+            candidate.setAccessible(true);
+            try {
+                Object value = candidate.get(screen);
+                if (value instanceof String && !((String) value).isEmpty()) {
+                    return (String) value;
+                }
+            } catch (IllegalAccessException e) {
+                return "";
+            }
+        }
+        return "";
     }
 
     /**

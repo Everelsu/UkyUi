@@ -1,6 +1,8 @@
 plugins {
     id("java-library")
     id("com.gtnewhorizons.retrofuturagradle") version "2.0.2"
+    id("com.modrinth.minotaur") version "2.8.7"
+    id("net.darkhax.curseforgegradle") version "1.1.26"
 }
 
 // ---- Project coordinates ----

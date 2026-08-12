@@ -9,7 +9,7 @@
   "updateUrl": "",
   "authorList": ["Relsev, REDEMAX"],
   "credits": "Forge and UniMixins. Renderer settings are read from Angelica's own option model.",
-  "logoFile": "",
+  "logoFile": "uky_logo.png",
   "screenshots": [],
   "parent": "",
   "useDependencyInformation": true,

@@ -18,6 +18,12 @@ public final class UkySounds {
     public static final ResourceLocation BUTTON = new ResourceLocation("uky", "button");
     public static final ResourceLocation DELETE_HOLD = new ResourceLocation("uky", "delete_hold");
     public static final ResourceLocation DELETE_BREAK = new ResourceLocation("uky", "delete_break");
+    /**
+     * The toast's own hit. Named after the file, typo included: renaming the ogg
+     * would be a resource-pack-breaking change for the sake of one letter nobody
+     * reads, and the sound event above it is what the rest of the mod refers to.
+     */
+    public static final ResourceLocation ACHIEVEMENT = new ResourceLocation("uky", "achievement");
 
     /**
      * Length of {@code delete_hold.ogg}, in seconds.

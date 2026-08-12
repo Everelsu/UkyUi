@@ -21,6 +21,14 @@ uky.gamemode.hardcore.warning=Одна жизнь. Ты умрёшь навсе�
 
 
 uky.progress.search=Поиск...
+uky.progress.filter.all=Все
+uky.progress.filter.done=Есть
+uky.progress.filter.left=Осталось
+uky.progress.requires=Нужно
+
+# ---- всплывающая плашка достижения и строка о нём в чате ----
+uky.achievement.unlocked=ДОСТИЖЕНИЕ
+uky.achievement.open=Нажмите, чтобы открыть в списке достижений
 
 uky.controls.search=Поиск действия или клавиши...
 uky.controls.press=Нажмите клавишу
@@ -47,6 +55,14 @@ uky.graphics.potato=Картошка
 uky.graphics.minimal=Минимально
 uky.graphics.balanced=Средне
 uky.graphics.maximum=Максимально
+
+# ---- свои переключатели на вкладке «Звук и чат» ----
+uky.settings.chat=Чат UKY
+uky.settings.redesignChat=Свой вид чата
+uky.settings.achievementToast=Плашка достижения
+uky.settings.achievementChat=Короткая строка в чате
+uky.settings.tooltips=Подсказки UKY
+uky.settings.restyleTooltips=Свой вид подсказок
 
 # ---- сцена смерти ----
 # По шесть строк на причину. Сцена выбирает одну на всю смерть.
