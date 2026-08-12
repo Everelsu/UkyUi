@@ -1,6 +1,10 @@
+import net.darkhax.curseforgegradle.TaskPublishCurseForge
+
 plugins {
     id("java-library")
     id("com.gtnewhorizons.retrofuturagradle") version "2.0.2"
+    // Publishing. Neither plugin does anything until its task is asked for by name;
+    // see the release section at the bottom of this file.
     id("com.modrinth.minotaur") version "2.8.7"
     id("net.darkhax.curseforgegradle") version "1.1.26"
 }
@@ -13,7 +17,7 @@ plugins {
 // disagree, the mod list and the file name disagree, and it is the mod list people
 // quote in bug reports.
 group = "com.console.uky"
-version = "0.5.1"
+version = "0.5.2"
 
 // Java 8 toolchain is mandatory for 1.7.10 (both compiling and running)
 java {
@@ -179,4 +183,198 @@ tasks.named<Jar>("jar").configure {
             "MixinConfigs" to "mixins.uky.early.client.json"
         )
     }
+}
+
+// ---- Release: Modrinth and CurseForge ----
+//
+// Both stores are wired to the same three things — the reobfuscated jar, the version
+// in `version` above, and the notes for that version in CHANGELOG.md — so a release is
+// one tag rather than two forms filled in twice.
+//
+// Nothing here runs on its own: `build` depends on none of it, and the tasks
+// (`modrinth`, `modrinthSyncBody`, `curseforge`, `publishRelease`) each have to be
+// asked for by name. Credentials are read from the environment and never from a file
+// in this repository — MODRINTH_TOKEN and CURSEFORGE_TOKEN, which in CI come from the
+// repository secrets of the same name. See RELEASING.md.
+
+/**
+ * The jar that ships — reobfuscated to SRG names, not the workspace "-dev" one.
+ *
+ * Typed as the base `org.gradle.jvm.tasks.Jar` on purpose: RetroFuturaGradle's
+ * reobfuscation task extends that rather than the `bundling.Jar` that a bare `Jar`
+ * means in the Kotlin DSL, so asking for the latter fails at configuration time.
+ */
+val releaseJar = tasks.named<org.gradle.jvm.tasks.Jar>("reobfJar")
+
+/**
+ * Project identifiers, from gradle.properties.
+ *
+ * Empty by default, and checked when a publish runs rather than here: a fork with no
+ * projects of its own must still be able to run every other task in this build, and
+ * `gradle tasks` configures these two along with the rest.
+ */
+val modrinthProjectId: String = providers.gradleProperty("modrinthProjectId").getOrElse("")
+val curseforgeProjectId: String = providers.gradleProperty("curseforgeProjectId").getOrElse("")
+
+val modrinthToken: String = providers.environmentVariable("MODRINTH_TOKEN").getOrElse("")
+val curseforgeToken: String = providers.environmentVariable("CURSEFORGE_TOKEN").getOrElse("")
+
+/**
+ * What changed in this version, read out of CHANGELOG.md.
+ *
+ * The section headed with this version, down to the next heading. Written once and
+ * sent to both stores and to the GitHub release, because three copies of a changelog
+ * are three different changelogs by the second release.
+ */
+val releaseNotes: String by lazy {
+    val changelog = file("CHANGELOG.md")
+    val fallback = "https://github.com/Everelsu/UkyUi/releases/tag/v${project.version}"
+    if (!changelog.isFile) {
+        return@lazy fallback
+    }
+    val text = changelog.readText()
+    val heading = Regex("(?m)^##\\s+\\[?" + Regex.escape(project.version.toString()) + "]?.*$")
+        .find(text) ?: return@lazy fallback
+    val rest = text.substring(heading.range.last + 1)
+    val next = Regex("(?m)^##\\s+").find(rest)
+    (if (next == null) rest else rest.substring(0, next.range.first)).trim().ifEmpty { fallback }
+}
+
+/**
+ * Fails a release whose version does not agree with the one compiled into the mod.
+ *
+ * `UkyUI.VERSION` has to be a compile-time constant, so it cannot be given the value
+ * from this file, and the two drifting apart is invisible until somebody quotes the
+ * mod list in a bug report against a jar that says something else.
+ */
+val checkModVersion = tasks.register("checkModVersion") {
+    group = "verification"
+    description = "Checks UkyUI.VERSION against the version in build.gradle.kts"
+    val source = file("src/main/java/com/console/uky/UkyUI.java")
+    val expected = project.version.toString()
+    inputs.file(source)
+    inputs.property("version", expected)
+    doLast {
+        val found = Regex("VERSION\\s*=\\s*\"([^\"]+)\"").find(source.readText())?.groupValues?.get(1)
+        check(found == expected) {
+            "Version mismatch: build.gradle.kts says $expected, UkyUI.VERSION says $found.\n" +
+                "Both have to move together — see the note at the top of this file."
+        }
+    }
+}
+
+/**
+ * Everything a publish needs set up, checked before anything is built.
+ *
+ * A task of its own, with the jar ordered after it, so a missing token fails in a
+ * second rather than at the end of a five-minute decompile — which is exactly when it
+ * would happen on a fresh checkout.
+ */
+fun preflight(name: String, store: String, projectId: String, propertyName: String,
+              tokenName: String, token: String) = tasks.register(name) {
+    group = "verification"
+    description = "Checks the $store release settings"
+    dependsOn(checkModVersion)
+    doLast {
+        require(projectId.isNotEmpty()) {
+            "$propertyName is not set. Put the project's id in gradle.properties" +
+                " — see RELEASING.md."
+        }
+        require(token.isNotEmpty()) {
+            "$tokenName is not set in the environment. It is a secret and does not" +
+                " belong in this repository — see RELEASING.md."
+        }
+    }
+}
+
+val modrinthPreflight = preflight("checkModrinthRelease", "Modrinth", modrinthProjectId,
+    "modrinthProjectId", "MODRINTH_TOKEN", modrinthToken)
+val curseforgePreflight = preflight("checkCurseForgeRelease", "CurseForge", curseforgeProjectId,
+    "curseforgeProjectId", "CURSEFORGE_TOKEN", curseforgeToken)
+
+releaseJar.configure {
+    // Only ever relevant when a preflight is in the task graph at all, which is to say
+    // when something is being published. An ordinary build is untouched by this.
+    mustRunAfter(modrinthPreflight, curseforgePreflight)
+}
+
+modrinth {
+    token.set(modrinthToken)
+    projectId.set(modrinthProjectId)
+    versionNumber.set(project.version.toString())
+    versionName.set("UKY UI ${project.version} for Minecraft 1.7.10")
+    versionType.set("release")
+    // The task itself: Minotaur understands an archive task and takes the file off it,
+    // which is one fewer thing to keep in step with where the build writes its jars.
+    uploadFile.set(releaseJar)
+    gameVersions.set(listOf("1.7.10"))
+    loaders.set(listOf("forge"))
+    changelog.set(provider { releaseNotes })
+    // ghjoiQAl is UniMixins — the coremod providing the mixin subsystem this mod does
+    // not start without. By id rather than by slug: an owner can change a slug, and
+    // the id is what the API actually resolves.
+    dependencies {
+        required.project("ghjoiQAl")
+    }
+    // Pushed by `modrinthSyncBody`, which is a task of its own; publishing a version
+    // does not touch the project page.
+    syncBodyFrom.set(provider { file("store/modrinth-description.md").readText() })
+}
+
+tasks.named("modrinth").configure {
+    dependsOn(modrinthPreflight, releaseJar)
+}
+
+tasks.named("modrinthSyncBody").configure {
+    dependsOn(modrinthPreflight)
+}
+
+tasks.register<TaskPublishCurseForge>("curseforge") {
+    group = "upload"
+    description = "Publishes the release jar to CurseForge"
+    dependsOn(curseforgePreflight, releaseJar)
+
+    apiToken = curseforgeToken
+
+    // Only described when there is somewhere to send it. `gradle tasks` configures
+    // every task it lists, and an upload declared against an empty project id fails
+    // there — on a build that was never going to publish anything.
+    if (curseforgeProjectId.isNotEmpty()) {
+        val main = upload(curseforgeProjectId, releaseJar.get())
+        main.releaseType = "release"
+        main.displayName = "UKY UI ${project.version} for Minecraft 1.7.10"
+        main.changelog = releaseNotes
+        main.changelogType = "markdown"
+        main.addGameVersion("1.7.10")
+        main.addModLoader("Forge")
+        main.addJavaVersion("Java 8")
+        main.addRequirement("unimixins")
+    }
+}
+
+/** Both stores at once, which is what a release actually is. */
+tasks.register("publishRelease") {
+    group = "upload"
+    description = "Publishes the release jar to Modrinth and CurseForge"
+    dependsOn(tasks.named("modrinth"), tasks.named("curseforge"))
+}
+
+/**
+ * The version and the notes, for whatever is driving a release from outside Gradle.
+ *
+ * The release workflow reads both from here rather than parsing this file or the
+ * changelog itself, so the rules for what a version is and where its notes come from
+ * live in exactly one place.
+ */
+tasks.register("printVersion") {
+    group = "help"
+    description = "Prints the project version"
+    val value = project.version.toString()
+    doLast { println(value) }
+}
+
+tasks.register("printReleaseNotes") {
+    group = "help"
+    description = "Prints this version's section of CHANGELOG.md"
+    doLast { println(releaseNotes) }
 }
