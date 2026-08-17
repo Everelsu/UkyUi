@@ -43,6 +43,19 @@ import java.util.List;
  * <p>Typing after the list arrives narrows it here, without asking anything again —
  * a client this old has no local copy of the server's commands, so a request per
  * keystroke would be a request per keystroke on somebody else's machine.
+ *
+ * <p><b>A command shows its list without being asked.</b> Everything above used to
+ * wait for Tab, which meant the feature was invisible: the box only ever appeared to
+ * somebody who already knew it was there, and a player typing a command they half
+ * remembered got the same blank line 1.7.10 always gave them. Typing {@code /} now
+ * opens the list on its own, and it is asked for again each time the cursor moves into
+ * a new argument — see {@link #afterEdit}. That is the behaviour of every client since
+ * 1.13, and the request rate is the thing it is careful about: one per word, not one
+ * per keystroke, with the letters inside a word narrowing what already arrived.
+ *
+ * <p>Ordinary messages are still Tab-only. The completion there is player names, which
+ * is worth having and is not worth a packet for every word of every sentence typed in
+ * chat.
  */
 public final class CommandLine {
 
@@ -62,6 +75,27 @@ public final class CommandLine {
     private int scroll;
     /** True between asking the server and hearing back from it. */
     private boolean awaitingServer;
+    /**
+     * The text before the word the current candidates were asked for, or null.
+     *
+     * This is what says "still the same word": the letters inside the word being
+     * completed change with every key and the text ahead of it does not, so comparing
+     * it is how {@link #afterEdit} tells narrowing what is already here from needing to
+     * ask again. Null means nothing has been asked for, which is the state a closed box
+     * is in.
+     */
+    private String requestedContext;
+    /**
+     * Whether the open list was asked for by pressing Tab rather than by typing.
+     *
+     * The one thing that turns on it is the single-candidate shortcut in
+     * {@link #onServerSuggestions}: completing straight away is exactly what Tab meant
+     * and exactly what typing did not. A list that arrived on its own and silently
+     * rewrote the line mid-word would be the least intuitive thing here.
+     */
+    private boolean manual;
+    /** Whether the open list was asked for on a line that began with a slash. */
+    private boolean commandList;
 
     /** Bounds of the box, kept from the last draw so a click can be tested against it. */
     private float boxX1;
@@ -85,6 +119,9 @@ public final class CommandLine {
         this.selected = 0;
         this.scroll = 0;
         this.awaitingServer = false;
+        this.requestedContext = null;
+        this.manual = false;
+        this.commandList = false;
     }
 
     // ------------------------------------------------------------------- input --
@@ -98,9 +135,22 @@ public final class CommandLine {
                 if (isOpen()) {
                     apply(this.shown.get(this.selected));
                 } else {
-                    request();
+                    request(true);
                 }
                 return true;
+            case 205: // right arrow
+                // At the end of the line, with a completion showing ahead of the
+                // cursor: take it. This is what a shell does, and it is the gesture
+                // people try first — the greyed text is sitting right there and
+                // walking into it is the obvious way to ask for it. Anywhere else
+                // the key is left alone and moves the cursor as it always did.
+                if (isOpen() && this.field.getCursorPosition() == this.field.getText().length()
+                        && this.field.getCursorPosition() == this.field.getSelectionEnd()
+                        && hasGhost()) {
+                    apply(this.shown.get(this.selected));
+                    return true;
+                }
+                return false;
             case 1: // escape
                 // Closes the list before it closes the chat, which is the behaviour
                 // of every box like this and the reason it is safe to have one.
@@ -127,16 +177,57 @@ public final class CommandLine {
     }
 
     /**
-     * Re-narrows the list after the field changed.
+     * Brings the list in line with whatever the field now says.
      *
      * Called for every edit rather than only for typed characters: a backspace widens
      * what matches, and a list that only ever shrank would go empty and stay empty.
+     *
+     * <p>Three outcomes, decided by whether the cursor is still in the word the current
+     * candidates were asked for:
+     *
+     * <ul>
+     * <li><b>Still the same word</b> — narrow what is already here. No packet: the
+     *     server was asked about this word once and nothing it could say has changed.
+     * <li><b>A new word, in a command</b> — ask again. This is what makes the box
+     *     follow a command along as it is typed, argument by argument, and it is the
+     *     whole of the automatic behaviour.
+     * <li><b>A new word, in an ordinary message</b> — close. What was open belonged to
+     *     a word that is no longer being typed, and a sentence does not ask on its own.
+     * </ul>
      */
     public void afterEdit() {
-        if (this.candidates.isEmpty()) {
+        boolean command = this.field.getText().startsWith("/");
+
+        // A list asked for on a command line stops meaning anything the moment the line
+        // stops being one. Backspacing over the slash is the case that matters: without
+        // this, "/" narrowed against an empty word leaves every command on the server
+        // hanging over a blank chat line, because an empty prefix matches all of them.
+        if (this.requestedContext != null && this.commandList && !command) {
+            close();
             return;
         }
-        narrow();
+        if (this.requestedContext != null && this.requestedContext.equals(context())) {
+            narrow();
+            return;
+        }
+        if (command) {
+            request(false);
+            return;
+        }
+        close();
+    }
+
+    /**
+     * The text ahead of the word being completed.
+     *
+     * Everything before {@link #wordStart}, which is precisely the part that does not
+     * change while a word is being typed and does change the moment the cursor enters
+     * another one.
+     */
+    private String context() {
+        String text = this.field.getText();
+        int start = Math.min(wordStart(), text.length());
+        return text.substring(0, Math.max(0, start));
     }
 
     public boolean mouseClicked(int mouseX, int mouseY, int button) {
@@ -190,7 +281,7 @@ public final class CommandLine {
      * is released, while the server's reply is a packet away and merges into the same
      * list when it lands.
      */
-    private void request() {
+    private void request(boolean manual) {
         if (this.mc.thePlayer == null) {
             return;
         }
@@ -200,9 +291,13 @@ public final class CommandLine {
         // and Forge's client-command completion reads the first character without
         // checking there is one.
         if (beforeCursor.isEmpty()) {
+            close();
             return;
         }
 
+        this.manual = manual;
+        this.commandList = beforeCursor.charAt(0) == '/';
+        this.requestedContext = context();
         this.candidates.clear();
         if (beforeCursor.charAt(0) == '/') {
             ClientCommandHandler.instance.autoComplete(beforeCursor, currentWord());
@@ -231,8 +326,11 @@ public final class CommandLine {
         addAll(values);
         narrow();
         // One candidate and nothing to choose between: complete it and get out of the
-        // way, which is what pressing Tab meant.
-        if (this.shown.size() == 1) {
+        // way, which is what pressing Tab meant — and only what pressing Tab meant. A
+        // list that opened by itself must never write into the line, or a command whose
+        // first two letters happen to be unique finishes itself under the cursor while
+        // it is still being typed.
+        if (this.manual && this.shown.size() == 1) {
             apply(this.shown.get(0));
         }
     }
@@ -334,17 +432,28 @@ public final class CommandLine {
      * common case where the first candidate is the right one.
      */
     private void drawGhost(int cursorX, int y) {
-        if (!isOpen()) {
+        if (!hasGhost()) {
             return;
         }
         String suggestion = this.shown.get(this.selected);
-        String word = currentWord();
-        if (word.length() >= suggestion.length()
-                || !suggestion.toLowerCase().startsWith(word.toLowerCase())) {
-            return;
-        }
-        this.font.drawStringWithShadow(suggestion.substring(word.length()), cursorX, y,
+        this.font.drawStringWithShadow(suggestion.substring(currentWord().length()), cursorX, y,
                 Draw.withAlpha(Theme.textDim, 0.55F));
+    }
+
+    /**
+     * Whether the highlighted candidate has anything left to add.
+     *
+     * Shared with the right-arrow shortcut: what that key takes has to be exactly what
+     * is drawn ahead of the cursor, or the key does something the line does not show.
+     */
+    private boolean hasGhost() {
+        if (!isOpen()) {
+            return false;
+        }
+        String suggestion = this.shown.get(this.selected);
+        String word = currentWord();
+        return word.length() < suggestion.length()
+                && suggestion.toLowerCase().startsWith(word.toLowerCase());
     }
 
     private void drawCursor(int cursorX, int y) {

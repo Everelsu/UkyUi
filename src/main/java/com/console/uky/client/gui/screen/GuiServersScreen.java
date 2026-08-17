@@ -8,9 +8,11 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.Theme;
+import com.console.uky.client.sound.UkySounds;
+import com.console.uky.client.world.TileCracks;
+import com.console.uky.client.world.TileShatter;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiYesNo;
 import net.minecraft.client.gui.GuiYesNoCallback;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
@@ -33,6 +35,14 @@ import java.util.Map;
  * plays the same role the world capture does: blown up as the card's face,
  * blurred by the upscale, with the name and MOTD over it. Servers that publish no
  * icon get the same black plate an unvisited world gets.
+ *
+ * <p>Deleting one is the world picker's gesture too — hold the bin, or Shift-click it.
+ * It used to be a vanilla {@code GuiYesNo}, which was wrong in three ways at once: it
+ * threw the player out to a grey stone screen in the middle of a dark one, it asked a
+ * question the pointer had already answered by being on the bin, and it meant the two
+ * lists in this menu confirmed the same destructive action in two different ways. The
+ * hold is the confirmation — there is nothing to agree with, so the only thing that can
+ * mean "yes" is not letting go — and sliding off it is the cancel.
  */
 public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
@@ -68,7 +78,27 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private int lastMouseX;
     private int lastMouseY;
 
-    private int pendingDelete = -1;
+    // ---- deleting -----------------------------------------------------------
+    //
+    // The world picker's mechanism, whole: the same two durations, the same sound
+    // under the rise, the same fill inside the bin, and the same Shift-click past it.
+    // Both are the destructive action on a card in a grid, and a player who has
+    // learned one has learned the other.
+
+    /** Seconds the bin must be held; the length of the sound that plays under it. */
+    private static final float DELETE_HOLD_SECONDS = UkySounds.DELETE_HOLD_SECONDS;
+    /** Seconds to run the fill back down after letting go. */
+    private static final float DELETE_UNWIND_SECONDS = 0.14F;
+
+    /** Card whose bin is being held, or -1. */
+    private int holdCard = -1;
+    private float holdProgress;
+    /** Set by a Shift-click, cleared when the button comes up; see the world picker. */
+    private boolean holdSuppressed;
+    /** The break drawn on the card while the bin is held, and then broken along. */
+    private TileCracks cracks;
+    /** Plays after the entry is gone; holds nothing but pixels. */
+    private TileShatter shatter;
 
     public GuiServersScreen(GuiScreen parent) {
         super(parent);
@@ -206,31 +236,60 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         int count = this.servers.countServers();
         Probe[] fresh = new Probe[count];
         for (int i = 0; i < count; i++) {
-            final ServerData data = this.servers.getServerData(i);
-            final Probe probe = new Probe();
-            fresh[i] = probe;
-
-            data.pingToServer = -2L;
-            data.serverMOTD = "";
-            data.populationInfo = "";
-
-            PINGERS.execute(new Runnable() {
-                @Override
-                public void run() {
-                    probe.startedAt = System.currentTimeMillis();
-                    try {
-                        GuiServersScreen.this.pinger.func_147224_a(data);
-                    } catch (java.net.UnknownHostException e) {
-                        probe.state = PING_UNRESOLVED;
-                        data.populationInfo = "";
-                    } catch (Exception e) {
-                        probe.state = PING_UNREACHABLE;
-                        data.populationInfo = "";
-                    }
-                }
-            });
+            fresh[i] = ping(this.servers.getServerData(i));
         }
         this.probes = fresh;
+    }
+
+    /**
+     * Queues one entry's probe and hands back the record its answer lands in.
+     *
+     * Split out from {@link #pingAll} so that a server added or edited on this screen
+     * can be asked by itself. It used to have no way to be: {@link #probes} is indexed
+     * by position and was only ever rebuilt wholesale, so an entry added after the
+     * screen opened had no probe at all — {@code probeFor} returned null, which
+     * {@link #stateOf} reads as "still being asked", and the card sat on "Asking the
+     * server..." until the list was refreshed by hand.
+     */
+    private Probe ping(final ServerData data) {
+        final Probe probe = new Probe();
+
+        data.pingToServer = -2L;
+        data.serverMOTD = "";
+        data.populationInfo = "";
+
+        PINGERS.execute(new Runnable() {
+            @Override
+            public void run() {
+                probe.startedAt = System.currentTimeMillis();
+                try {
+                    GuiServersScreen.this.pinger.func_147224_a(data);
+                } catch (java.net.UnknownHostException e) {
+                    probe.state = PING_UNRESOLVED;
+                    data.populationInfo = "";
+                } catch (Exception e) {
+                    probe.state = PING_UNREACHABLE;
+                    data.populationInfo = "";
+                }
+            }
+        });
+        return probe;
+    }
+
+    /** Puts {@code probe} at {@code index}, growing the array when it is off the end. */
+    private void setProbe(int index, Probe probe) {
+        Probe[] snapshot = this.probes;
+        if (index < 0) {
+            return;
+        }
+        if (index < snapshot.length) {
+            snapshot[index] = probe;
+            return;
+        }
+        Probe[] grown = new Probe[index + 1];
+        System.arraycopy(snapshot, 0, grown, 0, snapshot.length);
+        grown[index] = probe;
+        this.probes = grown;
     }
 
     /**
@@ -276,6 +335,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
         drawHeader();
         updateHover(mouseX, mouseY);
+        updateHold();
 
         Draw.beginClip(this.gridX, this.gridY, this.gridWidth, this.gridHeight);
         drawAddCard(0);
@@ -284,7 +344,26 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
         Draw.endClip();
 
+        drawShatter();
         drawEdgeFade();
+    }
+
+    /**
+     * The shards, drawn over everything and outside the grid's clip.
+     *
+     * Unclipped for the world picker's reason: a card bursting apart should be allowed
+     * to throw pieces past the edge of the list rather than have them vanish at a
+     * boundary the player cannot see.
+     */
+    private void drawShatter() {
+        if (this.shatter == null) {
+            return;
+        }
+        this.shatter.advance(this.delta);
+        this.shatter.draw(this.fadeAlpha);
+        if (this.shatter.isFinished()) {
+            this.shatter = null;
+        }
     }
 
     private void drawHeader() {
@@ -452,6 +531,14 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
         drawStatus(data, index, x + 6, (int) (y2 - 9), alpha);
 
+        if (this.holdCard == index && this.holdProgress > 0.0F && this.cracks != null) {
+            this.cracks.draw(x, y, this.tileWidth, this.tileHeight,
+                    Ease.clamp01(this.holdProgress), alpha);
+            Draw.border(x, y, x2, y2, 1.0F,
+                    Draw.withAlpha(Theme.danger,
+                            (0.3F + 0.7F * Ease.clamp01(this.holdProgress)) * alpha));
+        }
+
         if (hover > 0.02F) {
             drawCardActions(index, x, y, hover, alpha);
             Draw.border(x, y, x2, y2, 1.0F, Draw.withAlpha(Theme.accent, hover * alpha));
@@ -551,8 +638,147 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
         drawIconButton(x + this.tileWidth - box * 2 - 8, y + 4, box, a,
                 this.hoveredAction == HIT_EDIT && this.hoveredCard == index, false);
-        drawIconButton(x + this.tileWidth - box - 4, y + 4, box, a,
-                this.hoveredAction == HIT_DELETE && this.hoveredCard == index, true);
+
+        float binX = x + this.tileWidth - box - 4;
+        boolean overBin = this.hoveredAction == HIT_DELETE && this.hoveredCard == index;
+        drawIconButton(binX, y + 4, box, a, overBin, true);
+        if (overBin && isShiftKeyDown()) {
+            // Full, because that is what Shift means: the next click is the one that
+            // does it, and the button already looks the way it looks a moment before
+            // a card breaks.
+            drawBinFill(binX, y + 4, box, alpha, 1.0F);
+        } else if (this.holdCard == index && this.holdProgress > 0.0F) {
+            drawBinFill(binX, y + 4, box, alpha, Ease.clamp01(this.holdProgress));
+        }
+    }
+
+    /**
+     * Advances or unwinds the hold on the bin.
+     *
+     * Driven from the button being physically down rather than from a click: the
+     * gesture is the confirmation, so the only thing that can go on meaning "yes" is
+     * going on holding. Moving off the bin unwinds it, which makes sliding away the
+     * natural cancel.
+     */
+    private void updateHold() {
+        boolean down = org.lwjgl.input.Mouse.isButtonDown(0);
+        if (!down) {
+            this.holdSuppressed = false;
+        }
+        boolean holding = down
+                && !this.holdSuppressed
+                // Shift already means "now", and the click has already done it.
+                && !isShiftKeyDown()
+                && this.hoveredAction == HIT_DELETE
+                && this.hoveredCard >= 0
+                && this.hoveredCard < this.servers.countServers()
+                && (this.holdCard == -1 || this.holdCard == this.hoveredCard);
+
+        if (holding) {
+            if (this.holdCard != this.hoveredCard || this.cracks == null) {
+                this.cracks = new TileCracks();
+            }
+            this.holdCard = this.hoveredCard;
+            // Started here rather than on the first frame of the press, so the sound
+            // and the fill begin together. Repeated calls after the first do nothing.
+            UkySounds.startDeleteHold();
+            this.holdProgress += this.delta / DELETE_HOLD_SECONDS;
+            if (this.holdProgress >= 1.0F) {
+                int index = this.holdCard;
+                this.holdCard = -1;
+                this.holdProgress = 0.0F;
+                // The rise has arrived; the break takes over from here.
+                UkySounds.stopDeleteHold();
+                destroyServer(index);
+            }
+            return;
+        }
+
+        if (this.holdProgress > 0.0F) {
+            // Let go before the end: the rise is cut off, because it is a rise towards
+            // something that is now not going to happen.
+            UkySounds.stopDeleteHold();
+        }
+
+        this.holdProgress -= this.delta / DELETE_UNWIND_SECONDS;
+        if (this.holdProgress <= 0.0F) {
+            this.holdProgress = 0.0F;
+            this.holdCard = -1;
+            // Dropped with the press it belonged to; see the world picker.
+            this.cracks = null;
+        }
+    }
+
+    /**
+     * Removes the entry at {@code index} and breaks its card apart where it stood.
+     *
+     * <p>The two parallel arrays are spliced rather than rebuilt, and that is the whole
+     * difficulty here. {@link #probes} and {@link #hoverAmount} are indexed by position
+     * in the server list, so removing an entry without removing theirs leaves every
+     * card below it reading the one above's ping and the one above's hover — a list
+     * where deleting the second server makes the third claim the second's latency.
+     * Re-pinging everything would fix it too, and would throw away every answer already
+     * received to solve a bookkeeping problem.
+     */
+    private void destroyServer(int index) {
+        if (index < 0 || index >= this.servers.countServers()) {
+            return;
+        }
+        UkySounds.play(UkySounds.DELETE_BREAK);
+
+        ServerData data = this.servers.getServerData(index);
+        ResourceLocation icon = iconFor(data);
+        float x = slotX(index + 1);
+        float y = slotY(index + 1);
+
+        this.servers.removeServerData(index);
+        this.servers.saveServerList();
+
+        this.probes = removeAt(this.probes, index);
+        this.hoverAmount = removeAt(this.hoverAmount, index);
+
+        TileCracks pattern = this.cracks != null ? this.cracks : new TileCracks();
+        this.cracks = null;
+        this.shatter = new TileShatter(pattern, icon, x, y, this.tileWidth, this.tileHeight);
+        clampScroll();
+    }
+
+    private static Probe[] removeAt(Probe[] array, int index) {
+        if (index < 0 || index >= array.length) {
+            return array;
+        }
+        Probe[] out = new Probe[array.length - 1];
+        System.arraycopy(array, 0, out, 0, index);
+        System.arraycopy(array, index + 1, out, index, array.length - index - 1);
+        return out;
+    }
+
+    private static float[] removeAt(float[] array, int index) {
+        if (index < 0 || index >= array.length) {
+            return array;
+        }
+        float[] out = new float[array.length - 1];
+        System.arraycopy(array, 0, out, 0, index);
+        System.arraycopy(array, index + 1, out, index, array.length - index - 1);
+        return out;
+    }
+
+    /**
+     * The hold filling the bin button up; the world picker's, to the pixel.
+     *
+     * @param sweep how full, 0 to 1 — a Shift-click draws it at 1 without any hold
+     */
+    private void drawBinFill(float x, float y, float box, float alpha, float sweep) {
+        Draw.rect(x, y + box * (1.0F - sweep), x + box, y + box,
+                Draw.withAlpha(Theme.danger, 0.55F * alpha));
+        // A brighter line riding the top of the fill, so the movement stays legible
+        // over the last few percent where the fill itself barely grows.
+        float edge = y + box * (1.0F - sweep);
+        Draw.rect(x, edge, x + box, edge + 1.0F, Draw.withAlpha(Theme.danger, alpha));
+        Draw.border(x, y, x + box, y + box, 1.0F, Draw.withAlpha(Theme.danger, alpha));
+
+        Icons.trash(x + box / 2.0F, y + box / 2.0F, box * 0.58F,
+                Draw.withAlpha(Draw.mix(Theme.danger, 0xFFFFFF, sweep), alpha));
     }
 
     private void drawIconButton(float x, float y, float box, float alpha, boolean hot,
@@ -636,7 +862,18 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     beginEditServer(this.hoveredCard, data);
                     return;
                 case HIT_DELETE:
-                    confirmDelete(this.hoveredCard);
+                    // Nothing on click. The bin is a hold, and a dialogue on top of a
+                    // hold would be two confirmations for one action.
+                    //
+                    // Shift stands in for the hold, as it does in the world picker.
+                    // A server entry is a name and an address rather than months of
+                    // play, so this is the list where the shortcut gets used — but it
+                    // is still the same key doing the same thing, which is the point of
+                    // it being the same key.
+                    if (isShiftKeyDown()) {
+                        this.holdSuppressed = true;
+                        destroyServer(this.hoveredCard);
+                    }
                     return;
                 default:
                     join(data);
@@ -686,7 +923,6 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     // never saved and editing one did nothing at all.
 
     private static final int MODE_NONE = 0;
-    private static final int MODE_DELETE = 1;
     private static final int MODE_ADD = 2;
     private static final int MODE_EDIT = 3;
     private static final int MODE_DIRECT = 4;
@@ -724,25 +960,12 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         this.mc.displayGuiScreen(new GuiServerEditScreen(this, GuiServerEditScreen.Mode.DIRECT, this.draft));
     }
 
-    private void confirmDelete(int index) {
-        this.mode = MODE_DELETE;
-        this.pendingDelete = index;
-        ServerData data = this.servers.getServerData(index);
-        this.mc.displayGuiScreen(new GuiYesNo(this,
-                I18n.format("selectServer.deleteQuestion", new Object[0]),
-                "'" + data.serverName + "' "
-                        + I18n.format("selectServer.deleteWarning", new Object[0]),
-                I18n.format("selectServer.deleteButton", new Object[0]),
-                I18n.format("gui.cancel", new Object[0]), 0));
-    }
-
     @Override
     public void confirmClicked(boolean confirmed, int id) {
         int finished = this.mode;
         this.mode = MODE_NONE;
 
         if (!confirmed) {
-            this.pendingDelete = -1;
             this.editIndex = -1;
             this.draft = null;
             this.mc.displayGuiScreen(this);
@@ -750,15 +973,13 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
 
         switch (finished) {
-            case MODE_DELETE:
-                if (this.pendingDelete >= 0 && this.pendingDelete < this.servers.countServers()) {
-                    this.servers.removeServerData(this.pendingDelete);
-                    this.servers.saveServerList();
-                }
-                break;
             case MODE_ADD:
                 this.servers.addServerData(this.draft);
                 this.servers.saveServerList();
+                // Asked for on its own rather than by re-pinging the list: appending
+                // keeps every answer already received, and the entry goes on the end,
+                // so its index is the one past what the array currently holds.
+                setProbe(this.servers.countServers() - 1, ping(this.draft));
                 break;
             case MODE_EDIT:
                 if (this.editIndex >= 0 && this.editIndex < this.servers.countServers()) {
@@ -767,13 +988,15 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     live.serverIP = this.draft.serverIP;
                     live.func_152584_a(this.draft.func_152586_b());
                     this.servers.saveServerList();
+                    // The address may be the thing that was edited, which makes the
+                    // answer on the card an answer about somewhere else.
+                    setProbe(this.editIndex, ping(live));
                 }
                 break;
             case MODE_DIRECT:
                 // Straight in, deliberately not saved: that is the whole point of a
                 // one-off connection.
                 join(this.draft);
-                this.pendingDelete = -1;
                 this.editIndex = -1;
                 this.draft = null;
                 return;
@@ -781,7 +1004,6 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                 break;
         }
 
-        this.pendingDelete = -1;
         this.editIndex = -1;
         this.draft = null;
         this.mc.displayGuiScreen(this);
@@ -792,8 +1014,15 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         this.mc.displayGuiScreen(this.parent);
     }
 
+    /**
+     * Leaving mid-hold must not leave the rise playing.
+     *
+     * The screen can go while the button is still down — Escape, or a server being
+     * joined from underneath — and nothing else would ever stop the sound.
+     */
     @Override
     public void onGuiClosed() {
+        UkySounds.stopDeleteHold();
         super.onGuiClosed();
         if (this.pinger != null) {
             this.pinger.func_147226_b();

@@ -4,6 +4,7 @@ import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
+import com.console.uky.client.gui.Transitions;
 import com.console.uky.handler.WorldCaptureHandler;
 
 import net.minecraft.client.gui.GuiButton;
@@ -164,12 +165,23 @@ public class GuiPauseScreen extends MenuScreen {
                 break;
             case ID_QUIT:
                 button.enabled = false;
-                // Take the world's parting picture first — the handler draws one
-                // clean frame and then runs this.
-                WorldCaptureHandler.captureThen(new Runnable() {
+                // Closed through the same animation as everything else here, and only
+                // then handed over. It used to go straight to the capture, which starts
+                // by closing the screen outright — so the one button on this menu that
+                // takes a second to act was also the only one that vanished on a frame
+                // boundary. Escape has always animated; this now matches it.
+                //
+                // It also costs the capture nothing: what the close animation fades away
+                // to is the world, which is exactly the clean frame the picture needs.
+                closeWith(new Runnable() {
                     @Override
                     public void run() {
-                        quitToMenu();
+                        WorldCaptureHandler.captureThen(new Runnable() {
+                            @Override
+                            public void run() {
+                                quitToMenu();
+                            }
+                        });
                     }
                 });
                 break;
@@ -219,6 +231,12 @@ public class GuiPauseScreen extends MenuScreen {
             this.mc.theWorld.sendQuittingDisconnectingPacket();
         }
         this.mc.loadWorld((WorldClient) null);
+        // Whatever comes up arrives out of black rather than simply being there. By this
+        // point the world has been faded down and the save screen has been through on the
+        // same colour, so the menu climbing out of it is the last step of one continuous
+        // move — and it is the same climb a screen makes returning to the title from a
+        // list, so the exit and the entrance are mirror images.
+        Transitions.emerge();
         this.mc.displayGuiScreen(destination);
     }
 

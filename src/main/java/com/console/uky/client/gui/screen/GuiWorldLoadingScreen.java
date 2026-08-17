@@ -111,6 +111,14 @@ public class GuiWorldLoadingScreen extends GuiScreen {
 
         Draw.vignette(this.width, this.height, 0.8F, 0xFF000000);
 
+        // Full strength from the first frame, and deliberately not faded in.
+        //
+        // Fading it was tried and is wrong. This screen does not follow the dark — it
+        // follows UkyLoadingScreen, which draws its own headline at this exact position
+        // with this exact alpha and its bar at the same height, precisely so the two
+        // phases of loading read as one continuous shot. Fading in here would make the
+        // caption dip out and return at the handover between them, which is a seam where
+        // there had not been one.
         String message = I18n.format("multiplayer.downloadingTerrain", new Object[0]);
         this.drawCenteredString(this.fontRendererObj, message,
                 this.width / 2, this.height - 40, Draw.withAlpha(Theme.text, 0.9F));

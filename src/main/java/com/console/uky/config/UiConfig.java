@@ -1,9 +1,12 @@
 package com.console.uky.config;
 
+import net.minecraftforge.common.config.ConfigCategory;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.common.config.Property;
 
 import java.io.File;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Single source of truth for everything a pack author would want to tweak
@@ -164,6 +167,15 @@ public final class UiConfig {
     /** Slow zoom/drift on the background image. */
     public static boolean backgroundDrift = true;
     public static boolean buttonSounds = true;
+    /**
+     * Lay a shadow under the text in this mod's screens.
+     *
+     * On, because off is what they were doing and it is what looked wrong: the interface
+     * drew flat while every vanilla screen, every other mod and the chat around it did
+     * not. A switch rather than a hundred and twenty edits, so the two looks can be
+     * compared — see {@code UkyFontRenderer}.
+     */
+    public static boolean textShadow = true;
     /** One of {@code blackhole}, {@code image}, {@code solid}. */
     public static String background = "blackhole";
     /**
@@ -250,6 +262,7 @@ public final class UiConfig {
         config = new Configuration(file);
         config.load();
         read();
+        prune();
         // Written every launch rather than only when a value changed, because the
         // comments are half of what this file is for. Forge marks the config dirty
         // when a *value* is added or edited, never when a comment is — so a build
@@ -313,11 +326,46 @@ public final class UiConfig {
         if (safe == null) {
             return text;
         }
-        // System.err rather than the logger: this runs while mods are still loading.
-        System.err.println("[UKY] the loading screen cannot draw \"" + text
-                + "\" — it has no font for anything outside plain ASCII this early,"
-                + " so it is showing \"" + safe + "\" instead. Menus are unaffected.");
+        if (shouldWarnAboutSplashText(text)) {
+            // System.err rather than the logger: this runs while mods are still loading.
+            System.err.println("[UKY] the loading screen cannot draw \"" + text
+                    + "\" — it has no font for anything outside plain ASCII this early,"
+                    + " so it is showing \"" + safe + "\" instead. Menus are unaffected.");
+        }
         return safe.toString();
+    }
+
+    /**
+     * Text {@link #splashSafe} has already complained about.
+     *
+     * The warning is worth printing once per string and is ruinous printed every
+     * frame. Its callers are the loading screen's own draw path — the wordmark, the
+     * current step, the tip — so the same handful of strings pass through here sixty
+     * times a second for the whole of mod loading, and {@code System.err} on a
+     * running game is not a cheap call: FML redirects it into log4j, so each one is a
+     * synchronised append to latest.log made from the splash thread while the main
+     * thread is loading mods through the same appender.
+     *
+     * <p>Measured on a 116-mod pack before this guard: 5,582 lines from one config
+     * tip, 69% of every line logged during start-up.
+     */
+    private static final Set<String> splashWarned = new HashSet<String>();
+
+    /**
+     * Whether {@code text} is worth a warning, and remembers that it was.
+     *
+     * <p>Deliberately capped. The wordmark and the tips are the strings an author can
+     * actually act on, and there are a handful of those; the loading step is whatever
+     * mod is being loaded at the time, and a pack with non-Latin mod names would
+     * otherwise put an unbounded number of one-off lines through here — the same
+     * flood, spread over more strings, about something the author cannot fix anyway.
+     * Past the cap the substitution still happens, silently.
+     *
+     * <p>Not synchronised: the loading screen draws from one thread. The cost of
+     * being wrong about that is a duplicated line.
+     */
+    private static boolean shouldWarnAboutSplashText(String text) {
+        return splashWarned.size() < 16 && splashWarned.add(text);
     }
 
     /**
@@ -560,6 +608,17 @@ public final class UiConfig {
         backgroundDrift = bool(CAT_EFFECTS, "backgroundDrift", backgroundDrift,
                 "Slow zoom and pan on the menu background image.");
         buttonSounds = bool(CAT_EFFECTS, "buttonSounds", buttonSounds, "Play a click sound on button press.");
+        textShadow = bool(CAT_EFFECTS, "textShadow", textShadow,
+                "Draw a shadow under the text in this mod's screens, the way Minecraft "
+                        + "draws its own.\n"
+                        + "These screens were flat everywhere while the game around them "
+                        + "— vanilla screens, other mods, the chat, item counts — was "
+                        + "not, which is what made the font look wrong when nothing was "
+                        + "wrong with it. Turn it off to compare.\n"
+                        + "Only this mod's own screens are affected, and only while they "
+                        + "are being drawn. It also needs this mod's font renderer, so a "
+                        + "pack whose renderer has already been replaced by something "
+                        + "else — OptiFine installs its own — will not see a difference.");
         background = str(CAT_EFFECTS, "background", background,
                 "Menu backdrop: 'blackhole' (rendered in code), 'image' "
                         + "(assets/uky/textures/gui/background.png) or 'solid'.");
@@ -686,6 +745,49 @@ public final class UiConfig {
         colorBlackHoleMid = hex(CAT_THEME, "blackHoleMid", colorBlackHoleMid, "Black hole middle disk colour.");
         colorBlackHoleCold = hex(CAT_THEME, "blackHoleCold", colorBlackHoleCold, "Black hole outer disk colour (cold region).");
 
+    }
+
+    /**
+     * Throws out anything in the file this build no longer has a setting for.
+     *
+     * <p>Forge's {@code Configuration} preserves what it does not recognise, which is
+     * the right default for a loader that cannot know whether a key belongs to a mod
+     * that is merely absent today. For a single mod's own file it is the wrong one, and
+     * it shows: {@code ConfigScreen} builds the in-game editor by walking
+     * {@code getCategoryNames()}, so it lists whatever is in the file rather than
+     * whatever the mod has. A feature that has been removed therefore goes on offering
+     * its settings — with controls that are read by nothing and cannot do anything — for
+     * as long as the file survives.
+     *
+     * <p>{@link #SHIPPED} is the register of what is real. Every read in {@link #read}
+     * passes through it, so once {@code read} has run it holds exactly this build's
+     * settings and nothing else; anything in the file outside it is a leftover. Which
+     * makes this self-maintaining: removing a setting from {@code read} is now the whole
+     * of removing it, and no future cleanup has to remember this method exists.
+     *
+     * <p>Runs after {@code read} for that reason, and before the save in {@link #load},
+     * so the file on disk is rewritten without the leftovers rather than carrying them
+     * to the next launch.
+     */
+    private static void prune() {
+        // Copied first: removing a category while walking the collection its names came
+        // from is a modification of what is being iterated.
+        for (String name : new java.util.ArrayList<String>(config.getCategoryNames())) {
+            ConfigCategory category = config.getCategory(name);
+            if (category == null) {
+                continue;
+            }
+            for (String key : new java.util.ArrayList<String>(category.keySet())) {
+                if (!SHIPPED.containsKey(name + '.' + key)) {
+                    category.remove(key);
+                }
+            }
+            // A category left with nothing in it was a section of its own, and an empty
+            // heading in the editor is no better than a populated stale one.
+            if (category.isEmpty() && category.getChildren().isEmpty()) {
+                config.removeCategory(category);
+            }
+        }
     }
 
     /** Re-reads the in-memory config after the in-game editor changed it. */

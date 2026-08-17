@@ -64,6 +64,13 @@ public class LateMixins implements ILateMixinLoader {
         if (isLoaded(loadedMods, "Waila")) {
             mixins.add("MixinWailaOverlay");
         }
+        // CodeChickenLib is not a mod and has no id of its own — it is a library
+        // shipped inside CodeChickenCore, which is what NEI loads it for. Either id
+        // means its classes are on the classpath, and NEI is the reason this matters:
+        // it routes every item tooltip through them. See MixinCclTooltip.
+        if (isLoaded(loadedMods, "CodeChickenCore") || isLoaded(loadedMods, "NotEnoughItems")) {
+            mixins.add("MixinCclTooltip");
+        }
         return mixins;
     }
 

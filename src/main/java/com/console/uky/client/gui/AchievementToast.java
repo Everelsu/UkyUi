@@ -9,6 +9,7 @@ import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.stats.Achievement;
 import org.lwjgl.opengl.GL11;
@@ -242,6 +243,24 @@ public final class AchievementToast {
         GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glDepthMask(false);
+
+        // Lighting off, and this is not optional.
+        //
+        // This is the one thing this mod draws that is not inside a screen and not
+        // inside the HUD: it happens at the very end of the frame, after everything
+        // else has had its turn and left the state however it liked. The last things
+        // to render before it are the hotbar's items and the held item, both of which
+        // turn item lighting on — so a panel drawn here with lighting still enabled is
+        // multiplied by an ambient of 0.4 and comes out grey, text and all, while the
+        // identical panel inside a screen looks right because the screen pass turned
+        // lighting off first. Vanilla's own popup has the same line for the same
+        // reason, one call earlier than this one.
+        RenderHelper.disableStandardItemLighting();
+        GL11.glDisable(GL11.GL_LIGHTING);
+        // Off by the time the world is done with it, in vanilla. A renderer
+        // replacement is under no obligation to leave it that way, and fog over a
+        // panel two thousand units from the camera is total.
+        GL11.glDisable(GL11.GL_FOG);
     }
 
     private static void endOverlay() {

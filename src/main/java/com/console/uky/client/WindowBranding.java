@@ -82,7 +82,24 @@ public final class WindowBranding {
             for (int i = 0; i < ICON_SIZES.length; i++) {
                 icons[i] = toRgba(icon(mark, ICON_SIZES[i]));
             }
-            Display.setIcon(icons);
+            // The return value is the number of icons the platform actually took, and
+            // throwing it away is why "the icon did not change" had no answer: this
+            // method warned when it failed, said nothing when it worked, and said
+            // nothing when it silently did nothing either.
+            //
+            // Zero is a real outcome rather than a hypothetical. LWJGL's Windows backend
+            // walks the array, works each buffer's dimension out from its length, and
+            // uses only the ones that come to 16 and 32 — everything else is skipped
+            // without a word. Anything that changed those sizes, or made a buffer the
+            // wrong length, would land here as a silent no-op.
+            int used = Display.setIcon(icons);
+            if (used <= 0) {
+                UkyUI.LOGGER.warn("Window icon: the platform accepted none of the {}"
+                        + " sizes offered {}", ICON_SIZES.length, java.util.Arrays.toString(ICON_SIZES));
+            } else {
+                UkyUI.LOGGER.info("Window icon set ({} of {} sizes accepted)",
+                        used, ICON_SIZES.length);
+            }
         } catch (Throwable t) {
             UkyUI.LOGGER.warn("Could not set the window icon", t);
         }

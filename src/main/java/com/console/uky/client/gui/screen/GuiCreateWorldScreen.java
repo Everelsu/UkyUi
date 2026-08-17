@@ -1071,16 +1071,35 @@ public class GuiCreateWorldScreen extends MenuScreen {
             settings.enableCommands();
         }
 
-        String folder = folderName(name);
-        // A brand new world has no capture yet, so the loading screen stays black —
-        // which is right. Naming it here is what stops the previous world's picture
-        // showing up behind the progress bar.
+        final String folder = folderName(name);
+        final String displayName = name;
+        final WorldSettings finalSettings = settings;
+        // A brand new world has no capture yet, so the loading screen stays dark — which
+        // is right. Naming it here is what stops the previous world's picture showing up
+        // behind the progress bar.
         WorldPreviews.setEnteringWorld(folder);
-        // See GuiWorldsScreen.play: this is the only point late enough to hold.
-        UkyLoadingScreen.install(this.mc);
 
-        this.mc.displayGuiScreen(null);
-        this.mc.launchIntegratedServer(folder, name, settings);
+        // Down the hole, and the world is launched once the screen is black.
+        //
+        // Creating a world used to cut: the form was on screen one frame and the loading
+        // screen the next. Every other way of leaving this menu is staged — picking a
+        // world dives, opening a list dives, coming back climbs out — so the one action
+        // that actually takes you somewhere was the only one that just happened. Diving
+        // costs the three quarters of a second it takes to go dark, and the dark it
+        // arrives at is the loading screen's own colour, so there is no boundary left to
+        // see between the two.
+        Transitions.dive(new Runnable() {
+            @Override
+            public void run() {
+                // Both inside the dive rather than before it: see GuiWorldsScreen.play —
+                // the loading screen has to be claimed as late as possible, because the
+                // game replaces its own after mod init and on every resize.
+                UkyLoadingScreen.install(GuiCreateWorldScreen.this.mc);
+                GuiCreateWorldScreen.this.mc.displayGuiScreen(null);
+                GuiCreateWorldScreen.this.mc.launchIntegratedServer(
+                        folder, displayName, finalSettings);
+            }
+        });
     }
 
     /**

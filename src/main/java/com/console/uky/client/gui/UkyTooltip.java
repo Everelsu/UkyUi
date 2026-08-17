@@ -163,18 +163,53 @@ public final class UkyTooltip {
         return PAD_Y * 2 + lineCount * LINE + (lineCount > 1 ? TITLE_GAP : 0);
     }
 
+    /**
+     * The panel itself — shadow, fill, frame, and the gold rail down the left.
+     *
+     * Split out from the drawing above because it is wanted twice: once here, around
+     * lines this class laid out, and once around a box somebody else measured. See
+     * {@link #panel(int, int, int, int)}.
+     */
+    private static void drawPanel(float x1, float y1, float x2, float y2) {
+        Draw.rect(x1 + 1.0F, y1 + 1.0F, x2 + 1.0F, y2 + 1.0F, Draw.withAlpha(0x000000, 0.35F));
+        Draw.gradientV(x1, y1, x2, y2,
+                Draw.withAlpha(Theme.background, 0.96F),
+                Draw.withAlpha(Draw.mix(Theme.background, Theme.surface, 0.6F), 0.96F));
+        Draw.border(x1, y1, x2, y2, 1.0F, Draw.withAlpha(Theme.text, 0.14F));
+        Draw.rect(x1, y1, x1 + 2.0F, y2, Draw.withAlpha(Theme.accent, 0.9F));
+        Draw.gradientH(x1 + 2.0F, y1, x1 + 34.0F, y2,
+                Draw.withAlpha(Theme.accent, 0.10F), Draw.withAlpha(Theme.accent, 0.0F));
+    }
+
+    /**
+     * The panel alone, around a box measured by somebody else.
+     *
+     * This is the whole of what the NEI hook needs. A pack with NEI in it never
+     * reaches {@link #draw}: NEI patches {@code GuiContainer} to render tooltips
+     * through its own path, which draws the box with CodeChickenLib and never calls
+     * {@code GuiScreen.drawHoveringText} — so every tooltip over an item came out in
+     * vanilla's purple frame no matter what this class did. Taking the box and leaving
+     * the contents alone puts the look back without touching a single line of what
+     * NEI, its paging, or any tooltip handler in the pack decided to put in there.
+     *
+     * @param x  left edge, in the coordinate space the caller is already drawing in
+     * @param w  width; the box spans {@code x} to {@code x + w}
+     * @return whether it drew — false leaves the caller to draw its own
+     * @see com.console.uky.mixins.mods.MixinCclTooltip the hook that calls this
+     */
+    public static boolean panel(int x, int y, int w, int h) {
+        if (!UiConfig.restyleTooltips || w <= 0 || h <= 0) {
+            return false;
+        }
+        drawPanel(x, y, x + (float) w, y + (float) h);
+        return true;
+    }
+
     /** Fill, frame, rail, and the lines — laid out from the box's own top-left. */
     private static void drawBox(FontRenderer font, List<String> text, int width, int height) {
         float x2 = width + PAD_X * 2;
 
-        Draw.rect(1.0F, 1.0F, x2 + 1.0F, height + 1.0F, Draw.withAlpha(0x000000, 0.35F));
-        Draw.gradientV(0.0F, 0.0F, x2, height,
-                Draw.withAlpha(Theme.background, 0.96F),
-                Draw.withAlpha(Draw.mix(Theme.background, Theme.surface, 0.6F), 0.96F));
-        Draw.border(0.0F, 0.0F, x2, height, 1.0F, Draw.withAlpha(Theme.text, 0.14F));
-        Draw.rect(0.0F, 0.0F, 2.0F, height, Draw.withAlpha(Theme.accent, 0.9F));
-        Draw.gradientH(2.0F, 0.0F, 34.0F, height,
-                Draw.withAlpha(Theme.accent, 0.10F), Draw.withAlpha(Theme.accent, 0.0F));
+        drawPanel(0.0F, 0.0F, x2, height);
 
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);

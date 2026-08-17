@@ -7,6 +7,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
+import com.console.uky.client.render.UkyFontRenderer;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
@@ -401,6 +402,12 @@ public abstract class MenuScreen extends GuiScreen {
         Draw.setClipScale(this.uiScaleFactor);
         GL11.glPushMatrix();
         GL11.glScalef(this.uiScaleX, this.uiScaleY, 1.0F);
+        // Text in this mod's screens gets a shadow under it, which is what the rest of the
+        // game has and what these screens were missing everywhere. Turned on here and off
+        // in the finally below, because it changes what the plain drawString means: left
+        // set, it would follow the game out of this screen and shadow every string drawn
+        // anywhere afterwards. See UkyFontRenderer.setShadowed.
+        UkyFontRenderer.setShadowed(UiConfig.textShadow);
         try {
             drawBackdrop();
             drawContent(localX, localY);
@@ -425,6 +432,10 @@ public abstract class MenuScreen extends GuiScreen {
 
             drawOverlay();
         } finally {
+            // Cleared here and not at the end of the try: anything thrown out of a draw
+            // above would otherwise leave every string in the game shadowed for the rest
+            // of the session, from a screen that is no longer even on top.
+            UkyFontRenderer.setShadowed(false);
             GL11.glPopMatrix();
             Draw.clearClipScale();
         }

@@ -60,6 +60,11 @@ public class GuiUkyChat extends GuiChat {
     public void initGui() {
         super.initGui();
         this.commandLine = new CommandLine(this.mc, this.inputField);
+        // Pressing "/" in the world opens this screen with the slash already typed, and
+        // opens it with the command list too. Without this the box would wait for the
+        // second character, which is the one case where the player has already said
+        // what they want before the screen existed.
+        this.commandLine.afterEdit();
     }
 
     /**

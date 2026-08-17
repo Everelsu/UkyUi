@@ -1,0 +1,35 @@
+[0.021s][info][cds] trying to map C:\Users\egord\AppData\Roaming\com.noctrinth.app\meta\java_versions\zulu25.34.17-ca-jre25.0.3-win_x64\bin\server\classes.jsa
+[0.022s][info][cds] Opened shared archive file C:\Users\egord\AppData\Roaming\com.noctrinth.app\meta\java_versions\zulu25.34.17-ca-jre25.0.3-win_x64\bin\server\classes.jsa.
+[0.022s][info][cds] The shared archive file was created with UseCompressedOops = 1, UseCompressedClassPointers = 1, UseCompactObjectHeaders = 0
+[0.022s][info][cds] Core region alignment: 65536
+[0.022s][info][cds] ArchiveRelocationMode: 1
+[0.022s][info][cds] ArchiveRelocationMode == 1: always map archive(s) at an alternative address
+[0.022s][info][cds] Try to map archive(s) at an alternative address
+[0.022s][info][cds] Reserved archive_space_rs [0x0000000015000000 - 0x0000000016000000] (16777216) bytes (includes protection zone)
+[0.022s][info][cds] Reserved class_space_rs   [0x0000000016000000 - 0x0000000056000000] (1073741824) bytes
+[0.022s][info][cds] Commit static  region #0 at base 0x0000000015010000 top 0x0000000015520000 (ReadWrite)
+[0.025s][info][cds] Mapped static  region #0 at base 0x0000000015010000 top 0x0000000015520000 (ReadWrite)
+[0.025s][info][cds] Commit static  region #1 at base 0x0000000015520000 top 0x0000000015d20000 (ReadOnly)
+[0.028s][info][cds] Mapped static  region #1 at base 0x0000000015520000 top 0x0000000015d20000 (ReadOnly)
+[0.028s][info][cds] Mapped static  region #2 at base 0x000002047eef0000 top 0x000002047ef30000 (Bitmap)
+[0.030s][info][cds] archived module property jdk.module.main: (null)
+[0.030s][info][cds] archived module property jdk.module.addexports: (null)
+[0.030s][info][cds] archived module property jdk.module.addmods: (null)
+[0.030s][info][cds] archived module property jdk.module.enable.native.access: (null)
+[0.030s][info][cds] archived module property jdk.module.addopens: (null)
+[0.030s][info][cds] archived module property jdk.module.addreads: (null)
+[0.030s][info][cds] optimized module handling: enabled
+[0.030s][info][cds] full module graph: enabled
+[0.030s][info][cds] CDS archive was created with max heap size = 128M, and the following configuration:
+[0.030s][info][cds]     narrow_klass_base at mapping start address, narrow_klass_pointer_bits = 32, narrow_klass_shift = 0
+[0.030s][info][cds]     narrow_oop_mode = 0, narrow_oop_base = 0x0000000000000000, narrow_oop_shift = 0
+[0.030s][info][cds] The current max heap size = 3904M, G1HeapRegion::GrainBytes = 2097152
+[0.030s][info][cds]     narrow_klass_base = 0x0000000015000000, arrow_klass_pointer_bits = 32, narrow_klass_shift = 0
+[0.030s][info][cds]     narrow_oop_mode = 1, narrow_oop_base = 0x0000000000000000, narrow_oop_shift = 3
+[0.030s][info][cds]     heap range = [0x000000070c000000 - 0x0000000800000000]
+[0.030s][info][cds] Preferred address to map heap data (to avoid relocation) is 0x00000000ffe00000
+[0.030s][info][cds] Commit static  region #3 at base 0x00000007ffe00000 top 0x00000007fff17000 (Heap)
+[0.031s][info][cds] Heap data mapped at 0x00000007ffe00000, size =  1138760 bytes
+[0.031s][info][cds] CDS heap data relocation delta = 30064771072 bytes
+[0.031s][info][cds] use_full_module_graph = true; java.base = 0x000000001551c310
+[0.032s][info][cds] Unmapping region #2 at base 0x000002047eef0000 (Bitmap)

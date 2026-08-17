@@ -144,3 +144,4 @@ uky.graphics.potato.hint=No black hole. The backdrop is a flat colour and the me
 uky.graphics.minimal.hint=The hole is traced small and slowly. For weak or old cards.
 uky.graphics.balanced.hint=Full resolution, no supersampling. Hard to tell from maximum in motion.
 uky.graphics.maximum.hint=No ceiling. Everything is drawn as configured.
+

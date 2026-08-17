@@ -143,7 +143,11 @@ public abstract class ScrollList {
             if (isHovered) {
                 this.hovered = i;
             }
-            drawRow(i, x, rowY, width, rowHeight, isHovered, i == selected, alpha);
+            // The content width, not the list's. Rows lay their right-hand controls out
+            // from this, and screens hit-test them against rowRight(); the two have to be
+            // the same number or every control on the right of a row is drawn in one place
+            // and clicked in another.
+            drawRow(i, x, rowY, rowRight() - x, rowHeight, isHovered, i == selected, alpha);
         }
         Draw.endClip();
 
@@ -237,9 +241,32 @@ public abstract class ScrollList {
         return index >= 0 && index < rowCount() ? index : -1;
     }
 
-    /** Right edge of a row, for placing controls inside one. */
+    /**
+     * Right edge available to a row's contents — the list's edge, less the scrollbar.
+     *
+     * <p>This returned {@code x + width}, the list's actual edge, and that quietly put
+     * every control any screen placed with it underneath the bar. {@link #rowIndexAt}
+     * already refuses to report a row when the pointer is over the rail, on the stated
+     * grounds that "nothing is under the scrollbar as far as the screens are concerned"
+     * — but this method was handing them the edge where it is. So a toggle or a reset
+     * button sitting a few units in from the right was inside the strip the bar answers
+     * to: aiming at the control caught the bar, aiming at the bar caught the control,
+     * and the value labels drawn against this edge ran under the rail with nothing
+     * between them and it.
+     *
+     * <p>{@link #GRAB_WIDTH} and not {@link #RAIL_WIDTH}, because what has to be kept
+     * clear is the part that takes the mouse rather than the part that is painted. The
+     * two differ on purpose — a bar you have to hit within two pixels is a bar you miss.
+     *
+     * <p>Reserved whether or not there is anything to scroll, which costs nine units on a
+     * list that fits. The alternative is worse than it sounds: the strip only takes the
+     * mouse when the list is scrollable, so a conditional reserve would move every
+     * control in every row sideways the moment a category gained an entry or a window was
+     * made shorter. Layout that depends on how much content there is, is layout that
+     * shifts under the pointer.
+     */
     public int rowRight() {
-        return x + width;
+        return (int) (x + width - GRAB_WIDTH);
     }
 
     /** Screen y of a row's top edge, accounting for the current scroll. */

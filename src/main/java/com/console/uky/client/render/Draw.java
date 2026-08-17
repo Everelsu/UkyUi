@@ -382,6 +382,44 @@ public final class Draw {
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
+    /**
+     * A textured triangle, given absolute vertices and the texture coordinates for each.
+     *
+     * <p>Exists because {@link #textureShard} cannot break anything. It draws a rotated
+     * rectangle, so a picture cut up with it comes apart into rectangles however fine the
+     * cut is — which read as tiles sliding apart rather than as something shattering. A
+     * shard is a triangle, and it has to be an arbitrary one: the whole character of
+     * broken glass is in the long thin pieces radiating from the impact, and those have
+     * no axis to be aligned to.
+     *
+     * <p>Vertices are absolute rather than local-plus-rotation, so a caller that has
+     * already worked out where its corners are — which anything tumbling a shard about
+     * its own centroid has — does not pay for a matrix push per piece.
+     */
+    public static void textureTriangle(ResourceLocation tex,
+                                       float x1, float y1, float u1, float v1,
+                                       float x2, float y2, float u2, float v2,
+                                       float x3, float y3, float u3, float v3,
+                                       int argb) {
+        Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        // Shards tumble, so half of them are wound the other way by the time they land.
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        color(argb);
+
+        Tessellator t = Tessellator.instance;
+        t.startDrawing(GL11.GL_TRIANGLES);
+        t.addVertexWithUV(x1, y1, 0.0D, u1, v1);
+        t.addVertexWithUV(x2, y2, 0.0D, u2, v2);
+        t.addVertexWithUV(x3, y3, 0.0D, u3, v3);
+        t.draw();
+
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
     public static void texture(ResourceLocation tex, float x, float y, float w, float h, int argb) {
         Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
         GL11.glEnable(GL11.GL_TEXTURE_2D);

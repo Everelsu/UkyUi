@@ -10,6 +10,7 @@ import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.client.world.UkyLoadingScreen;
 import com.console.uky.client.world.WorldEntryFade;
+import com.console.uky.client.world.TileCracks;
 import com.console.uky.client.world.TileShatter;
 import com.console.uky.client.world.WorldPreviews;
 import cpw.mods.fml.client.FMLClientHandler;
@@ -26,7 +27,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Singleplayer worlds as cards, on the far side of the dive.
@@ -86,6 +89,24 @@ public class GuiWorldsScreen extends MenuScreen {
     /** Card whose bin is being held, or -1. */
     private int holdCard = -1;
     private float holdProgress;
+    /**
+     * Set after a Shift-click deletes something, cleared when the button comes up.
+     *
+     * Without it the hold starts the instant the deletion finishes: the button is
+     * still physically down, the pointer is still over a bin, and the cards have all
+     * shuffled up one — so the gesture would carry straight on into destroying
+     * whichever world moved into the space the last one just left.
+     */
+    private boolean holdSuppressed;
+    /**
+     * The break, drawn on the card before it happens, and then broken along.
+     *
+     * Created when the hold starts and dropped when it is let go, so the pattern belongs
+     * to that press: a second attempt cracks the tile somewhere else. Handed to
+     * {@link TileShatter} at the end, which is what makes the pieces come apart along the
+     * cracks the player was watching rather than along a fresh set nobody has seen.
+     */
+    private TileCracks cracks;
     /** Plays after the world is gone; holds nothing but pixels. */
     private TileShatter shatter;
 
@@ -177,6 +198,19 @@ public class GuiWorldsScreen extends MenuScreen {
             this.worlds.addAll(list);
             // Most recently played first: almost always the one wanted.
             Collections.sort(this.worlds);
+
+            // Anything cached under a folder that is no longer here is dropped, and this
+            // is the general form of a bug that showed up as one specific thing: a world
+            // created after another was deleted opening on a photograph of the deleted
+            // one. Both caches are keyed by folder name and Minecraft reissues folder
+            // names, so a stale entry is not merely stale — it belongs to whoever gets
+            // that name next. Doing it from here rather than at each deletion covers
+            // every way a save can go, including ones this screen never sees.
+            Set<String> live = new HashSet<String>();
+            for (int i = 0; i < this.worlds.size(); i++) {
+                live.add(this.worlds.get(i).getFileName());
+            }
+            WorldPreviews.retainOnly(live);
         } catch (Exception e) {
             UkyUI.LOGGER.error("Could not read the world list", e);
         }
@@ -477,6 +511,19 @@ public class GuiWorldsScreen extends MenuScreen {
                     Draw.withAlpha(Theme.danger, 0.95F * alpha));
         }
 
+        // The break spreading while the bin is held. Over the picture and the caption but
+        // under the buttons, because it is happening to the card rather than being part
+        // of the controls.
+        if (this.holdCard == index && this.holdProgress > 0.0F && this.cracks != null) {
+            this.cracks.draw(x, y, this.tileWidth, this.tileHeight,
+                    Ease.clamp01(this.holdProgress), alpha);
+            // The frame heats up with it, so the whole card is committing rather than
+            // just its surface.
+            Draw.border(x, y, x2, y2, 1.0F,
+                    Draw.withAlpha(Theme.danger,
+                            (0.3F + 0.7F * Ease.clamp01(this.holdProgress)) * alpha));
+        }
+
         if (hover > 0.02F) {
             drawCardActions(index, x, y, hover, alpha);
             Draw.border(x, y, x2, y2, 1.0F, Draw.withAlpha(Theme.accent, hover * alpha));
@@ -522,10 +569,16 @@ public class GuiWorldsScreen extends MenuScreen {
         drawIconButton(actionX(x, 1), y + 4, box, a,
                 this.hoveredAction == HIT_RENAME && this.hoveredCard == index, ICON_RENAME);
         float binX = actionX(x, 0);
-        drawIconButton(binX, y + 4, box, a,
-                this.hoveredAction == HIT_DELETE && this.hoveredCard == index, ICON_DELETE);
-        if (this.holdCard == index && this.holdProgress > 0.0F) {
-            drawHoldProgress(binX, y + 4, box, alpha);
+        boolean overBin = this.hoveredAction == HIT_DELETE && this.hoveredCard == index;
+        drawIconButton(binX, y + 4, box, a, overBin, ICON_DELETE);
+        if (overBin && isShiftKeyDown()) {
+            // Shown full, because that is what Shift means: the bar is already at the
+            // end and the next click is the one that does it. Saying so with the same
+            // fill the hold uses means there is nothing new to learn — the button looks
+            // the way it looks a moment before a world breaks.
+            drawBinFill(binX, y + 4, box, alpha, 1.0F);
+        } else if (this.holdCard == index && this.holdProgress > 0.0F) {
+            drawBinFill(binX, y + 4, box, alpha, Ease.clamp01(this.holdProgress));
         }
     }
 
@@ -540,10 +593,11 @@ public class GuiWorldsScreen extends MenuScreen {
      * <p>Filling the button itself from the bottom reads as charging, keeps every
      * pixel of the effect inside the thing under the pointer, and needs no shape the
      * rest of the interface does not already use.
+     *
+     * <p>{@code sweep} rather than the field it used to read, because a Shift-click
+     * draws the same fill at its full height without any hold having happened.
      */
-    private void drawHoldProgress(float x, float y, float box, float alpha) {
-        float sweep = Ease.clamp01(this.holdProgress);
-
+    private void drawBinFill(float x, float y, float box, float alpha, float sweep) {
         Draw.rect(x, y + box * (1.0F - sweep), x + box, y + box,
                 Draw.withAlpha(Theme.danger, 0.55F * alpha));
         // A brighter line riding the top of the fill, so the movement is legible even
@@ -620,13 +674,24 @@ public class GuiWorldsScreen extends MenuScreen {
      * too, which makes sliding away the natural cancel.
      */
     private void updateHold() {
-        boolean holding = org.lwjgl.input.Mouse.isButtonDown(0)
+        boolean down = org.lwjgl.input.Mouse.isButtonDown(0);
+        if (!down) {
+            this.holdSuppressed = false;
+        }
+        boolean holding = down
+                && !this.holdSuppressed
+                // Shift already means "now", and the click has already done it. Letting
+                // the hold run as well would charge a bar for a world that is gone.
+                && !isShiftKeyDown()
                 && this.hoveredAction == HIT_DELETE
                 && this.hoveredCard >= 0
                 && this.hoveredCard < this.worlds.size()
                 && (this.holdCard == -1 || this.holdCard == this.hoveredCard);
 
         if (holding) {
+            if (this.holdCard != this.hoveredCard || this.cracks == null) {
+                this.cracks = new TileCracks();
+            }
             this.holdCard = this.hoveredCard;
             // Started here rather than on the first frame of the press, because the
             // sound and the fill have to begin together for the rise to line up with
@@ -649,6 +714,10 @@ public class GuiWorldsScreen extends MenuScreen {
         if (this.holdProgress <= 0.0F) {
             this.holdProgress = 0.0F;
             this.holdCard = -1;
+            // Dropped with the press it belonged to, so the next attempt cracks the tile
+            // somewhere new. Keeping it would make a released-and-retried hold resume a
+            // break already half drawn, which reads as damage the card has kept.
+            this.cracks = null;
         }
     }
 
@@ -666,6 +735,19 @@ public class GuiWorldsScreen extends MenuScreen {
         this.holdProgress = 0.0F;
         // The rise has arrived; the break takes over from here.
         UkySounds.stopDeleteHold();
+        destroyWorld(index);
+    }
+
+    /**
+     * Deletes the world at {@code index}, however the screen decided to ask.
+     *
+     * Two gestures arrive here — the four and a half seconds of holding the bin, and a
+     * Shift-click that skips them — and neither of them is what this does. Deleting a
+     * world is one piece of work with one set of hazards (an open directory handle, a
+     * folder that is not there any more), and having it written out once is what keeps
+     * the fast path from being the one where a hazard was forgotten.
+     */
+    private void destroyWorld(int index) {
         if (index < 0 || index >= this.worlds.size()) {
             return;
         }
@@ -687,7 +769,23 @@ public class GuiWorldsScreen extends MenuScreen {
             UkyUI.LOGGER.warn("Could not delete world {}", folder, t);
         }
 
-        this.shatter = new TileShatter(preview, x, y, this.tileWidth, this.tileHeight);
+        // The picture has to be forgotten along with the world, and it is easy to see why
+        // only after it goes wrong. Both preview caches are keyed by folder name, and
+        // Minecraft reissues folder names: creating a world takes the first free one, so
+        // this deletion frees exactly the name the next world created will be given. The
+        // cache still holding an entry under it meant that world opened on a photograph
+        // of this one — a picture of somewhere that had been deleted.
+        //
+        // Forgotten rather than freed: the shards below are drawn from this very texture
+        // for the next second. See WorldPreviews.forget.
+        WorldPreviews.forget(folder);
+
+        // The cracks from the hold, so the pieces part along the lines that were on screen
+        // a frame ago. A Shift-click has no hold behind it and so no pattern; that gets a
+        // fresh one, which is the same break without the anticipation.
+        TileCracks pattern = this.cracks != null ? this.cracks : new TileCracks();
+        this.cracks = null;
+        this.shatter = new TileShatter(pattern, preview, x, y, this.tileWidth, this.tileHeight);
         loadWorlds();
     }
 
@@ -717,6 +815,18 @@ public class GuiWorldsScreen extends MenuScreen {
                 case HIT_DELETE:
                     // Nothing on click. The bin is a hold, and a dialogue on top of a
                     // hold would be two confirmations for one action.
+                    //
+                    // Shift is the exception, and it is the only one. The hold exists
+                    // because a world is months of work and a misclick must not be able
+                    // to take it; somebody clearing out six test worlds is not
+                    // misclicking, and making them wait twenty-seven seconds to say so
+                    // is the hold protecting nothing. Holding a modifier down is a
+                    // deliberate act in its own right, so it stands in for the four and
+                    // a half seconds rather than removing them.
+                    if (isShiftKeyDown()) {
+                        this.holdSuppressed = true;
+                        destroyWorld(this.hoveredCard);
+                    }
                     return;
                 default:
                     // Grows the tile to fill the screen first; play() runs when it

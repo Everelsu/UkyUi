@@ -43,6 +43,13 @@ public final class WorldEntryFade {
     private static float zoomAtHandover;
     private static float elapsed;
     private static long lastFrameNanos;
+    /**
+     * Whether a dissolve is in flight, held separately from {@link #texture}.
+     *
+     * It used to be "texture is not null", and that quietly made the whole mechanism
+     * conditional on there being a photograph — see {@link #begin}.
+     */
+    private static boolean running;
 
     private WorldEntryFade() {
     }
@@ -50,21 +57,32 @@ public final class WorldEntryFade {
     /**
      * Starts the dissolve.
      *
-     * @param preview the still the loading screen was showing, or null to do nothing
+     * <p><b>A missing picture is no longer a reason to do nothing.</b> This returned
+     * immediately when {@code preview} was null, which meant the one case that needs a
+     * dissolve most was the one case that never got one: a world being entered for the
+     * first time has no capture, so the loading screen simply vanished and the lit world
+     * appeared in the following frame. Every world anybody has played gets a soft arrival
+     * and every brand new world gets a hard cut, which is exactly backwards — the new
+     * world is the one nobody has seen before.
+     *
+     * <p>Without a picture there is still something to fade: the loading screen's own
+     * look. It ends on {@link Theme#background} under a heavy vignette, so that is what
+     * gets lifted off the world instead of a photograph. Same mechanism, same timing,
+     * one fewer layer.
+     *
+     * @param preview the still the loading screen was showing, or null if it had none
      * @param zoom    the zoom it had reached, so the push-in carries on unbroken
      */
     public static void begin(ResourceLocation preview, float zoom) {
-        if (preview == null) {
-            return;
-        }
         texture = preview;
         zoomAtHandover = zoom;
         elapsed = 0.0F;
         lastFrameNanos = System.nanoTime();
+        running = true;
     }
 
     public static boolean isRunning() {
-        return texture != null;
+        return running;
     }
 
     /**
@@ -77,6 +95,7 @@ public final class WorldEntryFade {
      */
     public static void cancel() {
         texture = null;
+        running = false;
     }
 
     /** Registered on FML's bus, where {@link TickEvent} lives. */
@@ -84,7 +103,7 @@ public final class WorldEntryFade {
 
         @SubscribeEvent
         public void onRenderTick(TickEvent.RenderTickEvent event) {
-            if (event.phase != TickEvent.Phase.END || texture == null) {
+            if (event.phase != TickEvent.Phase.END || !running) {
                 return;
             }
 
@@ -94,7 +113,7 @@ public final class WorldEntryFade {
             lastFrameNanos = now;
 
             if (elapsed >= SECONDS) {
-                texture = null;
+                cancel();
                 return;
             }
             draw(Ease.outCubic(elapsed / SECONDS));
@@ -105,7 +124,7 @@ public final class WorldEntryFade {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.theWorld == null) {
             // Left again before the fade finished; there is nothing to fade into.
-            texture = null;
+            cancel();
             return;
         }
         ScaledResolution resolution =
@@ -126,16 +145,26 @@ public final class WorldEntryFade {
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glDepthMask(false);
 
-        // The push-in keeps going while it dissolves; stopping it dead would give
-        // away the exact frame of the handover, which is what this exists to hide.
-        float zoom = zoomAtHandover + progress * 0.02F;
         float opacity = 1.0F - progress;
-        Draw.textureCover(texture, 0, 0, width, height, PREVIEW_W, PREVIEW_H,
-                zoom, 0.0F, 0.0F, Draw.withAlpha(0xFFFFFF, opacity));
-        // The loading screen's own darkening, lifted at the same rate. Carrying it
-        // over is what makes the first frame here indistinguishable from the last
-        // frame there.
-        Draw.rect(0, 0, width, height, Draw.withAlpha(Theme.background, SCRIM * opacity));
+        if (texture != null) {
+            // The push-in keeps going while it dissolves; stopping it dead would give
+            // away the exact frame of the handover, which is what this exists to hide.
+            float zoom = zoomAtHandover + progress * 0.02F;
+            Draw.textureCover(texture, 0, 0, width, height, PREVIEW_W, PREVIEW_H,
+                    zoom, 0.0F, 0.0F, Draw.withAlpha(0xFFFFFF, opacity));
+            // The loading screen's own darkening, lifted at the same rate. Carrying it
+            // over is what makes the first frame here indistinguishable from the last
+            // frame there.
+            Draw.rect(0, 0, width, height, Draw.withAlpha(Theme.background, SCRIM * opacity));
+        } else {
+            // No photograph — a world being entered for the first time. What the loading
+            // screen had instead was the backdrop colour at full strength under its
+            // vignette, so that is what gets lifted. Same reasoning as the branch above:
+            // the first frame drawn here has to be the last frame drawn there, and the
+            // two figures below are that screen's own.
+            Draw.rect(0, 0, width, height, Draw.withAlpha(Theme.background, opacity));
+            Draw.vignette(width, height, 0.8F * opacity, 0xFF000000);
+        }
 
         GL11.glDepthMask(true);
         if (depth) {

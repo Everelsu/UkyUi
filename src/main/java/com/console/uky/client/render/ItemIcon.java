@@ -66,14 +66,14 @@ public final class ItemIcon {
         Minecraft mc = Minecraft.getMinecraft();
 
         GL11.glPushMatrix();
-        GL11.glTranslatef(centerX, centerY, 0.0F);
-        if (spin != 0.0F) {
-            GL11.glRotatef(spin, 0.0F, 0.0F, 1.0F);
-        }
-        // Every axis, including the one pointing into the screen: see the note above.
-        GL11.glScalef(scale, scale, scale);
 
-        // The state a cube needs, in the order RenderItem expects to find it.
+        // The state a cube needs, in the order RenderItem expects to find it — and the
+        // lighting before the transform below rather than after it.
+        //
+        // `glLight(GL_POSITION)` puts the light where the modelview matrix says, so
+        // setting it up inside the entrance would turn the two lights with the item
+        // and light it from somewhere new on every frame of the spin. Vanilla calls
+        // this at the top of a screen's draw for the same reason.
         GL11.glEnable(GL11.GL_CULL_FACE);
         GL11.glEnable(GL11.GL_DEPTH_TEST);
         GL11.glDepthMask(true);
@@ -83,6 +83,13 @@ public final class ItemIcon {
         GL11.glEnable(GL11.GL_COLOR_MATERIAL);
         GL11.glEnable(GL11.GL_LIGHTING);
         GL11.glColor4f(brightness, brightness, brightness, 1.0F);
+
+        GL11.glTranslatef(centerX, centerY, 0.0F);
+        if (spin != 0.0F) {
+            GL11.glRotatef(spin, 0.0F, 0.0F, 1.0F);
+        }
+        // Every axis, including the one pointing into the screen: see the note above.
+        GL11.glScalef(scale, scale, scale);
 
         try {
             renderer.renderItemAndEffectIntoGUI(mc.fontRenderer, mc.getTextureManager(),
