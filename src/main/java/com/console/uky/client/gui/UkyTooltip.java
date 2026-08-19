@@ -60,10 +60,33 @@ public final class UkyTooltip {
      * @return whether it drew — false hands the box back to vanilla, which is what
      *         the config switch does and what happens when there is nothing to draw
      */
-    @SuppressWarnings("unchecked")
     public static boolean draw(GuiScreen screen, List lines, int x, int y, FontRenderer font) {
-        if (!UiConfig.restyleTooltips || screen == null || font == null
-                || lines == null || lines.isEmpty()) {
+        if (screen == null) {
+            return false;
+        }
+        return draw(screen.width, screen.height, lines, x, y, font);
+    }
+
+    /**
+     * As above, for a caller that has the screen's size but not the screen.
+     *
+     * Which is not a hypothetical: BetterQuesting draws its tooltips from a static
+     * utility that is handed the width and the height as arguments, so there is no
+     * {@code GuiScreen} anywhere in reach. Everything this class does needs the screen
+     * for exactly two numbers, so those are what it asks for.
+     *
+     * @param x the pointer, not the box — this applies its own offsets, the same ones
+     *          vanilla applies, so a caller that follows vanilla's convention (they all
+     *          do, being copied from it) passes the mouse position straight through
+     * @return whether it drew — false hands the box back to the caller, which is what
+     *         the config switch does and what happens when there is nothing to draw
+     */
+    @SuppressWarnings("unchecked")
+    public static boolean draw(int screenWidth, int screenHeight, List lines,
+                               int x, int y, FontRenderer font) {
+        if (!UiConfig.restyleTooltips || font == null
+                || lines == null || lines.isEmpty()
+                || screenWidth <= 0 || screenHeight <= 0) {
             return false;
         }
         List<String> text = new ArrayList<String>();
@@ -78,8 +101,6 @@ public final class UkyTooltip {
             return false;
         }
 
-        int screenWidth = screen.width;
-        int screenHeight = screen.height;
         // The first line is the item's name and is left alone: it is short, it is
         // coloured by rarity, and wrapping it would be the one wrap anybody noticed.
         text = wrap(text, font, Math.min(UiConfig.tooltipWidth, Math.max(80, screenWidth - 48)));

@@ -267,11 +267,26 @@ public final class QuestBookTheme {
     // --------------------------------------------------------------- selection --
 
     /**
-     * Makes ours the active theme, unless it already is.
+     * Makes ours the active theme — once, and then never again.
      *
-     * Checked rather than set unconditionally because selecting a theme is not free —
-     * BetterQuesting writes the choice to its own config — and this runs every time a
-     * quest book screen opens, which on a busy quest map is often.
+     * <p><b>It used to do this on every quest book screen opening</b>, and that made the
+     * theme impossible to leave: the quest book has a Themes screen, picking anything
+     * else in it worked exactly until the book was next opened, and then ours was back.
+     * A setting that cannot be changed from inside the interface it belongs to is not a
+     * default, it is a lock.
+     *
+     * <p>So selecting it now also clears the switch that asked for it, which is the same
+     * shape {@code showSettingsOnFirstRun} has and for the same reason: one key that
+     * turns itself off, rather than a preference plus a hidden "already done" flag that
+     * nobody reading the config file could guess the meaning of. After this has run once,
+     * BetterQuesting remembers the choice in its own config and whatever the player picks
+     * afterwards is left alone — set it back to true to hand the book our theme again.
+     *
+     * <p>The switch is cleared on both paths, including the one where ours is already
+     * active. Clearing it only when something was actually changed would leave it set on
+     * a fresh install whose first book opened on our theme anyway, and the first time the
+     * player then chose another one it would be overridden — which is the whole bug,
+     * arrived at one step later.
      */
     private static void select() throws Exception {
         Object registry = registry();
@@ -283,11 +298,15 @@ public final class QuestBookTheme {
             Object id = Class.forName("betterquesting.api2.client.gui.themes.IGuiTheme")
                     .getMethod("getID").invoke(active);
             if (ID.equals(id)) {
+                UiConfig.setRestyleQuestBook(false);
                 return;
             }
         }
         registry.getClass().getMethod("setTheme", ResourceLocation.class)
                 .invoke(registry, ID);
+        UiConfig.setRestyleQuestBook(false);
+        UkyUI.LOGGER.info("BetterQuesting theme set to {}; the quest book's own Themes"
+                + " screen now decides, and mods.restyleQuestBook has turned itself off", ID);
     }
 
     // ------------------------------------------------------------- reflection --

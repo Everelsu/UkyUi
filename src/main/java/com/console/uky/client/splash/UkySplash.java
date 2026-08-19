@@ -255,6 +255,9 @@ public final class UkySplash {
         private long startNanos;
         private float elapsed;
 
+        /** Seconds one pass of the indeterminate chunk takes. See drawWaiting. */
+        private static final float WAIT_PERIOD = 1.6F;
+
         /** Smoothed progress so the bar glides instead of jumping between steps. */
         private float shownProgress;
 
@@ -522,6 +525,10 @@ public final class UkySplash {
                 }
             }
 
+            // A bar FML was given no step count for cannot say how far along it is,
+            // so it is drawn as motion instead of as a fraction. See drawWaiting.
+            boolean firstWaiting = first != null && first.getSteps() <= 0;
+
             float target = first == null ? 0.0F : progressOf(first);
             shownProgress += (target - shownProgress) * 0.12F;
             if (target < shownProgress) {
@@ -534,15 +541,17 @@ public final class UkySplash {
             float spacing = 26.0F;
 
             if (first != null) {
-                drawBar(0, first, barX, y, barWidth, alpha, shownProgress);
+                drawBar(0, first, barX, y, barWidth, alpha, shownProgress, firstWaiting);
                 y += spacing;
             }
             if (penult != null) {
-                drawBar(1, penult, barX, y, barWidth, alpha * 0.75F, progressOf(penult));
+                drawBar(1, penult, barX, y, barWidth, alpha * 0.75F,
+                        progressOf(penult), penult.getSteps() <= 0);
                 y += spacing;
             }
             if (last != null) {
-                drawBar(2, last, barX, y, barWidth, alpha * 0.75F, progressOf(last));
+                drawBar(2, last, barX, y, barWidth, alpha * 0.75F,
+                        progressOf(last), last.getSteps() <= 0);
             }
         }
 
@@ -565,22 +574,65 @@ public final class UkySplash {
             return captionText[slot];
         }
 
+        /**
+         * One rule, its caption above it, and — where the bar knows its own length —
+         * the percentage in the margin beside it.
+         *
+         * <p>The reading sits outside the track rather than on it because the track is a
+         * hairline, with nothing to put text on. The margin is wide enough for it at
+         * every GUI scale: the bar is capped at just over half the width, so a quarter
+         * of the screen is free either side and "100%" needs about twenty pixels.
+         *
+         * @param waiting the bar reports no step count, so there is no fraction to draw
+         */
         private void drawBar(int slot, ProgressBar bar, float x, float y, float width,
-                float alpha, float progress) {
+                float alpha, float progress, boolean waiting) {
             if (font != null) {
                 // Guarded too: a bar's caption is another mod's name, and nothing stops
                 // a mod being called something this font sheet has no glyphs for.
                 drawCentered(caption(slot, bar),
                         x + width / 2.0F, y - 12.0F, 0xFFFFFF, 0.75F * alpha);
+                if (UiConfig.showPercent && !waiting) {
+                    drawText((int) (clamp01(progress) * 100.0F) + "%",
+                            x + width + 5.0F, y - 4.0F, 0xFFFFFF, 0.45F * alpha);
+                }
             }
             // Track: a hairline so the full length always reads, even at 0%.
             rectRGBA(x, y, x + width, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.18F * alpha);
+            if (waiting) {
+                drawWaiting(x, y, width, alpha);
+                return;
+            }
             float fill = width * clamp01(progress);
             if (fill > 0.0F) {
                 rectRGBA(x, y, x + fill, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.95F * alpha);
                 // Short bright head, the one bit of motion on an otherwise static frame.
                 rectRGBA(Math.max(x, x + fill - 12.0F), y - 0.5F, x + fill, y + 1.5F,
                         1.0F, 1.0F, 1.0F, 0.55F * alpha);
+            }
+        }
+
+        /**
+         * The fill for a bar that has no step count.
+         *
+         * FML lets a bar be created with zero steps and several mods do it, at which
+         * point the old drawing left an empty track for the whole of that stage — the
+         * one thing a loading screen must never look like, because it is exactly how a
+         * hung one looks. A chunk crossing the track says what an empty one cannot:
+         * this is working, it just cannot count.
+         *
+         * <p>It enters and leaves past the ends of the track and is eased at both, so
+         * the loop has no seam to restart on and nothing about it reads as a position.
+         */
+        private void drawWaiting(float x, float y, float width, float alpha) {
+            float phase = (elapsed % WAIT_PERIOD) / WAIT_PERIOD;
+            float eased = phase * phase * (3.0F - 2.0F * phase);
+            float chunk = width * 0.22F;
+            float head = x - chunk + (width + chunk) * eased;
+            float from = Math.max(x, head);
+            float to = Math.min(x + width, head + chunk);
+            if (to > from) {
+                rectRGBA(from, y, to, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.95F * alpha);
             }
         }
 
@@ -632,12 +684,18 @@ public final class UkySplash {
             if (alpha <= 0.01F) {
                 return;
             }
+            drawText(text, centerX - font.getStringWidth(text) / 2.0F, y, rgb, alpha);
+        }
+
+        private void drawText(String text, float x, float y, int rgb, float alpha) {
+            if (alpha <= 0.01F) {
+                return;
+            }
             int color = ((int) (clamp01(alpha) * 255.0F) << 24) | (rgb & 0xFFFFFF);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            int width = font.getStringWidth(text);
-            font.drawString(text, (int) (centerX - width / 2.0F), (int) y, color, false);
+            font.drawString(text, (int) x, (int) y, color, false);
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         }

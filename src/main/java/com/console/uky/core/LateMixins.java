@@ -71,6 +71,11 @@ public class LateMixins implements ILateMixinLoader {
         if (isLoaded(loadedMods, "CodeChickenCore") || isLoaded(loadedMods, "NotEnoughItems")) {
             mixins.add("MixinCclTooltip");
         }
+        // The quest book keeps its own copy of vanilla's tooltip code, so it is the one
+        // place neither of the hooks above can reach. See MixinBqTooltip.
+        if (isLoaded(loadedMods, "betterquesting")) {
+            mixins.add("MixinBqTooltip");
+        }
         return mixins;
     }
 

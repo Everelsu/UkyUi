@@ -122,11 +122,12 @@ public final class UiConfig {
      */
     public static boolean restyleWaila = true;
     /**
-     * Hand BetterQuesting a theme built from the palette below.
+     * Hand BetterQuesting a theme built from the palette below — once.
      *
-     * The theme is registered whether or not this is on — it shows up in the quest
-     * book's own theme list either way. This only decides whether it is also
-     * *selected*, which is the part that overrules a choice made in that list.
+     * The theme is registered whether or not this is on; it shows up in the quest
+     * book's own theme list either way. This decides whether it is also *selected*, and
+     * it turns itself off the moment it has been, so the selection is a default rather
+     * than something the player has to fight. See {@code QuestBookTheme.select}.
      */
     public static boolean restyleQuestBook = true;
     /**
@@ -234,6 +235,7 @@ public final class UiConfig {
     };
 
     public static boolean customSplash = true;
+    public static boolean showPercent = true;
     public static boolean showTips = false;
     public static String[] splashTips = DEFAULT_TIPS;
 
@@ -533,13 +535,18 @@ public final class UiConfig {
                         + "What the box says is untouched, including everything other "
                         + "mods add to it.");
         restyleQuestBook = bool(CAT_MODS, "restyleQuestBook", restyleQuestBook,
-                "Select the UKY theme in BetterQuesting's quest book. The theme is "
+                "Hand BetterQuesting's quest book the UKY theme, once. The theme is "
                         + "built from the palette in [theme] below, so it follows the "
                         + "rest of the interface rather than sitting beside it.\n"
-                        + "It is registered either way and can be picked by hand from "
-                        + "the quest book's Themes screen; turn this off if you would "
-                        + "rather that choice stuck, because with it on the theme is "
-                        + "re-selected every time a quest book screen opens.");
+                        + "This turns itself off the first time a quest book is opened "
+                        + "with it on, and from then on the book's own Themes screen "
+                        + "decides — pick anything else there and it stays picked. It "
+                        + "used to re-select ours every time the book opened, which "
+                        + "meant another theme could be chosen and lasted exactly until "
+                        + "the book was next opened.\n"
+                        + "Set it back to true to hand the book our theme again — after "
+                        + "changing the palette, for instance. The theme is registered "
+                        + "whether this is on or off, so it is always in that list.");
         questBookTransition = bool(CAT_MODS, "questBookTransition", questBookTransition,
                 "Darken the world behind the quest book, and let the book arrive over "
                         + "a fifth of a second instead of appearing between two frames. "
@@ -718,6 +725,10 @@ public final class UiConfig {
                         + "on your GPU; the game falls back to Forge's own splash. Ignored when "
                         + "Angelica is installed, which manages GL state in a way this screen "
                         + "cannot be made to share.");
+        showPercent = bool(CAT_SPLASH, "showPercent", showPercent,
+                "Show a percentage beside each bar on the mod-loading screen. Bars "
+                        + "that report no total have no percentage to show and are "
+                        + "drawn as a moving chunk instead, whatever this is set to.");
         showTips = bool(CAT_SPLASH, "showTips", showTips,
                 "Show the lines below at the bottom of the mod-loading screen — the "
                         + "one with the progress bar, while the game is starting up. "
@@ -861,6 +872,25 @@ public final class UiConfig {
      * — or a player who alt-F4s out of the settings screen they were just handed —
      * does not get shown it again on the next launch.
      */
+    /**
+     * Records that the quest book has been handed our theme, so it is not handed it again.
+     *
+     * Written through to the file straight away rather than at shutdown, for the reason
+     * the one below is: a crash between selecting the theme and quitting would leave the
+     * switch set, and the next launch would take the book's theme back off whoever had
+     * changed it.
+     */
+    public static void setRestyleQuestBook(boolean value) {
+        if (restyleQuestBook == value) {
+            return;
+        }
+        restyleQuestBook = value;
+        if (config != null) {
+            config.get(CAT_MODS, "restyleQuestBook", value).set(value);
+            config.save();
+        }
+    }
+
     public static void setShowSettingsOnFirstRun(boolean value) {
         showSettingsOnFirstRun = value;
         if (config != null) {
