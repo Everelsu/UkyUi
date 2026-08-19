@@ -75,6 +75,7 @@ public class LateMixins implements ILateMixinLoader {
         // place neither of the hooks above can reach. See MixinBqTooltip.
         if (isLoaded(loadedMods, "betterquesting")) {
             mixins.add("MixinBqTooltip");
+            mixins.add("MixinBqNotice");
         }
         return mixins;
     }

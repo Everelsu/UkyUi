@@ -8,6 +8,8 @@ import com.console.uky.client.render.Theme;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
+
+import java.util.List;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.world.WorldSettings;
 
@@ -82,7 +84,11 @@ public class GuiShareScreen extends MenuScreen {
         this.panelX2 = this.panelX1 + panelWidth;
 
         boolean cramped = this.height < 300;
-        this.modeHeight = cramped ? 34 : 46;
+        // Tall enough for a wrapped description rather than a truncated one. The
+        // blurb used to be drawn as a single line cut off with an ellipsis — "Ищите
+        // ресурсы, мас…" — which tells a player choosing a mode nothing at all, and
+        // was the more visible for the panel having a band of empty space under it.
+        this.modeHeight = cramped ? 34 : 62;
         int panelHeight = 52 + this.modeHeight + 12 + 22 + 16 + 20 + 20;
         this.panelY1 = Math.max(16, (this.height - panelHeight) / 2);
         this.panelY2 = this.panelY1 + panelHeight;
@@ -164,13 +170,46 @@ public class GuiShareScreen extends MenuScreen {
                     Draw.withAlpha(selected ? Theme.textHover : Theme.text, this.fadeAlpha));
 
             if (this.modeHeight >= 40) {
-                String blurb = I18n.format("selectWorld.gameMode." + MODES[i] + ".line1",
-                        new Object[0]);
-                this.fontRendererObj.drawString(
-                        fit(blurb, width - 16),
-                        x + 8, this.modeY + 22,
-                        Draw.withAlpha(Theme.textDim, 0.7F * this.fadeAlpha));
+                // Both halves, and wrapped to the card rather than cut at it. Vanilla
+                // splits this text across two keys precisely because it does not fit on
+                // one line, and taking only the first and trimming it threw away the
+                // half that says what the mode actually does.
+                drawBlurb(i, x + 8, this.modeY + 22, width - 16);
             }
+        }
+    }
+
+    /**
+     * A mode's description, wrapped into the card.
+     *
+     * The two vanilla keys are joined before wrapping rather than drawn as the two
+     * lines they are: where they break is a decision made for vanilla's own card width,
+     * and this card is a different width on every window. Joining them and re-flowing
+     * puts the break where this layout needs it.
+     *
+     * <p>Lines past what the card can hold are dropped rather than drawn over its
+     * edge. That is a real case at {@code cramped} sizes and in the longer
+     * translations, and a description spilling onto the button below it would be worse
+     * than a description that stops.
+     */
+    private void drawBlurb(int mode, int x, int y, int maxWidth) {
+        String key = "selectWorld.gameMode." + MODES[mode];
+        String blurb = I18n.format(key + ".line1", new Object[0]);
+        String second = I18n.format(key + ".line2", new Object[0]);
+        // A key with no translation comes back as the key itself; that is not a line.
+        if (!second.isEmpty() && !second.startsWith(key)) {
+            blurb = blurb + " " + second;
+        }
+
+        int lineHeight = this.fontRendererObj.FONT_HEIGHT;
+        int room = (this.modeY + this.modeHeight - 6 - y) / lineHeight;
+        if (room <= 0) {
+            return;
+        }
+        List<?> lines = this.fontRendererObj.listFormattedStringToWidth(blurb, maxWidth);
+        for (int i = 0; i < lines.size() && i < room; i++) {
+            this.fontRendererObj.drawString(String.valueOf(lines.get(i)), x, y + i * lineHeight,
+                    Draw.withAlpha(Theme.textDim, 0.7F * this.fadeAlpha));
         }
     }
 

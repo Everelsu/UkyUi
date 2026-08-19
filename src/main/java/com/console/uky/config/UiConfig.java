@@ -131,6 +131,15 @@ public final class UiConfig {
      */
     public static boolean restyleQuestBook = true;
     /**
+     * Show BetterQuesting's "quest complete" notice as this mod's own panel.
+     *
+     * The quest book announces a finished quest with a title across the middle of the
+     * screen; this mod announces an earned achievement with a panel that cuts in from
+     * the right. They are the same event, and showing them in two shapes at once is what
+     * makes a pack look assembled rather than made. See {@code QuestToast}.
+     */
+    public static boolean restyleQuestToast = true;
+    /**
      * A scrim under the quest book, and the beat it takes to arrive.
      *
      * Separate from the theme because it is a different thing: the theme is what the
@@ -547,6 +556,18 @@ public final class UiConfig {
                         + "Set it back to true to hand the book our theme again — after "
                         + "changing the palette, for instance. The theme is registered "
                         + "whether this is on or off, so it is always in that list.");
+        restyleQuestToast = bool(CAT_MODS, "restyleQuestToast", restyleQuestToast,
+                "Show the quest book's 'quest complete' notice as one of our panels — "
+                        + "the same one an achievement uses, cutting in from the right "
+                        + "with the quest's own icon in its frame.\n"
+                        + "Finishing a quest and earning an achievement at the same "
+                        + "moment otherwise puts two announcements of the same kind of "
+                        + "thing on screen in two different shapes, in two different "
+                        + "places, for two different lengths of time.\n"
+                        + "Off leaves BetterQuesting's own title, including whatever its "
+                        + "own notification settings say about style and duration. Note "
+                        + "that with this on those settings no longer apply, because the "
+                        + "notice is no longer theirs to draw.");
         questBookTransition = bool(CAT_MODS, "questBookTransition", questBookTransition,
                 "Darken the world behind the quest book, and let the book arrive over "
                         + "a fifth of a second instead of appearing between two frames. "

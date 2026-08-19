@@ -5,6 +5,103 @@ build sends to Modrinth, to CurseForge and to the GitHub release for it — see
 [RELEASING.md](RELEASING.md) — so it is written to be read by a player rather than by
 whoever wrote the commit.
 
+## 0.5.3
+
+**Quest book** (needs BetterQuesting)
+
+- Tooltips are drawn as one of this mod's panels and made to fit. The quest book keeps
+  its own copy of vanilla's tooltip code, which wraps to a width but never checks the
+  height — so a quest listing forty entries ran off the top of the screen and off the
+  bottom at the same time, and the half you wanted to read was the half that was not
+  there.
+- Finishing a quest shows the same panel an achievement does, with the quest's own icon
+  in its frame, instead of a title across the middle of the screen. Completing a quest
+  and earning an achievement together no longer puts two announcements of the same kind
+  of thing on screen in two different shapes. Off in `uky.cfg` under
+  `mods.restyleQuestToast`, which leaves BetterQuesting's own notice and its own
+  notification settings.
+- The theme is handed to the book once rather than re-selected every time it opens.
+  Another theme picked in the book's own Themes screen used to last exactly until the
+  book was next opened; now it stays picked.
+
+**Tooltips in packs with NEI**
+
+- NEI draws item tooltips itself and never touches the vanilla path this mod hooks, so
+  with it installed every tooltip in the game came out in vanilla's purple frame no
+  matter what the tooltip setting said. They are restyled now too. What is inside them
+  is untouched, including NEI's own paging and the bars and item grids that packs put
+  inside a tooltip.
+
+**Worlds and servers**
+
+- Holding the bin cracks the card: a point of impact, and cracks spreading out of it,
+  deeper the longer the button is held. Letting go closes them again.
+- The card then comes apart along exactly those cracks — long shards thrown from the
+  impact, rather than the grid of rectangles it used to break into. Nothing breaks into
+  rectangles, which is why the old one read as a tile sliding apart rather than
+  shattering.
+- Shift-click the bin to delete at once, on both lists. The hold is there because a
+  world is months of work; clearing out six test worlds is not a misclick.
+- Servers are deleted by that same gesture. It used to be a vanilla confirmation screen
+  dropped into the middle of a dark one, asking a question the pointer had already
+  answered by being on the bin.
+- A server added or edited on that screen is pinged straight away. It used to sit on
+  "Asking the server..." until the whole list was refreshed by hand.
+- A world created after another was deleted no longer opens on a photograph of the
+  deleted one. Minecraft hands folder names back out, and the picture was still cached
+  under the name the new world had just been given.
+
+**Entering and leaving a world**
+
+- Leaving is one movement now: the pause menu animates out, the world darkens to
+  exactly the colour the saving screen comes up on, and the menu climbs back out of
+  black on the far side. It used to cut three times in a row.
+- Creating a world dives into it the way opening one from the list already did.
+
+**Chat**
+
+- The command list opens as soon as `/` is typed, and follows the command along as it
+  is written, a word at a time. It waited for Tab before, which meant it only ever
+  appeared to somebody who already knew it was there. Ordinary messages are still
+  Tab-only — that completion is player names, and it is not worth a packet for every
+  word of every sentence.
+- Right arrow at the end of the line takes the completion shown greyed ahead of the
+  cursor.
+
+**Interface**
+
+- Text in this mod's screens has a shadow under it, the way the rest of the game does.
+  These screens were flat while every vanilla screen, every other mod and the chat
+  around them were not, which is what made the font look wrong when nothing was wrong
+  with it. `effects.textShadow`.
+- Controls at the right-hand end of a row are no longer underneath the scrollbar.
+  Aiming at the control caught the bar and aiming at the bar caught the control, on
+  every list in the mod at once.
+- The open-to-LAN screen wraps each game mode's description into its card instead of
+  cutting it off after three words.
+- Settings this build no longer has are dropped from the config file, rather than kept
+  there and listed in the in-game editor with nothing behind them.
+
+**Loading screen**
+
+- Paced to twenty frames a second rather than sixty. Every frame here costs far more
+  than it appears to — the captions go through vanilla's font renderer, which emits a
+  `glBegin`/`glEnd` pair per character — and this is the one screen shown during work it
+  must not compete with.
+- No longer logs an exception and a stack trace on every launch looking for a logo image
+  that has never shipped.
+
+**Fixes**
+
+- The item in the achievement panel is lit correctly while it spins. The light was being
+  positioned inside the entrance animation, so it turned with the item and lit it from
+  somewhere new on every frame.
+- The menu no longer starts tracing black hole fallback tables when the driver has
+  simply not been asked yet. During mod loading the GL context belongs to the loading
+  screen and the question has no answer rather than the answer "no" — and taking that
+  for a no spent the whole session on the slow path, on hardware that runs the shader
+  perfectly well.
+
 ## 0.5.2
 
 **Achievements**

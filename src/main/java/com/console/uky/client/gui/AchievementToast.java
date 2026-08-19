@@ -11,6 +11,7 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.resources.I18n;
+import net.minecraft.item.ItemStack;
 import net.minecraft.stats.Achievement;
 import org.lwjgl.opengl.GL11;
 
@@ -73,17 +74,33 @@ public final class AchievementToast {
     /** One popup: what it says, what it shows, and which of the two kinds it is. */
     private static final class Toast {
 
-        final Achievement achievement;
+        /**
+         * What this panel is about, for spotting a duplicate — the achievement itself,
+         * or a quest's own title.
+         *
+         * Compared by identity for an achievement and by value for anything else, which
+         * is what {@link #sameAs} is for. It used to be the {@code Achievement} field
+         * below doing both jobs; separating them is what let anything that is not an
+         * achievement use this panel at all.
+         */
+        final Object key;
+        /** The item shown in the frame, or null for a panel without one. */
+        final ItemStack icon;
         final String kicker;
         final String title;
         /** True for the "press E" hint, which is not something that was earned. */
         final boolean hint;
 
-        Toast(Achievement achievement, String kicker, String title, boolean hint) {
-            this.achievement = achievement;
+        Toast(Object key, ItemStack icon, String kicker, String title, boolean hint) {
+            this.key = key;
+            this.icon = icon;
             this.kicker = kicker;
             this.title = title;
             this.hint = hint;
+        }
+
+        boolean sameAs(Toast other) {
+            return this.key == other.key || (this.key != null && this.key.equals(other.key));
         }
 
         float dwell() {
@@ -111,7 +128,7 @@ public final class AchievementToast {
         if (!UiConfig.achievementToast || achievement == null) {
             return false;
         }
-        enqueue(new Toast(achievement,
+        enqueue(new Toast(achievement, achievement.theItemStack,
                 I18n.format("uky.achievement.unlocked", new Object[0]),
                 nameOf(achievement), false));
         return true;
@@ -131,7 +148,30 @@ public final class AchievementToast {
         } catch (Throwable t) {
             description = "";
         }
-        enqueue(new Toast(achievement, nameOf(achievement), description, true));
+        enqueue(new Toast(achievement, achievement.theItemStack,
+                nameOf(achievement), description, true));
+        return true;
+    }
+
+    /**
+     * Queues a panel for something that is not an achievement — a quest, at present.
+     *
+     * <p>The same panel, deliberately. BetterQuesting's own notice and this are the same
+     * event described twice: a thing was completed, here is what it was called. Showing
+     * them in two different shapes, in two different places on the screen, with two
+     * different durations, is the sort of thing that makes a pack look assembled rather
+     * than made — and a player who has just earned both at once sees it plainly.
+     *
+     * @param key    what this is about, for spotting a repeat
+     * @param kicker the small line that says what happened — "Quest complete"
+     * @param title  the large line: what it was
+     * @param icon   the item in the frame, or null for a panel without one
+     */
+    public static boolean show(Object key, String kicker, String title, ItemStack icon) {
+        if (!UiConfig.achievementToast || title == null) {
+            return false;
+        }
+        enqueue(new Toast(key, icon, kicker == null ? "" : kicker, title, false));
         return true;
     }
 
@@ -144,11 +184,11 @@ public final class AchievementToast {
         }
         // A duplicate can arrive when the server resends the stat block on a
         // reconnect; showing the same achievement twice in a row reads as a bug.
-        if (current.achievement == toast.achievement) {
+        if (current.sameAs(toast)) {
             return;
         }
         for (int i = 0; i < queue.size(); i++) {
-            if (queue.get(i).achievement == toast.achievement) {
+            if (queue.get(i).sameAs(toast)) {
                 return;
             }
         }
@@ -462,7 +502,7 @@ public final class AchievementToast {
      * a mistake rather than an entrance.
      */
     private static void drawItem(Toast toast, float cx, float cy, float elapsed) {
-        if (toast.achievement.theItemStack == null) {
+        if (toast.icon == null) {
             return;
         }
         float t = Ease.clamp01((elapsed - LINE_SECONDS - 0.04F) / 0.30F);
@@ -475,7 +515,7 @@ public final class AchievementToast {
         // the state that makes that true now lives.
         float scale = 1.0F + 0.65F * (1.0F - Ease.outBack(t));
         float spin = (1.0F - Ease.outCubic(t)) * -25.0F;
-        ItemIcon.draw(toast.achievement.theItemStack, cx, cy, scale, spin, 1.0F);
+        ItemIcon.draw(toast.icon, cx, cy, scale, spin, 1.0F);
     }
 
     /**
