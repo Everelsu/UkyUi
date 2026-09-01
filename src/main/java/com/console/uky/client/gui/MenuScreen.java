@@ -3,10 +3,14 @@ package com.console.uky.client.gui;
 import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.render.AmbientParticles;
 import com.console.uky.client.render.BlackHole;
+import com.console.uky.client.render.Comets;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
+import com.console.uky.client.render.UkyFontRenderer;
+import com.console.uky.client.sound.UkySounds;
+import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
@@ -39,6 +43,11 @@ public abstract class MenuScreen extends GuiScreen {
     private static final float FADE_IN_SECONDS = 0.45F;
 
     private static final AmbientParticles particles = new AmbientParticles();
+    /**
+     * Shared like the black hole, and for the same reason: a comet halfway across the
+     * sky must not restart because somebody opened the settings.
+     */
+    protected static final Comets comets = new Comets();
     private final Random grainRandom = new Random();
     /** Shared so the starfield keeps its position when moving between screens. */
     protected static final BlackHole blackHole = new BlackHole();
@@ -272,8 +281,41 @@ public abstract class MenuScreen extends GuiScreen {
 
     // ------------------------------------------------------------- lifecycle --
 
+    /**
+     * The size {@link #initGui()} last ran at, or -1 if it has never run.
+     *
+     * Forge lets any mod cancel {@code GuiScreenEvent.InitGuiEvent.Pre}, and
+     * {@code GuiScreen.setWorldAndResolution} then sets the width, the height and the
+     * font renderer and <em>skips {@code initGui} entirely</em>. Everything a screen
+     * builds there — the widgets, the layout, the text fields — is simply never
+     * built, and the first frame dereferences a null. It is not hypothetical: a pack
+     * with a hundred mods in it has one that does this, and the crash it produces
+     * names us, because we are what was drawing.
+     *
+     * <p>So the initialisation is no longer allowed to depend on being called. See
+     * {@link #ensureInitialised()}.
+     */
+    private int laidOutWidth = -1;
+    private int laidOutHeight = -1;
+
+    /**
+     * Runs the initialisation if nothing else did.
+     *
+     * Cheap enough to sit at the top of the draw: two integer comparisons on a frame
+     * where everything is in order, and on the frame where it is not, exactly the work
+     * that was skipped. Keyed on the size rather than on a bare flag so that a resize
+     * whose init was also cancelled is caught by the same test.
+     */
+    private void ensureInitialised() {
+        if (this.laidOutWidth != this.width || this.laidOutHeight != this.height) {
+            initGui();
+        }
+    }
+
     @Override
     public void initGui() {
+        this.laidOutWidth = this.width;
+        this.laidOutHeight = this.height;
         this.buttonList.clear();
         this.lastFrameNanos = System.nanoTime();
         this.elapsed = 0.0F;
@@ -298,6 +340,9 @@ public abstract class MenuScreen extends GuiScreen {
             this.particles.resize(this.width, this.height);
             blackHole.resize(this.width, this.height);
         }
+        // Told the size either way: a comet crossing when the window was resized should
+        // finish its crossing in the new one rather than off the side of it.
+        comets.resize(this.width, this.height);
         buildLayout();
 
         // The very first menu of the session starts on its own angle rather than
@@ -317,10 +362,36 @@ public abstract class MenuScreen extends GuiScreen {
      * For anything that changes the layout while the screen stays open — switching a
      * settings tab, filtering a list. Calling {@code initGui} for that reset the
      * fade to zero, so every tab click blinked the whole screen through black.
+     *
+     * <p>The controls it rebuilds arrive already settled. They are new objects, so
+     * without this each of them starts its entrance from nothing and the stagger
+     * spreads that over the better part of a second: the tab strip and the title stayed
+     * put while every row under them faded out and slid back in, one after another.
+     * That reads as the text flickering, not as the panel animating — the screen is
+     * already on the screen, and only its contents changed. The entrance belongs to a
+     * screen arriving, which is {@link #initGui()}, and nothing here rewinds that.
      */
     protected void relayout() {
         this.buttonList.clear();
         buildLayout();
+        settleWidgets();
+    }
+
+    /**
+     * Puts every widget at the end of its entrance.
+     *
+     * Separate from {@link #relayout()} so that a screen rebuilding its controls some
+     * other way — a list that adds a row without laying the whole screen out again —
+     * can ask for the same thing.
+     */
+    protected void settleWidgets() {
+        List<?> buttons = this.buttonList;
+        for (int i = 0; i < buttons.size(); i++) {
+            Object widget = buttons.get(i);
+            if (widget instanceof MenuButton) {
+                ((MenuButton) widget).settle();
+            }
+        }
     }
 
     /** Draw screen-specific content. Widgets are drawn afterwards. */
@@ -346,6 +417,7 @@ public abstract class MenuScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        ensureInitialised();
         tickTiming();
         syncScale();
 
@@ -363,9 +435,19 @@ public abstract class MenuScreen extends GuiScreen {
         // the conversion too.
         int localX = (int) (mouseX / this.uiScaleX);
         int localY = (int) (mouseY / this.uiScaleY);
+        // The backdrop has one thing in it that answers the pointer. It is told where
+        // the pointer is here rather than reading it, because this is the one place
+        // that knows what a screen coordinate means in our units.
+        comets.pointer(localX, localY);
         Draw.setClipScale(this.uiScaleFactor);
         GL11.glPushMatrix();
         GL11.glScalef(this.uiScaleX, this.uiScaleY, 1.0F);
+        // Text in this mod's screens gets a shadow under it, which is what the rest of the
+        // game has and what these screens were missing everywhere. Turned on here and off
+        // in the finally below, because it changes what the plain drawString means: left
+        // set, it would follow the game out of this screen and shadow every string drawn
+        // anywhere afterwards. See UkyFontRenderer.setShadowed.
+        UkyFontRenderer.setShadowed(UiConfig.textShadow);
         try {
             drawBackdrop();
             drawContent(localX, localY);
@@ -390,6 +472,10 @@ public abstract class MenuScreen extends GuiScreen {
 
             drawOverlay();
         } finally {
+            // Cleared here and not at the end of the try: anything thrown out of a draw
+            // above would otherwise leave every string in the game shadowed for the rest
+            // of the session, from a screen that is no longer even on top.
+            UkyFontRenderer.setShadowed(false);
             GL11.glPopMatrix();
             Draw.clearClipScale();
         }
@@ -432,22 +518,93 @@ public abstract class MenuScreen extends GuiScreen {
             return;
         }
         // The overdrawn base fill above is opaque, so anything drawn over it is safe.
+        advanceHoleFade();
         drawBackgroundArt();
+        // Here rather than inside drawBackgroundArt, because that is the method a
+        // screen overrides when it wants its own sky — the title screen does, for the
+        // parallax and the intro — and a comet that only crossed the screens nobody was
+        // looking at would be a strange thing to have built.
+        drawComets();
         drawBackgroundTint();
         // Dust drifting up from the floor makes sense in a room, not in space —
-        // the black hole supplies its own moving matter.
-        if (!isBlackHoleBackground()) {
+        // the black hole supplies its own moving matter, and so does the bare sky.
+        if (!isBlackHoleBackground() && !isStarfieldOnly()) {
             particles.render(this.fadeAlpha * 0.85F);
         }
     }
 
+    /**
+     * The sky with nothing in front of it, for screens the hole would be in the way of.
+     *
+     * The backdrop is otherwise the same one every menu has — the same stars, drifting
+     * at the same rate — so a screen that turns this on still belongs to the same room.
+     * It is the light source that goes, not the setting.
+     *
+     * @see com.console.uky.client.render.BlackHole#renderStars
+     */
+    protected boolean isStarfieldOnly() {
+        return false;
+    }
+
+    /**
+     * How much of the hole there is, 1 to 0.
+     *
+     * Static, like the camera, and for the same reason: it is the state of one
+     * continuous shot rather than a property of whichever screen happens to be drawing.
+     * Opening the shader packs used to take the hole off the screen between two frames,
+     * which is a cut in the middle of a shot that never cuts anywhere else.
+     */
+    private static float holeFade = 1.0F;
+
+    /** Half a second either way, which is a camera move rather than a switch. */
+    private static final float HOLE_FADE_HALF_LIFE = 0.16F;
+
+    private void advanceHoleFade() {
+        float target = isStarfieldOnly() ? 0.0F : 1.0F;
+        holeFade = Ease.approach(holeFade, target, HOLE_FADE_HALF_LIFE, this.delta);
+        // Snapped at the ends, so "there is no hole" is a state that is actually
+        // reached rather than approached forever at a thousandth of a radius.
+        if (Math.abs(holeFade - target) < 0.01F) {
+            holeFade = target;
+        }
+    }
+
+    /** What is left of the hole this frame; 1 on every screen that keeps it. */
+    protected static float holeFade() {
+        return holeFade;
+    }
+
+    /**
+     * Draws the sky: the hole where there is one, the bare starfield where there is not,
+     * and the half-second in between.
+     *
+     * <p>The hole recedes rather than fades — its radius goes to nothing, taking the
+     * lensing with it — so the stars it was bending straighten out into exactly the
+     * positions the unlensed field draws them at. The two halves therefore meet on the
+     * same frame, and what the eye sees is the hole falling away into the distance
+     * rather than a picture being swapped.
+     *
+     * @param diskIntensity how bright the disk is on this screen, before the fade
+     */
+    protected void drawSky(float centreX, float centreY, float radius,
+                           float diskIntensity, float warp) {
+        float left = radius * holeFade;
+        if (left <= 1.0F) {
+            // Nothing of it worth drawing. The starfield's own centre is the window's,
+            // which is where the shrinking hole's stars have arrived by now.
+            blackHole.renderStars(this.width * 0.5F, this.height * 0.5F, this.fadeAlpha);
+            return;
+        }
+        blackHole.render(centreX, centreY, left,
+                this.fadeAlpha * diskIntensity * holeFade, this.fadeAlpha, warp, false);
+    }
+
     protected void drawBackgroundArt() {
-        if (isBlackHoleBackground()) {
+        if (isBlackHoleBackground() || isStarfieldOnly()) {
             blackHole.update(this.delta);
             advanceCamera(blackHoleCenterX(), blackHoleCenterY(), blackHoleRadius());
             blackHole.lookFrom(blackHolePose());
-            blackHole.render(cameraX, cameraY, cameraRadius,
-                    this.fadeAlpha * blackHoleIntensity(), 1.0F);
+            drawSky(cameraX, cameraY, cameraRadius, blackHoleIntensity(), 1.0F);
             return;
         }
         // "image" mode needs artwork the pack supplies; nothing ships by default,
@@ -459,7 +616,7 @@ public abstract class MenuScreen extends GuiScreen {
         float zoom = 1.06F;
         float panX = 0.0F;
         float panY = 0.0F;
-        if (UiConfig.backgroundDrift) {
+        if (Quality.backgroundDrift()) {
             // Two prime-ish periods keep the loop from feeling metronomic.
             zoom = 1.06F + (float) Math.sin(this.elapsed * 0.07F) * 0.035F;
             panX = (float) Math.sin(this.elapsed * 0.043F) * 0.6F;
@@ -468,6 +625,40 @@ public abstract class MenuScreen extends GuiScreen {
         Draw.textureCover(BACKGROUND, 0, 0, this.width, this.height,
                 BACKGROUND_W, BACKGROUND_H, zoom, panX, panY,
                 Draw.withAlpha(0xFFFFFF, this.fadeAlpha));
+    }
+
+    /**
+     * The rare thing that happens in the backdrop.
+     *
+     * Over the sky and over the disk alike: a comet is nearer than either, and one that
+     * disappeared behind the accretion disk would look like a drawing order mistake
+     * rather than like distance.
+     */
+    private void drawComets() {
+        if (!UiConfig.comets) {
+            return;
+        }
+        comets.update(this.delta);
+        comets.render(this.fadeAlpha);
+        if (showsWishStar()) {
+            // Over the comets rather than under them: it is the thing that sends one,
+            // and watching it disappear behind the tail it just threw would be
+            // backwards.
+            comets.renderWish(this.fadeAlpha);
+        }
+    }
+
+    /**
+     * Whether this screen carries the star that answers a click.
+     *
+     * <p>Everywhere except the title screen. Comets cross every backdrop there is,
+     * because they are the sky and the sky is the same on all of them — but the thing
+     * that can be pressed lives one screen in, where somebody is already looking at
+     * controls rather than at the front door. It is also the screen where the sky is
+     * emptiest on the left, which is where the star is.
+     */
+    protected boolean showsWishStar() {
+        return true;
     }
 
     /**
@@ -501,7 +692,9 @@ public abstract class MenuScreen extends GuiScreen {
     }
 
     protected boolean isBlackHoleBackground() {
-        return "blackhole".equals(UiConfig.background);
+        // The preset has the last word over the background setting, not the other way
+        // round: potato exists for hardware where the cheapest trace is still too much.
+        return "blackhole".equals(UiConfig.background) && Quality.blackHole();
     }
 
     /** Cached across screens: probing the resource manager every frame is wasteful. */
@@ -565,15 +758,15 @@ public abstract class MenuScreen extends GuiScreen {
 
     /** Post-processing drawn over everything, widgets included. */
     protected void drawOverlay() {
-        if (UiConfig.vignette) {
+        if (Quality.vignette()) {
             Draw.vignette(this.width, this.height, 0.85F * this.fadeAlpha, 0xFF000000);
         }
         // Grain over the starfield just turns it to mush — the black hole already
         // supplies all the texture the backdrop needs.
-        if (UiConfig.filmGrain && !isBlackHoleBackground()) {
+        if (Quality.filmGrain() && !isBlackHoleBackground()) {
             drawFilmGrain();
         }
-        if (UiConfig.scanlines) {
+        if (Quality.scanlines()) {
             Draw.scanlines(this.width, this.height, 3.0F, Draw.withAlpha(0x000000, 0.10F * this.fadeAlpha));
         }
 
@@ -616,12 +809,82 @@ public abstract class MenuScreen extends GuiScreen {
 
     // ----------------------------------------------------------------- input --
 
+    /**
+     * Input reaches a screen before its first frame does, so the same guard is needed
+     * here — a click landing on a screen that was never initialised would otherwise
+     * be handled against a layout that does not exist yet.
+     */
+    @Override
+    public void handleInput() {
+        ensureInitialised();
+        super.handleInput();
+    }
+
     @Override
     protected void actionPerformed(GuiButton button) throws java.io.IOException {
         if (!button.enabled) {
             return;
         }
         onAction(button);
+    }
+
+    /**
+     * A click on the backdrop, before anything on the screen sees it.
+     *
+     * <p>There is exactly one thing back there to hit: see {@code BlackHole}'s secret
+     * star. It is tested first because it is behind everything — a click that lands on
+     * a button is a click on the button — and this is only reached at all when the
+     * click missed every widget the subclass tested. Subclasses that handle a click
+     * themselves and return without calling {@code super} keep that behaviour.
+     *
+     * @return true when the click was taken by the backdrop
+     */
+    protected boolean clickedBackdrop(int mouseX, int mouseY) {
+        if (!UiConfig.comets || isVoid()
+                || (!isBlackHoleBackground() && !isStarfieldOnly())) {
+            return false;
+        }
+        if (!showsWishStar() || overWidget(mouseX, mouseY)
+                || !comets.clickWish(mouseX, mouseY)) {
+            return false;
+        }
+        if (UiConfig.buttonSounds) {
+            // The interface's own click, quieter and pitched up: something happened,
+            // and it was not a button.
+            UkySounds.play(UkySounds.BUTTON, 0.35F, 1.7F);
+        }
+        return true;
+    }
+
+    @Override
+    protected void mouseClicked(int mouseX, int mouseY, int button) {
+        if (clickedBackdrop(mouseX, mouseY)) {
+            return;
+        }
+        super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /**
+     * Whether a control is under this point.
+     *
+     * The backdrop is behind everything, so anything drawn over it wins — a star that
+     * drifted under the Quit button must not take the click meant for it.
+     */
+    private boolean overWidget(int mouseX, int mouseY) {
+        List<?> buttons = this.buttonList;
+        for (int i = 0; i < buttons.size(); i++) {
+            Object entry = buttons.get(i);
+            if (!(entry instanceof GuiButton)) {
+                continue;
+            }
+            GuiButton widget = (GuiButton) entry;
+            if (widget.visible && mouseX >= widget.xPosition && mouseY >= widget.yPosition
+                    && mouseX < widget.xPosition + widget.width
+                    && mouseY < widget.yPosition + widget.height) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Handle a button press. */

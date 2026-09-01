@@ -24,11 +24,27 @@ public abstract class ScrollList {
     protected int rowHeight;
 
     /** Where the list wants to be scrolled to, and where it currently is. */
+    /** How far in from the right edge the rail is drawn. */
+    private static final float RAIL_WIDTH = 2.0F;
+    /**
+     * How much of that edge answers to the mouse.
+     *
+     * Deliberately several times the width of what is drawn. A three-pixel target is
+     * one most people miss on the first try and some never hit at all, and the cost of
+     * being generous here is a strip of empty panel beside the rows that scrolls
+     * instead of selecting — which is what it looks like it should do anyway.
+     */
+    private static final float GRAB_WIDTH = 9.0F;
+
     private float targetScroll;
     private float scroll;
     private boolean dragging;
     private int dragStartY;
     private float dragStartScroll;
+    /** True while the thumb itself is being dragged, as opposed to the content. */
+    private boolean railDragging;
+    /** Where on the thumb it was taken hold of, so it does not jump on grab. */
+    private float railGrabOffset;
 
     /** Row under the pointer, or -1. */
     protected int hovered = -1;
@@ -77,6 +93,19 @@ public abstract class ScrollList {
         clampScroll();
     }
 
+    /**
+     * Scrolls so that {@code index} sits in the middle of the viewport.
+     *
+     * For arriving at a row rather than merely being able to see it: a list opened
+     * from a link elsewhere has to answer "where is it" before it answers "is it
+     * visible", and a row that has just been scrolled to the very bottom edge of the
+     * list looks like one that happened to be there already.
+     */
+    public void scrollToCenter(int index) {
+        targetScroll = index * rowHeight + rowHeight * 0.5F - height * 0.5F;
+        clampScroll();
+    }
+
     private float maxScroll() {
         return Math.max(0.0F, rowCount() * rowHeight - height);
     }
@@ -96,7 +125,10 @@ public abstract class ScrollList {
     }
 
     public void draw(int mouseX, int mouseY, float alpha) {
-        boolean inside = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+        // The rail's strip is not part of the rows: a row that highlights while the
+        // pointer is on the scrollbar invites a click that will not select it.
+        boolean inside = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height
+                && !overRail(mouseX, mouseY);
         this.hovered = -1;
 
         Draw.beginClip(x, y, width, height);
@@ -111,27 +143,67 @@ public abstract class ScrollList {
             if (isHovered) {
                 this.hovered = i;
             }
-            drawRow(i, x, rowY, width, rowHeight, isHovered, i == selected, alpha);
+            // The content width, not the list's. Rows lay their right-hand controls out
+            // from this, and screens hit-test them against rowRight(); the two have to be
+            // the same number or every control on the right of a row is drawn in one place
+            // and clicked in another.
+            drawRow(i, x, rowY, rowRight() - x, rowHeight, isHovered, i == selected, alpha);
         }
         Draw.endClip();
 
-        drawScrollRail(alpha);
         drawEdgeFade(alpha);
+        // After the edge fade, not before: the rail is a control and must not be
+        // faded out at the ends of its own travel.
+        drawScrollRail(mouseX, mouseY, alpha);
     }
 
-    /** Thin rail on the right, only while there is somewhere to scroll. */
-    private void drawScrollRail(float alpha) {
+    /**
+     * The rail on the right, and the thumb you can actually take hold of.
+     *
+     * It used to be three pixels wide and purely an indicator — the click that landed
+     * on it was treated as a click on the list behind it, so grabbing it scrolled the
+     * content the wrong way and selected whatever row happened to be under the
+     * pointer. It is now a control: {@link #GRAB_WIDTH} units of it respond to the
+     * mouse, which is wider than it is drawn, because a bar you have to hit within
+     * three pixels is a bar you miss.
+     */
+    private void drawScrollRail(int mouseX, int mouseY, float alpha) {
         float max = maxScroll();
         if (max <= 0.0F) {
             return;
         }
-        float railX = x + width - 2.0F;
+        float railX = x + width - RAIL_WIDTH;
         Draw.rect(railX, y, railX + 1.0F, y + height, Draw.withAlpha(Theme.textDim, 0.12F * alpha));
 
-        float thumbHeight = Math.max(16.0F, height * (height / (float) (rowCount() * rowHeight)));
-        float thumbY = y + (height - thumbHeight) * (scroll / max);
-        Draw.rect(railX - 1.0F, thumbY, railX + 2.0F, thumbY + thumbHeight,
-                Draw.withAlpha(Theme.accent, 0.55F * alpha));
+        float thumbHeight = thumbHeight();
+        float thumbY = thumbY(max, thumbHeight);
+        boolean hot = this.railDragging || overRail(mouseX, mouseY);
+
+        // Wider and brighter under the pointer, so it is clear it can be taken hold
+        // of before it is.
+        float half = hot ? 2.5F : 1.5F;
+        Draw.rect(railX - half + 0.5F, thumbY, railX + half + 0.5F, thumbY + thumbHeight,
+                Draw.withAlpha(Theme.accent, (hot ? 0.95F : 0.55F) * alpha));
+        if (hot) {
+            Draw.rect(railX - half - 1.0F, thumbY, railX - half + 0.5F, thumbY + thumbHeight,
+                    Draw.withAlpha(Theme.accent, 0.25F * alpha));
+        }
+    }
+
+    private float thumbHeight() {
+        float content = rowCount() * (float) rowHeight;
+        return Math.max(16.0F, height * (height / content));
+    }
+
+    private float thumbY(float max, float thumbHeight) {
+        return y + (height - thumbHeight) * (scroll / max);
+    }
+
+    /** Whether the pointer is in the strip the rail answers to. */
+    private boolean overRail(int mouseX, int mouseY) {
+        return maxScroll() > 0.0F
+                && mouseX >= x + width - GRAB_WIDTH && mouseX <= x + width + 2
+                && mouseY >= y && mouseY < y + height;
     }
 
     /** Softens the clip edges so rows dissolve rather than being sliced off. */
@@ -158,13 +230,43 @@ public abstract class ScrollList {
         if (mouseX < x || mouseX >= x + width || mouseY < y || mouseY >= y + height) {
             return -1;
         }
+        // Nothing is under the scrollbar as far as the screens are concerned. They use
+        // this to spot a click on a control inside a row before handing it to the
+        // list, and a delete button that fires because the bar was grabbed over the
+        // top of it is the worst version of this bug.
+        if (overRail(mouseX, mouseY)) {
+            return -1;
+        }
         int index = (int) ((mouseY - y + scroll) / rowHeight);
         return index >= 0 && index < rowCount() ? index : -1;
     }
 
-    /** Right edge of a row, for placing controls inside one. */
+    /**
+     * Right edge available to a row's contents — the list's edge, less the scrollbar.
+     *
+     * <p>This returned {@code x + width}, the list's actual edge, and that quietly put
+     * every control any screen placed with it underneath the bar. {@link #rowIndexAt}
+     * already refuses to report a row when the pointer is over the rail, on the stated
+     * grounds that "nothing is under the scrollbar as far as the screens are concerned"
+     * — but this method was handing them the edge where it is. So a toggle or a reset
+     * button sitting a few units in from the right was inside the strip the bar answers
+     * to: aiming at the control caught the bar, aiming at the bar caught the control,
+     * and the value labels drawn against this edge ran under the rail with nothing
+     * between them and it.
+     *
+     * <p>{@link #GRAB_WIDTH} and not {@link #RAIL_WIDTH}, because what has to be kept
+     * clear is the part that takes the mouse rather than the part that is painted. The
+     * two differ on purpose — a bar you have to hit within two pixels is a bar you miss.
+     *
+     * <p>Reserved whether or not there is anything to scroll, which costs nine units on a
+     * list that fits. The alternative is worse than it sounds: the strip only takes the
+     * mouse when the list is scrollable, so a conditional reserve would move every
+     * control in every row sideways the moment a category gained an entry or a window was
+     * made shorter. Layout that depends on how much content there is, is layout that
+     * shifts under the pointer.
+     */
     public int rowRight() {
-        return x + width;
+        return (int) (x + width - GRAB_WIDTH);
     }
 
     /** Screen y of a row's top edge, accounting for the current scroll. */
@@ -173,6 +275,12 @@ public abstract class ScrollList {
     }
 
     public boolean mouseClicked(int mouseX, int mouseY) {
+        // The rail first, and over its own wider strip: it sits on top of the rows,
+        // and a click meant for it must not also land on the row behind it.
+        if (overRail(mouseX, mouseY)) {
+            grabRail(mouseY);
+            return true;
+        }
         if (mouseX < x || mouseX >= x + width || mouseY < y || mouseY >= y + height) {
             return false;
         }
@@ -187,7 +295,50 @@ public abstract class ScrollList {
         return true;
     }
 
+    /**
+     * Takes hold of the thumb, or jumps to where the track was clicked.
+     *
+     * Clicking the track above or below the thumb centres it on the pointer and then
+     * carries on as a drag, which is what every scrollbar does and what makes a single
+     * click on a long list land somewhere useful.
+     */
+    private void grabRail(int mouseY) {
+        float max = maxScroll();
+        float thumbHeight = thumbHeight();
+        float thumbY = thumbY(max, thumbHeight);
+
+        this.railDragging = true;
+        this.dragging = false;
+        if (mouseY >= thumbY && mouseY <= thumbY + thumbHeight) {
+            // Grabbed where it was held, so the thumb does not jump under the pointer.
+            this.railGrabOffset = mouseY - thumbY;
+        } else {
+            this.railGrabOffset = thumbHeight * 0.5F;
+            dragRailTo(mouseY);
+        }
+    }
+
+    private void dragRailTo(int mouseY) {
+        float max = maxScroll();
+        float thumbHeight = thumbHeight();
+        float travel = height - thumbHeight;
+        if (travel <= 0.0F) {
+            return;
+        }
+        float t = (mouseY - this.railGrabOffset - y) / travel;
+        targetScroll = max * (t < 0.0F ? 0.0F : (t > 1.0F ? 1.0F : t));
+        clampScroll();
+        // The bar has to track the pointer exactly, so the easing that makes the wheel
+        // feel smooth is skipped here — a thumb that lags behind the mouse it is being
+        // dragged by reads as the list being stuck.
+        this.scroll = targetScroll;
+    }
+
     public void mouseDragged(int mouseY) {
+        if (this.railDragging) {
+            dragRailTo(mouseY);
+            return;
+        }
         if (!dragging) {
             return;
         }
@@ -198,6 +349,7 @@ public abstract class ScrollList {
 
     public void mouseReleased() {
         this.dragging = false;
+        this.railDragging = false;
     }
 
     /** @param notches positive scrolls up, matching LWJGL's wheel sign */

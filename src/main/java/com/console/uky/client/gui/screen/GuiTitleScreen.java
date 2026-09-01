@@ -10,6 +10,7 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.client.splash.UkySplash;
+import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraftforge.common.ForgeVersion;
 import net.minecraftforge.fml.client.GuiModList;
@@ -452,6 +453,19 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         return this.fadeAlpha * this.intro.uiAlpha() * (1.0F - Transitions.blackout());
     }
 
+    /**
+     * The front door has no easter egg on it.
+     *
+     * Comets cross this sky like every other — it is the same sky — but the star that
+     * answers a click lives a screen further in. This one already has five things on it
+     * that are meant to be clicked, and every pixel of it is somebody's first
+     * impression of the pack.
+     */
+    @Override
+    protected boolean showsWishStar() {
+        return false;
+    }
+
     /** How long the black carried over from the loading screen takes to lift. */
     private static final float ARRIVAL_SECONDS = 0.9F;
     /** Only the first title screen of the session arrives from the splash. */
@@ -519,25 +533,28 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             blackHole.lookFrom(blackHolePose());
             // Shared camera, so arriving from another screen glides into place.
             advanceCamera(blackHoleCenterX(), blackHoleCenterY(), blackHoleRadius());
-            // Pointer parallax rides on top without disturbing that easing.
-            blackHole.render(
-                    cameraX + this.parallaxX * 6.0F,
+            // Pointer parallax rides on top without disturbing that easing. Through
+            // drawSky rather than straight to the hole, so this screen shares the
+            // recede-and-return the shader screens use — nothing here ever asks for it,
+            // but arriving from a screen that did should finish the move rather than
+            // snap out of it.
+            drawSky(cameraX + this.parallaxX * 6.0F,
                     cameraY + this.parallaxY * 4.0F,
                     cameraRadius * Transitions.holeScale(),
-                    this.fadeAlpha * this.intro.holeIntensity(),
+                    this.intro.holeIntensity(),
                     this.intro.warp());
             return;
         }
 
         this.intro.update(this.delta);
-        if ("solid".equals(UiConfig.background)) {
+        if ("solid".equals(UiConfig.background) || !Quality.blackHole()) {
             return;
         }
 
         float zoom = 1.10F;
         float panX = this.parallaxX * 0.35F;
         float panY = this.parallaxY * 0.25F;
-        if (UiConfig.backgroundDrift) {
+        if (Quality.backgroundDrift()) {
             zoom += (float) Math.sin(this.elapsed * 0.06F) * 0.03F;
             panX += (float) Math.sin(this.elapsed * 0.041F) * 0.25F;
             panY += (float) Math.cos(this.elapsed * 0.029F) * 0.18F;
@@ -584,6 +601,52 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
+    /**
+     * On the tick rather than in the draw, so the one place this screen replaces
+     * itself is not in the middle of its own frame.
+     */
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        offerFirstRunSettings();
+    }
+
+    /** True once this launch has done it, so it cannot fire twice in a session. */
+    private static boolean firstRunSettingsOffered;
+
+    /**
+     * Hands a brand new install the settings screen, once.
+     *
+     * There is a good deal in here that nobody would think to go looking for — the
+     * graphics preset most of all, which is the thing somebody on a weak card needs
+     * before they have formed an opinion about whether the menu is worth keeping. A
+     * screen shown once beats a settings screen nobody opens.
+     *
+     * <p>Held until the intro has finished and the menu has arrived, rather than
+     * fired from {@code initGui}: opening it over a title screen that has not
+     * appeared yet reads as the game having started somewhere else. By this point the
+     * player has seen where they are, and the settings then slide in over it in the
+     * same seamless move any other menu change uses.
+     */
+    private void offerFirstRunSettings() {
+        if (firstRunSettingsOffered
+                || !UiConfig.showSettingsOnFirstRun
+                || this.intro.isActive()
+                || this.contentAlpha < 0.85F
+                || Transitions.isBusy()
+                || isClosing()) {
+            return;
+        }
+        firstRunSettingsOffered = true;
+        // Recorded before the screen opens, not after it closes: leaving by any route
+        // — Escape, Done, or the window's close button — still counts as having been
+        // shown it, and none of those routes comes back through here.
+        UiConfig.setShowSettingsOnFirstRun(false);
+        // A screen that says what this is and asks the one question that matters,
+        // rather than the whole settings screen with no explanation attached.
+        switchTo(new GuiWelcomeScreen(this));
+    }
+
     private void startMenuMusic() {
         if (UiConfig.menuMusic) {
             UkySounds.startMusic((float) UiConfig.menuMusicVolume);
@@ -627,6 +690,27 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
+    /**
+     * The wordmark's letters, once somebody has knocked one loose.
+     *
+     * Rebuilt whenever the title changes, which is also what puts every letter back
+     * after the config is edited in game.
+     */
+    private FallingLetters letters;
+    /** Screen-space left edge and width of each glyph, from the last frame drawn. */
+    private float[] glyphX = new float[0];
+    private float[] glyphWidth = new float[0];
+    private float glyphTop;
+    private float glyphBottom;
+
+    private FallingLetters letters() {
+        String text = UiConfig.title == null ? "" : UiConfig.title;
+        if (this.letters == null || !this.letters.matches(text)) {
+            this.letters = new FallingLetters(text);
+        }
+        return this.letters;
+    }
+
     /** Title text at 2x with a letter-spaced, shadowed look. */
     private void drawWordmark(String text, int centerX, int y) {
         final float scale = 2.0F;
@@ -654,13 +738,33 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         int shadow = Draw.withAlpha(0x000000, 0.6F * this.contentAlpha);
         int color = Draw.withAlpha(Theme.text, this.contentAlpha);
 
+        FallingLetters loose = letters();
+        if (this.glyphX.length != text.length()) {
+            this.glyphX = new float[text.length()];
+            this.glyphWidth = new float[text.length()];
+        }
+        this.glyphTop = y;
+        this.glyphBottom = y + 8 * scale;
+
         for (int i = 0; i < text.length(); i++) {
-            String ch = String.valueOf(text.charAt(i));
-            this.fontRenderer.drawString(ch, (int) (cursor + 1), (int) (baseY + 1), shadow, false);
-            this.fontRenderer.drawString(ch, (int) cursor, (int) baseY, color, false);
-            cursor += this.fontRenderer.getCharWidth(text.charAt(i)) + tracking;
+            char glyph = text.charAt(i);
+            int width = this.fontRenderer.getCharWidth(glyph);
+            // Recorded in screen space so a click can be tested against it without
+            // reproducing the scale and the tracking at the other end.
+            this.glyphX[i] = cursor * scale;
+            this.glyphWidth[i] = width * scale;
+
+            if (loose.isInPlace(i)) {
+                String ch = String.valueOf(glyph);
+                this.fontRenderer.drawString(ch, (int) (cursor + 1), (int) (baseY + 1), shadow, false);
+                this.fontRenderer.drawString(ch, (int) cursor, (int) baseY, color, false);
+            }
+            cursor += width + tracking;
         }
         GL11.glPopMatrix();
+
+        loose.update(this.delta, this.holeCenterX, this.holeCenterY, this.holeRadius);
+        loose.draw(this.fontRendererObj, this.contentAlpha);
 
         // Accent rule under the wordmark, growing outwards from the centre.
         float grow = Ease.outCubic((this.elapsed - 0.25F) / 0.8F);
@@ -758,7 +862,36 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             this.intro.skip();
             return;
         }
+        if (knockOutLetter(mouseX, mouseY)) {
+            return;
+        }
         super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /**
+     * Frees the wordmark letter under the pointer, if there is one.
+     *
+     * @return true when a letter was hit, so the click goes no further
+     */
+    private boolean knockOutLetter(int mouseX, int mouseY) {
+        if (mouseY < this.glyphTop || mouseY > this.glyphBottom) {
+            return false;
+        }
+        for (int i = 0; i < this.glyphX.length; i++) {
+            float left = this.glyphX[i];
+            float right = left + this.glyphWidth[i];
+            if (mouseX < left || mouseX > right || !letters().isInPlace(i)) {
+                continue;
+            }
+            float centreX = (left + right) / 2.0F;
+            // Which side of the letter was struck decides which way it is pushed, and
+            // that sideways speed is what turns the fall into an orbit rather than a
+            // drop. Hitting it dead centre would send it straight down the throat.
+            float away = mouseX < centreX ? -1.0F : 1.0F;
+            letters().knockOut(i, centreX, this.glyphTop + 8.0F, away);
+            return true;
+        }
+        return false;
     }
 
     @Override

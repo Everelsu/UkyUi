@@ -175,6 +175,66 @@ public final class Draw {
         rect(x2 - r, y1 + r, x2, y2 - r, argb);
     }
 
+    /**
+     * A rectangle whose vertical edges lean right, by {@code skew} units at the top.
+     *
+     * The HUD panels this mod draws over live gameplay — the achievement toast above
+     * all — are cut this way so they cannot be mistaken for a menu panel that has
+     * wandered onto the screen. Everything else about them is the same, so the lean
+     * is a primitive rather than a shape each one builds by hand.
+     */
+    public static void slant(float x1, float y1, float x2, float y2, float skew, int argb) {
+        slantGradientV(x1, y1, x2, y2, skew, argb, argb);
+    }
+
+    /** {@link #slant} with a vertical gradient: {@code top} at y1, {@code bottom} at y2. */
+    public static void slantGradientV(float x1, float y1, float x2, float y2, float skew,
+                                      int top, int bottom) {
+        if ((top >>> 24) == 0 && (bottom >>> 24) == 0) {
+            return;
+        }
+        beginShapes();
+        GL11.glBegin(GL11.GL_QUADS);
+        color(bottom);
+        GL11.glVertex2f(x1, y2);
+        GL11.glVertex2f(x2, y2);
+        color(top);
+        GL11.glVertex2f(x2 + skew, y1);
+        GL11.glVertex2f(x1 + skew, y1);
+        GL11.glEnd();
+        endShapes();
+    }
+
+    /** {@link #slant} with a horizontal gradient, for sweeps along a leaning panel. */
+    public static void slantGradientH(float x1, float y1, float x2, float y2, float skew,
+                                      int left, int right) {
+        if ((left >>> 24) == 0 && (right >>> 24) == 0) {
+            return;
+        }
+        beginShapes();
+        GL11.glBegin(GL11.GL_QUADS);
+        color(left);
+        GL11.glVertex2f(x1, y2);
+        color(right);
+        GL11.glVertex2f(x2, y2);
+        GL11.glVertex2f(x2 + skew, y1);
+        color(left);
+        GL11.glVertex2f(x1 + skew, y1);
+        GL11.glEnd();
+        endShapes();
+    }
+
+    /** Hairline frame around a {@link #slant}, drawn inside the given bounds. */
+    public static void slantBorder(float x1, float y1, float x2, float y2, float skew,
+                                   float thickness, int argb) {
+        // Top and bottom are ordinary bars, offset by the lean; the sides are thin
+        // slants of their own, which is what keeps the corners closed.
+        slant(x1, y1, x2, y1 + thickness, skew, argb);
+        slant(x1, y2 - thickness, x2, y2, skew, argb);
+        slant(x1, y1, x1 + thickness, y2, skew, argb);
+        slant(x2 - thickness, y1, x2, y2, skew, argb);
+    }
+
     // --------------------------------------------------------------- shapes --
 
     public static void line(float x1, float y1, float x2, float y2, float width, int argb) {
@@ -321,6 +381,44 @@ public final class Draw {
         t.draw();
 
         GL11.glPopMatrix();
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
+    /**
+     * A textured triangle, given absolute vertices and the texture coordinates for each.
+     *
+     * <p>Exists because {@link #textureShard} cannot break anything. It draws a rotated
+     * rectangle, so a picture cut up with it comes apart into rectangles however fine the
+     * cut is — which read as tiles sliding apart rather than as something shattering. A
+     * shard is a triangle, and it has to be an arbitrary one: the whole character of
+     * broken glass is in the long thin pieces radiating from the impact, and those have
+     * no axis to be aligned to.
+     *
+     * <p>Vertices are absolute rather than local-plus-rotation, so a caller that has
+     * already worked out where its corners are — which anything tumbling a shard about
+     * its own centroid has — does not pay for a matrix push per piece.
+     */
+    public static void textureTriangle(ResourceLocation tex,
+                                       float x1, float y1, float u1, float v1,
+                                       float x2, float y2, float u2, float v2,
+                                       float x3, float y3, float u3, float v3,
+                                       int argb) {
+        Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        // Shards tumble, so half of them are wound the other way by the time they land.
+        GL11.glDisable(GL11.GL_CULL_FACE);
+        color(argb);
+
+        Tessellator t = Tessellator.instance;
+        t.startDrawing(GL11.GL_TRIANGLES);
+        t.addVertexWithUV(x1, y1, 0.0D, u1, v1);
+        t.addVertexWithUV(x2, y2, 0.0D, u2, v2);
+        t.addVertexWithUV(x3, y3, 0.0D, u3, v3);
+        t.draw();
+
         GL11.glDisable(GL11.GL_BLEND);
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
     }

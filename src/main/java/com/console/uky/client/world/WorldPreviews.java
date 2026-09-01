@@ -16,8 +16,10 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.IntBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -136,6 +138,65 @@ public final class WorldPreviews {
     private static String texturePath(String folderName) {
         return "worldpreview/" + folderName.toLowerCase().replaceAll("[^a-z0-9_-]", "_")
                 + "_" + Integer.toHexString(folderName.hashCode());
+    }
+
+    /**
+     * Forgets a folder's picture without freeing it, for a world that has been deleted.
+     *
+     * <p><b>Why this is separate from {@link #invalidate}.</b> Both caches are keyed by
+     * folder name, and Minecraft hands folder names back out: creating a world picks the
+     * first name that is free, so deleting "Новый мир 2" makes that exact folder
+     * available again and the next world created takes it. Nothing was dropping the
+     * cache on deletion, so the new world found the old one's uploaded texture still
+     * sitting under its name — and the loading screen showed a picture of a world that
+     * no longer existed.
+     *
+     * <p>The texture itself is deliberately <em>not</em> freed here, which is the whole
+     * reason this is not just a call to {@code invalidate}. Deleting a world plays the
+     * tile apart into shards, and those shards are drawn from this very texture for the
+     * next second — freeing it now would leave the animation drawing a texture that had
+     * been thrown away. Holding it costs a few hundred kilobytes until either the name is
+     * reused, at which point {@code loadTexture} replaces it and frees the old one, or
+     * the game closes. That is a bounded, self-healing leak in exchange for not having to
+     * thread the shards' lifetime through this class.
+     */
+    public static void forget(String folderName) {
+        TEXTURES.remove(folderName);
+        MISSING.remove(folderName);
+    }
+
+    /**
+     * Forgets every folder that is not in {@code live} — the worlds that still exist.
+     *
+     * <p>{@link #forget} covers a world deleted through this mod's own list, which is
+     * where it usually happens and not where it can only happen: vanilla's world screen
+     * is still reachable with {@code replaceWorldList} off, another mod may remove a
+     * save, and a folder can simply be deleted on disk while the game is running. Every
+     * one of those leaves an entry behind under a name Minecraft will hand out again.
+     *
+     * <p>Called when the world list is read rather than when a picture is looked up. That
+     * is the point: checking the file still exists on every cache hit would mean a disk
+     * lookup per tile per frame, which is the entire thing these caches were added to
+     * avoid. Once per opening of the list costs nothing and catches all of it.
+     *
+     * <p>Unlike {@link #forget} this does free the textures, because here there is nothing
+     * still drawing them — a world dropped by this path went while the list was closed,
+     * so it has no shards in flight.
+     */
+    public static void retainOnly(Set<String> live) {
+        MISSING.retainAll(live);
+        // Collected before removing: taking entries out of the map while walking its own
+        // key set through an iterator that is not the one doing the removing is how a
+        // ConcurrentModificationException happens.
+        List<String> stale = new ArrayList<String>();
+        for (String folder : TEXTURES.keySet()) {
+            if (!live.contains(folder)) {
+                stale.add(folder);
+            }
+        }
+        for (int i = 0; i < stale.size(); i++) {
+            invalidate(stale.get(i));
+        }
     }
 
     /** Drops the cached texture so the next read picks up a freshly written file. */

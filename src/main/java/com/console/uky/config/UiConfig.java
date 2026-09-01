@@ -1,9 +1,12 @@
 package com.console.uky.config;
 
+import net.minecraftforge.common.config.ConfigCategory;
 import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.common.config.Property;
 
 import java.io.File;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Single source of truth for everything a pack author would want to tweak
@@ -25,6 +28,8 @@ import java.io.File;
 public final class UiConfig {
 
     private static final String CAT_SCREENS = "screens";
+    private static final String CAT_HUD = "hud";
+    private static final String CAT_MODS = "mods";
     private static final String CAT_EFFECTS = "effects";
     private static final String CAT_THEME = "theme";
     private static final String CAT_MENU = "mainmenu";
@@ -53,6 +58,148 @@ public final class UiConfig {
     public static boolean replaceWorldList = true;
     public static boolean replaceLoadingScreen = true;
     public static boolean replaceDeathScreen = true;
+    public static boolean replacePlayerList = true;
+    /**
+     * Open the settings once, the first time the title screen is reached.
+     *
+     * Both the switch and the marker: it is turned off the moment it fires, and
+     * turning it back on by hand makes it happen again. One key rather than a
+     * preference plus a hidden "already done" flag, because the second one is a piece
+     * of state nobody can guess the meaning of in a file meant to be read.
+     */
+    public static boolean showSettingsOnFirstRun = true;
+
+    // ---- hud ----
+    /**
+     * Replace the achievement popup with ours.
+     *
+     * The vanilla one is a 160x32 slice of a texture that slides down from the top
+     * edge and back up again, and it has looked like that since 2011. Ours is the
+     * same idea drawn in the palette, with the arrival worth watching — see
+     * {@code AchievementToast}.
+     */
+    public static boolean achievementToast = true;
+    /** Play {@code achievement} the moment a toast arrives. */
+    public static boolean achievementSound = true;
+    public static double achievementVolume = 0.9D;
+    /**
+     * Rewrite the chat line an achievement produces.
+     *
+     * Vanilla's is a full sentence naming the player and the achievement in
+     * brackets; this cuts it to the achievement, marked, and makes it a link into
+     * the achievements list. Multiplayer keeps the name, because there it is the
+     * part that matters.
+     */
+    public static boolean achievementChatLink = true;
+    /**
+     * Draw the chat in this mod's own style instead of vanilla's grey boxes.
+     *
+     * Off by default and deliberately so: the chat is the one HUD element people
+     * read rather than glance at, and a pack author should opt into changing it.
+     */
+    public static boolean redesignChat = false;
+    /**
+     * Draw item tooltips as one of our panels, and make them fit the screen.
+     *
+     * The look is the smaller half of this. The rest is the part a modded pack needs:
+     * a line too long to fit is wrapped, a box too tall for the window is scaled to
+     * it, and one that is still too tall after that is cut and counted rather than
+     * drawn off the edge.
+     */
+    public static boolean restyleTooltips = true;
+    /**
+     * Width, in interface units, past which a tooltip line is re-flowed. 0 never
+     * wraps, which is what vanilla does.
+     */
+    public static int tooltipWidth = 220;
+
+    // ---- other mods ----
+    /**
+     * The blocks a tooltip is worth least on, out of the box.
+     *
+     * Vanilla terrain only, and deliberately so: these are the blocks every pack has,
+     * every player already knows by sight, and every landscape is made of. Nothing
+     * modded is guessed at from here — a pack that wants its own filler quiet says so
+     * in the config, which is what the list is for.
+     */
+    private static final String[] DEFAULT_WAILA_HIDDEN = {
+        "minecraft:stone",
+        "minecraft:grass",
+        "minecraft:dirt",
+        "minecraft:sand",
+        "minecraft:gravel",
+        "minecraft:cobblestone",
+        "minecraft:sandstone",
+        "minecraft:netherrack",
+        "minecraft:end_stone",
+        "minecraft:bedrock",
+        "minecraft:water",
+        "minecraft:flowing_water",
+        "minecraft:lava",
+        "minecraft:flowing_lava",
+        "minecraft:tallgrass",
+        "minecraft:snow_layer",
+    };
+
+    /**
+     * Draw Waila's block tooltip as one of our panels.
+     *
+     * Only the box and the text colour: what goes inside it is Waila's, down to the
+     * last provider a pack has registered. Nothing here knows what a tooltip says.
+     */
+    public static boolean restyleWaila = true;
+    /**
+     * Blocks Waila should say nothing about at all.
+     *
+     * The tooltip is worth having over a machine and worth nothing over the ground: a
+     * player who is walking across a hillside spends the whole walk with a box in the
+     * corner of the screen naming the stone they are standing on. Which blocks those
+     * are is a per-pack question — one pack's filler is another pack's ore — so it is a
+     * list rather than a rule, and {@link #wailaHideListed} is the single switch that
+     * turns the whole thing off without anyone having to empty it.
+     *
+     * <p>Entries are registry names: {@code minecraft:grass}, optionally with a
+     * metadata value after it ({@code minecraft:stone:1} for granite, leaving ordinary
+     * stone alone). The domain may be left off — {@code grass} matches
+     * {@code minecraft:grass} — which is what most people will type.
+     */
+    public static String[] wailaHiddenBlocks = DEFAULT_WAILA_HIDDEN;
+    /**
+     * Whether {@link #wailaHiddenBlocks} is obeyed.
+     *
+     * Separate from the list so that turning the feature off for an evening does not
+     * cost the list, and so the answer to "why is Waila not showing" is one line rather
+     * than a diff.
+     */
+    public static boolean wailaHideListed = true;
+    /**
+     * Hand BetterQuesting a theme built from the palette below — once.
+     *
+     * The theme is registered whether or not this is on; it shows up in the quest
+     * book's own theme list either way. This decides whether it is also *selected*, and
+     * it turns itself off the moment it has been, so the selection is a default rather
+     * than something the player has to fight. See {@code QuestBookTheme.select}.
+     */
+    public static boolean restyleQuestBook = true;
+    /**
+     * Show BetterQuesting's "quest complete" notice as this mod's own panel.
+     *
+     * The quest book announces a finished quest with a title across the middle of the
+     * screen; this mod announces an earned achievement with a panel that cuts in from
+     * the right. They are the same event, and showing them in two shapes at once is what
+     * makes a pack look assembled rather than made. See {@code QuestToast}.
+     */
+    public static boolean restyleQuestToast = true;
+    /**
+     * A scrim under the quest book, and the beat it takes to arrive.
+     *
+     * Separate from the theme because it is a different thing: the theme is what the
+     * book is drawn with, this is what happens around it, and either is worth having
+     * without the other.
+     */
+    public static boolean questBookTransition = true;
+    /** How dark the world goes behind the quest book; 0 leaves it alone. */
+    public static double questBookDim = 0.80D;
 
     // ---- death ----
     public static double deathSceneSeconds = 3.0D;
@@ -62,7 +209,17 @@ public final class UiConfig {
     public static boolean deathSounds = true;
     public static double deathVolume = 0.85D;
 
+
     // ---- effects ----
+    /**
+     * Ceiling on everything below it: {@code minimal}, {@code balanced} or
+     * {@code maximum}. See {@link Quality}, which is what actually reads it.
+     *
+     * Defaults to maximum because that is what this mod did before the setting
+     * existed, and a config that silently downgrades an existing install is a bug
+     * report about the menu looking worse after an update.
+     */
+    public static String graphics = Quality.MAXIMUM;
     public static boolean ambientParticles = true;
     public static int ambientParticleBudget = 40;
     public static boolean vignette = true;
@@ -71,6 +228,24 @@ public final class UiConfig {
     /** Slow zoom/drift on the background image. */
     public static boolean backgroundDrift = true;
     public static boolean buttonSounds = true;
+    /**
+     * Let a comet cross the backdrop, and light the star that sends one.
+     *
+     * Roughly one every forty seconds, several seconds to cross, drawn large enough to
+     * be noticed — the first version was astronomically modest and read as a star that
+     * had come loose. The backdrop is otherwise a still image that moves: nothing in it
+     * ever happens, and this is the one thing that does.
+     */
+    public static boolean comets = true;
+    /**
+     * Lay a shadow under the text in this mod's screens.
+     *
+     * On, because off is what they were doing and it is what looked wrong: the interface
+     * drew flat while every vanilla screen, every other mod and the chat around it did
+     * not. A switch rather than a hundred and twenty edits, so the two looks can be
+     * compared — see {@code UkyFontRenderer}.
+     */
+    public static boolean textShadow = true;
     /** One of {@code blackhole}, {@code image}, {@code solid}. */
     public static String background = "blackhole";
     /**
@@ -129,6 +304,7 @@ public final class UiConfig {
     };
 
     public static boolean customSplash = true;
+    public static boolean showPercent = true;
     public static boolean showTips = false;
     public static String[] splashTips = DEFAULT_TIPS;
 
@@ -157,6 +333,7 @@ public final class UiConfig {
         config = new Configuration(file);
         config.load();
         read();
+        prune();
         // Written every launch rather than only when a value changed, because the
         // comments are half of what this file is for. Forge marks the config dirty
         // when a *value* is added or edited, never when a comment is — so a build
@@ -175,6 +352,91 @@ public final class UiConfig {
      */
     public static void loadEarly(File gameDir) {
         load(new File(gameDir, CONFIG_PATH));
+    }
+
+    /**
+     * A setting with everything the loading screen cannot draw taken out of it.
+     *
+     * The loading screen runs before the resource system exists, so the only glyphs
+     * it can reach are the ones in the default font sheet — the printable ASCII range
+     * and nothing else. That is not a cosmetic limit. Under a renderer replacement
+     * such as Angelica, asking for a character outside the sheet sends the request to
+     * a unicode font provider whose class initialiser reads {@code glyph_sizes.bin}
+     * from a resource manager that is still empty. It throws, and a failed static
+     * initialiser marks that class unusable for the rest of the JVM's life: every
+     * piece of non-Latin text drawn later in the session then dies with
+     * {@code NoClassDefFoundError}, starting with the language screen, with nothing
+     * in the crash naming the loading screen that caused it.
+     *
+     * <p>So one Cyrillic {@code title} in the config costs the whole session. This is
+     * the guard against that, and it is deliberately applied at the loading screen
+     * rather than when the file is read: the same {@code title} is the main menu's
+     * wordmark, and there — after the resources are up — any script at all is fine.
+     *
+     * @return the text, with anything outside printable ASCII replaced by "?"
+     */
+    public static String splashSafe(String text) {
+        if (text == null) {
+            return null;
+        }
+        StringBuilder safe = null;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c >= ' ' && c <= '~') {
+                if (safe != null) {
+                    safe.append(c);
+                }
+                continue;
+            }
+            if (safe == null) {
+                safe = new StringBuilder(text.length());
+                safe.append(text, 0, i);
+            }
+            safe.append('?');
+        }
+        if (safe == null) {
+            return text;
+        }
+        if (shouldWarnAboutSplashText(text)) {
+            // System.err rather than the logger: this runs while mods are still loading.
+            System.err.println("[UKY] the loading screen cannot draw \"" + text
+                    + "\" — it has no font for anything outside plain ASCII this early,"
+                    + " so it is showing \"" + safe + "\" instead. Menus are unaffected.");
+        }
+        return safe.toString();
+    }
+
+    /**
+     * Text {@link #splashSafe} has already complained about.
+     *
+     * The warning is worth printing once per string and is ruinous printed every
+     * frame. Its callers are the loading screen's own draw path — the wordmark, the
+     * current step, the tip — so the same handful of strings pass through here sixty
+     * times a second for the whole of mod loading, and {@code System.err} on a
+     * running game is not a cheap call: FML redirects it into log4j, so each one is a
+     * synchronised append to latest.log made from the splash thread while the main
+     * thread is loading mods through the same appender.
+     *
+     * <p>Measured on a 116-mod pack before this guard: 5,582 lines from one config
+     * tip, 69% of every line logged during start-up.
+     */
+    private static final Set<String> splashWarned = new HashSet<String>();
+
+    /**
+     * Whether {@code text} is worth a warning, and remembers that it was.
+     *
+     * <p>Deliberately capped. The wordmark and the tips are the strings an author can
+     * actually act on, and there are a handful of those; the loading step is whatever
+     * mod is being loaded at the time, and a pack with non-Latin mod names would
+     * otherwise put an unbounded number of one-off lines through here — the same
+     * flood, spread over more strings, about something the author cannot fix anyway.
+     * Past the cap the substitution still happens, silently.
+     *
+     * <p>Not synchronised: the loading screen draws from one thread. The cost of
+     * being wrong about that is a duplicated line.
+     */
+    private static boolean shouldWarnAboutSplashText(String text) {
+        return splashWarned.size() < 16 && splashWarned.add(text);
     }
 
     /**
@@ -213,6 +475,16 @@ public final class UiConfig {
         config.setCategoryComment(CAT_SCREENS,
                 "Which vanilla screens this mod takes over. Turn one off and that "
                         + "screen goes back to vanilla; everything else keeps working.");
+        config.setCategoryComment(CAT_HUD,
+                "What this mod draws over the game rather than instead of it: the "
+                        + "achievement popup, the chat line an achievement produces, "
+                        + "and the chat itself. Nothing here changes what the game "
+                        + "does — only how it is drawn and worded.");
+        config.setCategoryComment(CAT_MODS,
+                "Interfaces belonging to other mods that this one restyles when they "
+                        + "are installed. Each entry does nothing at all when its mod "
+                        + "is absent, and none of them change what those mods do — "
+                        + "only what they look like.");
         config.setCategoryComment(CAT_MENU,
                 "The main menu: wordmark, which entries are shown, the music, and the "
                         + "link buttons underneath. See 'links' for how to add YouTube, "
@@ -254,6 +526,147 @@ public final class UiConfig {
                 "Replace the death screen with the death scene: the picture cuts out, "
                         + "the tape fails, a heart winds down. No buttons — any key or "
                         + "click comes back once it has played.");
+        replacePlayerList = bool(CAT_SCREENS, "replacePlayerList", replacePlayerList,
+                "Replace the Tab player list. Vanilla sizes its box by the server's "
+                        + "player cap rather than by who is actually online, so one "
+                        + "player on a sixty-slot server gets a screen-high panel of "
+                        + "empty rows. This one is as tall as the names in it, sorts "
+                        + "them, shows the ping as a number and marks your own row.");
+        showSettingsOnFirstRun = bool(CAT_SCREENS, "showSettingsOnFirstRun", showSettingsOnFirstRun,
+                "Open the settings screen by itself the first time you reach the "
+                        + "title screen, so the graphics preset and the rest are found "
+                        + "rather than looked for. Turns itself off once it has "
+                        + "happened; set it back to true to see it again.");
+
+        achievementToast = bool(CAT_HUD, "achievementToast", achievementToast,
+                "Replace the achievement popup — the box that drops in from the top "
+                        + "of the screen when you earn one. Ours is a slanted panel "
+                        + "that cuts in from the right: the item lands in its frame, "
+                        + "the name types itself out, and a hairline along the bottom "
+                        + "counts the time it has left. Earn several at once and they "
+                        + "queue rather than replacing each other.\n"
+                        + "Off puts vanilla's own box back.");
+        achievementSound = bool(CAT_HUD, "achievementSound", achievementSound,
+                "Play a sound when that panel arrives. Silence is the vanilla "
+                        + "behaviour; this is not.");
+        achievementVolume = dbl(CAT_HUD, "achievementVolume", achievementVolume, 0.0D, 1.0D,
+                "Volume of that sound, on top of the game's master slider.");
+        achievementChatLink = bool(CAT_HUD, "achievementChatLink", achievementChatLink,
+                "Shorten the chat line an achievement produces, and make it a link.\n"
+                        + "Vanilla writes a whole sentence — 'Player has just earned "
+                        + "the achievement [Taking Inventory]'. This cuts it to the "
+                        + "achievement itself, keeping the player's name only when "
+                        + "somebody else earned it. Clicking it opens the achievements "
+                        + "list scrolled to that entry with it picked out; hovering "
+                        + "still shows what it was for.");
+        restyleTooltips = bool(CAT_HUD, "restyleTooltips", restyleTooltips,
+                "Draw the box that appears over an item — its name, what it does, "
+                        + "everything every mod in the pack has added to it — as one "
+                        + "of our panels instead of vanilla's purple-bordered one.\n"
+                        + "The look is the smaller half. Vanilla's box is laid out on "
+                        + "the assumption that nothing will ever be very wide or very "
+                        + "tall, which is true of vanilla and not of a modded pack: a "
+                        + "machine listing its energy, its fluids and three lines of "
+                        + "lore produces a box taller than the window and drawn off "
+                        + "the end of it. This one wraps long lines to tooltipWidth "
+                        + "below, scales a box that is still too tall until it fits, "
+                        + "and only then cuts what is left over — saying how many "
+                        + "lines it cut.\n"
+                        + "What the lines say is untouched, including everything other "
+                        + "mods put in them.");
+        tooltipWidth = clampInt(CAT_HUD, "tooltipWidth", tooltipWidth, 0, 640,
+                "Width, in interface units, past which a tooltip line is re-flowed "
+                        + "onto the next. Around 220 is a comfortable paragraph and "
+                        + "roughly a third of the screen. 0 turns wrapping off and "
+                        + "leaves long lines to run as far as they like, which is "
+                        + "what vanilla does.\n"
+                        + "Needs restyleTooltips on.");
+        redesignChat = bool(CAT_HUD, "redesignChat", redesignChat,
+                "Draw the chat in this mod's style: each line on its own dark panel "
+                        + "with a rail down the left, new lines sliding in from the "
+                        + "left, and the input box below drawn as one of our fields.\n"
+                        + "Off by default. The chat is read rather than glanced at, "
+                        + "and every setting the game already has for it — scale, "
+                        + "width, height, opacity, visibility — is still obeyed either "
+                        + "way.");
+
+        restyleWaila = bool(CAT_MODS, "restyleWaila", restyleWaila,
+                "Draw Waila's block tooltip — the box naming whatever you are looking "
+                        + "at — as one of our panels: dark fill, hairline border, the "
+                        + "gold rail down the left, and the palette's text colour "
+                        + "instead of Waila's grey. The panel draws itself in from the "
+                        + "left over a sixth of a second, contents and all, whenever "
+                        + "you look at something new.\n"
+                        + "Progress bars inside it (a furnace burning, a machine "
+                        + "working) are ours too: they fill left to right from the "
+                        + "second accent to the first, with a highlight running along "
+                        + "the filled part while there is still work to do.\n"
+                        + "What the box says is untouched, including everything other "
+                        + "mods add to it.");
+        wailaHideListed = bool(CAT_MODS, "wailaHideListed", wailaHideListed,
+                "Obey 'wailaHiddenBlocks' below. Off shows Waila's tooltip over "
+                        + "everything again, without anyone having to empty the list "
+                        + "to get there.\n"
+                        + "Independent of restyleWaila: that is what the tooltip looks "
+                        + "like, this is whether there is one at all.");
+        wailaHiddenBlocks = strList(CAT_MODS, "wailaHiddenBlocks", wailaHiddenBlocks,
+                "Blocks Waila says nothing about. Look at one of these and no tooltip "
+                        + "appears at all.\n"
+                        + "The tooltip earns its place over a machine and earns nothing "
+                        + "over the ground: naming the stone underfoot for the whole of "
+                        + "a walk across a hillside is a box in the corner of the screen "
+                        + "that is never once read. Which blocks those are is a question "
+                        + "about the pack rather than about Waila, so it is a list.\n"
+                        + "One registry name per line: 'minecraft:grass'. Add a metadata "
+                        + "value to name one variant only — 'minecraft:stone:1' hides "
+                        + "granite and leaves ordinary stone alone. The domain may be "
+                        + "left off, so 'grass' works as well as 'minecraft:grass'.\n"
+                        + "The default is vanilla terrain and nothing else. Modded "
+                        + "filler is not guessed at: it is the same name the block goes "
+                        + "by in commands and recipes, which NEI shows under an item "
+                        + "once item ids are turned on in its options.\n"
+                        + "Emptying the list has the same effect as wailaHideListed=false.");
+        restyleQuestBook = bool(CAT_MODS, "restyleQuestBook", restyleQuestBook,
+                "Hand BetterQuesting's quest book the UKY theme, once. The theme is "
+                        + "built from the palette in [theme] below, so it follows the "
+                        + "rest of the interface rather than sitting beside it.\n"
+                        + "This turns itself off the first time a quest book is opened "
+                        + "with it on, and from then on the book's own Themes screen "
+                        + "decides — pick anything else there and it stays picked. It "
+                        + "used to re-select ours every time the book opened, which "
+                        + "meant another theme could be chosen and lasted exactly until "
+                        + "the book was next opened.\n"
+                        + "Set it back to true to hand the book our theme again — after "
+                        + "changing the palette, for instance. The theme is registered "
+                        + "whether this is on or off, so it is always in that list.");
+        restyleQuestToast = bool(CAT_MODS, "restyleQuestToast", restyleQuestToast,
+                "Show the quest book's 'quest complete' notice as one of our panels — "
+                        + "the same one an achievement uses, cutting in from the right "
+                        + "with the quest's own icon in its frame.\n"
+                        + "Finishing a quest and earning an achievement at the same "
+                        + "moment otherwise puts two announcements of the same kind of "
+                        + "thing on screen in two different shapes, in two different "
+                        + "places, for two different lengths of time.\n"
+                        + "Off leaves BetterQuesting's own title, including whatever its "
+                        + "own notification settings say about style and duration. Note "
+                        + "that with this on those settings no longer apply, because the "
+                        + "notice is no longer theirs to draw.");
+        questBookTransition = bool(CAT_MODS, "questBookTransition", questBookTransition,
+                "Darken the world behind the quest book, and let the book arrive over "
+                        + "a fifth of a second instead of appearing between two frames. "
+                        + "The scrim lifts again after the book is closed.\n"
+                        + "Independent of restyleQuestBook: this is what happens around "
+                        + "the book rather than what it is drawn with, so it applies "
+                        + "whichever theme the book is using.");
+        questBookDim = dbl(CAT_MODS, "questBookDim", questBookDim, 0.0D, 1.0D,
+                "How dark the world goes behind the quest book. 1 is the backdrop "
+                        + "colour at full strength — the world is gone; 0 leaves it "
+                        + "untouched and the book floats on the landscape the way "
+                        + "BetterQuesting draws it by itself. Around 0.8 is dark "
+                        + "enough for a dark theme to keep its contrast without "
+                        + "pretending the world stopped existing.\n"
+                        + "Needs questBookTransition on: it is the same scrim that "
+                        + "fades in and out.");
 
         deathSceneSeconds = dbl(CAT_DEATH, "sceneSeconds", deathSceneSeconds, 0.0D, 30.0D,
                 "Seconds of scene before a key or a click will bring the player back. "
@@ -272,8 +685,32 @@ public final class UiConfig {
         deathVolume = dbl(CAT_DEATH, "volume", deathVolume, 0.0D, 1.0D,
                 "Volume of those two, on top of the game's master slider.");
 
+        graphics = str(CAT_EFFECTS, "graphics", graphics,
+                "One ceiling over everything else in this section, for people who "
+                        + "would rather pick a word than tune eight numbers:\n"
+                        + "    maximum  - no ceiling. Every setting below is used as "
+                        + "written, which is what this mod did before this option "
+                        + "existed. The default.\n"
+                        + "    balanced - the black hole is traced at native "
+                        + "resolution rather than supersampled, a little less often, "
+                        + "and the film grain goes. Roughly half the GPU cost of "
+                        + "maximum, and hard to tell apart in motion.\n"
+                        + "    minimal  - for weak or old cards. The hole is traced "
+                        + "at half resolution and four times a second, the intro, the "
+                        + "particles, the grain and the background drift are off, and "
+                        + "the death scene is toned down. Roughly a fifth of the cost.\n"
+                        + "    potato   - no black hole at all. Every other preset "
+                        + "still traces it, and that trace is the entire cost of this "
+                        + "menu; where even the cheapest one is too much the backdrop "
+                        + "becomes a flat colour and the menus keep everything else.\n"
+                        + "This can only ever lower a setting, never raise one: "
+                        + "anything you have already turned off stays off at every "
+                        + "level, and 'maximum' does not undo your own choices. It is "
+                        + "also on the Video tab of the in-game settings, so it can "
+                        + "be changed without editing this file.");
         ambientParticles = bool(CAT_EFFECTS, "ambientParticles", ambientParticles,
-                "Drifting dust/ember particles behind the menus.");
+                "Drifting dust/ember particles behind the menus. Off entirely at "
+                        + "graphics=minimal.");
         ambientParticleBudget = clampInt(CAT_EFFECTS, "ambientParticleBudget", ambientParticleBudget, 0, 400,
                 "Maximum simultaneous ambient particles. Lower this on weak machines.");
         vignette = bool(CAT_EFFECTS, "vignette", vignette, "Darkened screen edges.");
@@ -282,6 +719,32 @@ public final class UiConfig {
         backgroundDrift = bool(CAT_EFFECTS, "backgroundDrift", backgroundDrift,
                 "Slow zoom and pan on the menu background image.");
         buttonSounds = bool(CAT_EFFECTS, "buttonSounds", buttonSounds, "Play a click sound on button press.");
+        comets = bool(CAT_EFFECTS, "comets", comets,
+                "Let a comet cross the backdrop: roughly one every forty seconds, with "
+                        + "a head, a halo and a tail a third of the screen long, taking "
+                        + "several seconds to cross.\n"
+                        + "The backdrop is otherwise a still image that moves — the "
+                        + "stars drift, the disk turns, and nothing in it ever happens. "
+                        + "This is the one thing that does, so it is drawn to be seen "
+                        + "rather than to be astronomically modest.\n"
+                        + "They cross every screen that draws our own sky, the title "
+                        + "screen included; in a world there is no sky to cross.\n"
+                        + "This also turns off the star that answers: one star high on "
+                        + "the left twinkles on its own, lights up under the pointer, "
+                        + "and sends a comet when it is clicked. It is on the screens "
+                        + "inside rather than on the title screen, which has enough "
+                        + "things on it to press already.");
+        textShadow = bool(CAT_EFFECTS, "textShadow", textShadow,
+                "Draw a shadow under the text in this mod's screens, the way Minecraft "
+                        + "draws its own.\n"
+                        + "These screens were flat everywhere while the game around them "
+                        + "— vanilla screens, other mods, the chat, item counts — was "
+                        + "not, which is what made the font look wrong when nothing was "
+                        + "wrong with it. Turn it off to compare.\n"
+                        + "Only this mod's own screens are affected, and only while they "
+                        + "are being drawn. It also needs this mod's font renderer, so a "
+                        + "pack whose renderer has already been replaced by something "
+                        + "else — OptiFine installs its own — will not see a difference.");
         background = str(CAT_EFFECTS, "background", background,
                 "Menu backdrop: 'blackhole' (rendered in code), 'image' "
                         + "(assets/uky/textures/gui/background.png) or 'solid'.");
@@ -381,6 +844,10 @@ public final class UiConfig {
                         + "on your GPU; the game falls back to Forge's own splash. Ignored when "
                         + "Angelica is installed, which manages GL state in a way this screen "
                         + "cannot be made to share.");
+        showPercent = bool(CAT_SPLASH, "showPercent", showPercent,
+                "Show a percentage beside each bar on the mod-loading screen. Bars "
+                        + "that report no total have no percentage to show and are "
+                        + "drawn as a moving chunk instead, whatever this is set to.");
         showTips = bool(CAT_SPLASH, "showTips", showTips,
                 "Show the lines below at the bottom of the mod-loading screen — the "
                         + "one with the progress bar, while the game is starting up. "
@@ -410,6 +877,49 @@ public final class UiConfig {
 
     }
 
+    /**
+     * Throws out anything in the file this build no longer has a setting for.
+     *
+     * <p>Forge's {@code Configuration} preserves what it does not recognise, which is
+     * the right default for a loader that cannot know whether a key belongs to a mod
+     * that is merely absent today. For a single mod's own file it is the wrong one, and
+     * it shows: {@code ConfigScreen} builds the in-game editor by walking
+     * {@code getCategoryNames()}, so it lists whatever is in the file rather than
+     * whatever the mod has. A feature that has been removed therefore goes on offering
+     * its settings — with controls that are read by nothing and cannot do anything — for
+     * as long as the file survives.
+     *
+     * <p>{@link #SHIPPED} is the register of what is real. Every read in {@link #read}
+     * passes through it, so once {@code read} has run it holds exactly this build's
+     * settings and nothing else; anything in the file outside it is a leftover. Which
+     * makes this self-maintaining: removing a setting from {@code read} is now the whole
+     * of removing it, and no future cleanup has to remember this method exists.
+     *
+     * <p>Runs after {@code read} for that reason, and before the save in {@link #load},
+     * so the file on disk is rewritten without the leftovers rather than carrying them
+     * to the next launch.
+     */
+    private static void prune() {
+        // Copied first: removing a category while walking the collection its names came
+        // from is a modification of what is being iterated.
+        for (String name : new java.util.ArrayList<String>(config.getCategoryNames())) {
+            ConfigCategory category = config.getCategory(name);
+            if (category == null) {
+                continue;
+            }
+            for (String key : new java.util.ArrayList<String>(category.keySet())) {
+                if (!SHIPPED.containsKey(name + '.' + key)) {
+                    category.remove(key);
+                }
+            }
+            // A category left with nothing in it was a section of its own, and an empty
+            // heading in the editor is no better than a populated stale one.
+            if (category.isEmpty() && category.getChildren().isEmpty()) {
+                config.removeCategory(category);
+            }
+        }
+    }
+
     /** Re-reads the in-memory config after the in-game editor changed it. */
     public static void reload() {
         if (config == null) {
@@ -421,6 +931,102 @@ public final class UiConfig {
 
     public static void save() {
         if (config != null && config.hasChanged()) {
+            config.save();
+        }
+    }
+    /**
+     * Writes the graphics preset, from the in-game settings screen.
+     *
+     * Straight to the file rather than only to the field. This is the one setting in
+     * here with a control on a vanilla-style settings screen, and every other control
+     * on that screen persists the moment it is changed — a preset that reverted on the
+     * next launch would read as it not having worked at all.
+     */
+    public static void setGraphics(String value) {
+        graphics = value;
+        if (config != null) {
+            config.get(CAT_EFFECTS, "graphics", value).set(value);
+            config.save();
+        }
+    }
+
+    /**
+     * Flips one of the HUD switches from the settings screen, file and all.
+     *
+     * Same reasoning as {@link #setGraphics}: these sit among vanilla options that
+     * persist the moment they are clicked, and one that reverted on the next launch
+     * would read as not having worked.
+     */
+    public static void setChatRedesign(boolean value) {
+        redesignChat = value;
+        write(CAT_HUD, "redesignChat", value);
+    }
+
+    public static void setAchievementToast(boolean value) {
+        achievementToast = value;
+        write(CAT_HUD, "achievementToast", value);
+    }
+
+    public static void setRestyleTooltips(boolean value) {
+        restyleTooltips = value;
+        write(CAT_HUD, "restyleTooltips", value);
+    }
+
+    public static void setAchievementChatLink(boolean value) {
+        achievementChatLink = value;
+        write(CAT_HUD, "achievementChatLink", value);
+    }
+
+    /**
+     * The Waila filter, from the settings screen.
+     *
+     * Only the switch has a control. What is on the list is a per-pack decision made
+     * once, in a file, with a registry name that nobody is going to type on a screen
+     * with no keyboard focus — so the screen offers the half of it that is worth
+     * changing mid-game and the config keeps the half that is not.
+     */
+    public static void setWailaHideListed(boolean value) {
+        wailaHideListed = value;
+        write(CAT_MODS, "wailaHideListed", value);
+    }
+
+    private static void write(String cat, String key, boolean value) {
+        if (config != null) {
+            config.get(cat, key, value).set(value);
+            config.save();
+        }
+    }
+
+    /**
+     * Records that the one-off settings screen has been shown.
+     *
+     * Written through to the file straight away rather than at shutdown, so a crash
+     * — or a player who alt-F4s out of the settings screen they were just handed —
+     * does not get shown it again on the next launch.
+     */
+    /**
+     * Records that the quest book has been handed our theme, so it is not handed it again.
+     *
+     * Written through to the file straight away rather than at shutdown, for the reason
+     * the one below is: a crash between selecting the theme and quitting would leave the
+     * switch set, and the next launch would take the book's theme back off whoever had
+     * changed it.
+     */
+    public static void setRestyleQuestBook(boolean value) {
+        if (restyleQuestBook == value) {
+            return;
+        }
+        restyleQuestBook = value;
+        if (config != null) {
+            config.get(CAT_MODS, "restyleQuestBook", value).set(value);
+            config.save();
+        }
+    }
+
+    public static void setShowSettingsOnFirstRun(boolean value) {
+        showSettingsOnFirstRun = value;
+        if (config != null) {
+            config.get(CAT_SCREENS, "showSettingsOnFirstRun", value).set(value);
             config.save();
         }
     }

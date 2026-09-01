@@ -1,0 +1,135 @@
+### Builds a release and publishes it to Modrinth, CurseForge and GitHub.
+###
+### Two ways in, and only one of them publishes by default:
+###
+###   * pushing a tag "v0.5.2" — builds, checks that the tag agrees with the version
+###     in build.gradle.kts, and publishes to all three
+###   * running it by hand from the Actions tab — builds, and publishes only to the
+###     destinations ticked; with none ticked it just leaves the jar as an artifact
+###
+### The three destinations are separate on purpose. An upload cannot be taken back: a
+### version that reached Modrinth is on Modrinth, so a release that fails halfway —
+### CurseForge rejecting a file the other two already accepted, say — has to be
+### finishable without sending the same version anywhere twice.
+###
+### A store is also skipped when its token is not configured, rather than failing the
+### run: a repository with only one of the two set up should still release to it. See
+### RELEASING.md for which secrets to add and where they come from.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      modrinth:
+        description: "Upload to Modrinth"
+        type: boolean
+        default: false
+      curseforge:
+        description: "Upload to CurseForge"
+        type: boolean
+        default: false
+      github_release:
+        description: "Create the GitHub release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # One flag per destination, decided once here rather than in three `if:` lines.
+      # A tag publishes everywhere; a manual run publishes where it was told to. The
+      # token check is folded in because secrets cannot be read from an `if:` directly.
+      PUBLISH_MODRINTH: ${{ (github.event_name == 'push' || inputs.modrinth) && secrets.MODRINTH_TOKEN != '' }}
+      PUBLISH_CURSEFORGE: ${{ (github.event_name == 'push' || inputs.curseforge) && secrets.CURSEFORGE_TOKEN != '' }}
+      PUBLISH_GITHUB: ${{ github.event_name == 'push' || inputs.github_release }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Two of them: Gradle 9 itself needs 17 or newer, and Minecraft 1.7.10 has to be
+      # compiled by Java 8. The second one is found through the toolchain path written
+      # below rather than by being JAVA_HOME.
+      - name: Set up JDKs
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            8
+            21
+
+      - name: Point Gradle at this machine's JDKs
+        run: |
+          # gradle.properties pins org.gradle.java.home to a path on the author's
+          # machine, which does not exist here. Dropping the line lets Gradle use the
+          # runner's JDK 21, and the toolchain line below is how it finds the 8.
+          sed -i '/^org.gradle.java.home=/d' gradle.properties
+          echo "org.gradle.java.installations.paths=$JAVA_HOME_8_X64" >> gradle.properties
+          # Belt and braces. The bit is set in git's index, but it only takes one
+          # commit made from Windows by a tool that does not carry file modes for the
+          # whole pipeline to stop at "Permission denied" again.
+          chmod +x gradlew
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew build
+
+      - name: Read the version
+        id: version
+        run: echo "value=$(./gradlew -q printVersion)" >> "$GITHUB_OUTPUT"
+
+      # A tag that says one thing and a jar that says another is the one mistake this
+      # pipeline can make that nobody notices until it is on both stores.
+      - name: Check the tag against the version
+        if: github.event_name == 'push'
+        run: |
+          expected="v${{ steps.version.outputs.value }}"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match the project version ($expected)." >&2
+            exit 1
+          fi
+
+      - name: Collect the release notes
+        run: ./gradlew -q printReleaseNotes > release-notes.md
+
+      - name: Publish to Modrinth
+        if: env.PUBLISH_MODRINTH == 'true'
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+        run: ./gradlew modrinth
+
+      - name: Publish to CurseForge
+        if: env.PUBLISH_CURSEFORGE == 'true'
+        env:
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+        run: ./gradlew curseforge
+
+      # The tag is built from the version rather than taken from the ref, so that this
+      # also works on a manual run — gh creates the tag at this commit if it is not
+      # there yet. On a tag push the two are the same thing, which the step above has
+      # already checked.
+      - name: Publish to GitHub
+        if: env.PUBLISH_GITHUB == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.value }}" \
+            --title "UKY UI ${{ steps.version.outputs.value }}" \
+            --notes-file release-notes.md \
+            "build/libs/ukyui-1.7.10-${{ steps.version.outputs.value }}.jar"
+
+      # Always, including on a tag: the run's own copy of what it built is what makes a
+      # failed publish something you can retry by hand rather than rebuild.
+      - name: Keep the jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: ukyui-${{ steps.version.outputs.value }}
+          path: build/libs/ukyui-1.7.10-${{ steps.version.outputs.value }}.jar
+          if-no-files-found: error

@@ -24,6 +24,12 @@
       { "name": "uky:delete_break", "stream": false }
     ]
   },
+  "achievement": {
+    "category": "master",
+    "sounds": [
+      { "name": "achivement_bass", "stream": false }
+    ]
+  },
   "heartbeat": {
     "sounds": [
       { "name": "uky:heartbeat", "stream": false }

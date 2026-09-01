@@ -37,10 +37,28 @@ public final class ShaderProgram {
                 supported = Boolean.valueOf(GLContext.getCapabilities().OpenGL21
                         || GLContext.getCapabilities().GL_ARB_shader_objects);
             } catch (Throwable t) {
-                supported = Boolean.FALSE;
+                // Deliberately not cached. The usual way to land here is to ask off the
+                // render thread: LWJGL keeps capabilities per thread, and during mod
+                // loading the thread that owns the GL context is the loading screen's,
+                // so the question has no answer yet rather than the answer "no".
+                // Remembering that as a "no" would send the whole session down the
+                // traced-table path on hardware that runs the shader perfectly well.
+                return false;
             }
         }
         return supported.booleanValue();
+    }
+
+    /**
+     * Whether we have actually asked the driver and been told no.
+     *
+     * Distinct from {@code !isSupported()}, which is also false when nobody could ask
+     * yet. Callers deciding whether to spend CPU on a fallback want this one: doing
+     * that work on a maybe is how a menu backdrop ends up costing a minute of the
+     * loading it was supposed to be shown during.
+     */
+    public static boolean isKnownUnsupported() {
+        return supported != null && !supported.booleanValue();
     }
 
     public ShaderProgram(ResourceLocation vertex, ResourceLocation fragment) {

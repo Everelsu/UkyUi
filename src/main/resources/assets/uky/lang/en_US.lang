@@ -38,6 +38,26 @@ uky.gamemode.hardcore.warning=One life. You die for good.
 
 uky.progress.none=Nothing here yet.
 uky.progress.search=Search...
+# The three filters beside that box. Short on purpose: they sit in a row of chips
+# with the search field, and a long word there costs the search box its width.
+uky.progress.filter.all=All
+uky.progress.filter.done=Earned
+uky.progress.filter.left=Left
+# Shown instead of the description while an achievement is still gated behind
+# another one — which is the only thing vanilla's tree of arrows actually said.
+uky.progress.requires=Needs
+
+# ---- quest notices ----
+# Only ever seen when BetterQuesting's own wording could not be reached: the notice
+# names itself with a lang key, and a key on screen is not a sentence. Keyed on the
+# last part of that key, so a version that renames the notice still lands here.
+uky.quest.notice.complete=QUEST COMPLETE
+uky.quest.notice.unlock=QUEST UNLOCKED
+uky.quest.notice.update=QUEST UPDATED
+
+# ---- the achievement popup and its chat line ----
+uky.achievement.unlocked=ACHIEVEMENT
+uky.achievement.open=Click to open it in the achievements list
 
 uky.controls.search=Search a binding or a key...
 uky.controls.press=Press a key
@@ -59,6 +79,45 @@ uky.settings.optifine.animations=Animations
 uky.settings.optifine.other=Other
 uky.settings.shaderPacks=Shader packs
 uky.settings.shaderPacks.open=Choose a shader pack...
+# ---- the shader pack screen ----
+# Iris names the screen itself where its own translation is present; these are ours.
+uky.shaderPacks.enabled=Shaders
+uky.shaderPacks.folder=Open folder
+uky.shaderPacks.options=Pack settings...
+uky.shaderPacks.apply=Apply
+uky.shaderPacks.reset=Reset
+uky.shaderPacks.none=No shader packs found.
+# Under the title while the screen is open: a pack can be dragged onto the window.
+uky.shaderPacks.drop=Drop a pack on the window to add it
+uky.shaderPacks.dropped=Packs added:
+# Shown while something has been picked and not yet loaded. Short: it sits beside the
+# screen's own title, in the corner the eye is already in.
+uky.shaderPacks.pending=not applied
+# The pack's profile row: a named set of values for everything else on the menu.
+# "Custom" is what it reads as once any of those has been changed by hand.
+uky.shaderPacks.profile=Profile
+uky.shaderPacks.profile.custom=Custom
+
+# ---- graphics preset ----
+# One ceiling over everything this mod draws. It only ever lowers a setting, so
+# "maximum" is what the mod did before the preset existed.
+uky.settings.effects=UKY effects
+uky.settings.graphics=UKY graphics
+uky.graphics.potato=Potato
+uky.graphics.minimal=Minimal
+uky.graphics.balanced=Balanced
+uky.graphics.maximum=Maximum
+
+# ---- this mod's own switches on the Sound & Chat tab ----
+uky.settings.chat=UKY chat
+uky.settings.redesignChat=Redesign chat
+uky.settings.achievementToast=Achievement popup
+uky.settings.achievementChat=Short achievement line
+uky.settings.tooltips=UKY tooltips
+uky.settings.restyleTooltips=Restyle tooltips
+# The switch over the list of blocks Waila is asked to say nothing about; the list
+# itself is in the config, under [mods] wailaHiddenBlocks.
+uky.settings.wailaHide=Quiet Waila on plain blocks
 
 # ---- death scene ----
 # Six lines per cause. The scene picks one at random and holds it for that death.
@@ -115,3 +174,22 @@ uky.death.mob.3=You were counted, not fought.
 uky.death.mob.4=It is still there.
 uky.death.mob.5=The hit landed. Nothing else did.
 uky.death.mob.6=You gave it the last opening.
+
+# Server list status. 1.7.10 has no multiplayer.status.* keys of its own -- those
+# arrived in 1.8 -- and the pinger's own wording is hardcoded English, so the words
+# a player reads when a server will not answer have to come from here.
+uky.server.status.pinging=Asking the server...
+uky.server.status.unresolved=Address not found
+uky.server.status.unreachable=No connection
+uky.server.status.timedOut=No answer
+
+uky.welcome.title=Welcome
+uky.welcome.body=This pack replaces Minecraft's menus. Everything here can be changed later, in Settings.
+uky.welcome.quality=How hard should the menu work?
+uky.welcome.settings=All settings...
+uky.welcome.start=Start
+uky.graphics.potato.hint=No black hole. The backdrop is a flat colour and the menus keep everything else.
+uky.graphics.minimal.hint=The hole is traced small and slowly. For weak or old cards.
+uky.graphics.balanced.hint=Full resolution, no supersampling. Hard to tell from maximum in motion.
+uky.graphics.maximum.hint=No ceiling. Everything is drawn as configured.
+

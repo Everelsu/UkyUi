@@ -44,6 +44,21 @@ public final class UkySplash {
     private static final String LOGO_RESOURCE = "/assets/uky/textures/gui/logo.png";
     private static final String OVERRIDE_DIR = "config/uky-splash";
 
+    /**
+     * Frames per second the loading screen is paced to.
+     *
+     * Twenty, not the sixty this used to ask for and not the hundred FML's own splash
+     * asks for. Every frame here is expensive in a way FML's is not: the captions are
+     * drawn through vanilla's {@link net.minecraft.client.gui.FontRenderer}, which
+     * emits a {@code glBegin}/{@code glEnd} pair <em>per character</em>, so three bar
+     * captions, a wordmark and a tip come to roughly a hundred and fifty of them a
+     * frame — nine thousand a second at sixty, in immediate mode, from a second
+     * thread sharing the main context. Nothing about a progress bar and a
+     * cross-fading tip needs more than twenty, and the whole point of this screen is
+     * to be shown during work it must not compete with.
+     */
+    private static final int FPS = 20;
+
     private static final Lock lock = new ReentrantLock(true);
 
     private static Drawable drawable;
@@ -195,11 +210,11 @@ public final class UkySplash {
         if (classpathResource == null) {
             return null;
         }
-        InputStream stream = UkySplash.class.getResourceAsStream(classpathResource);
-        if (stream == null) {
-            throw new IOException("Missing splash resource " + classpathResource);
-        }
-        return stream;
+        // A classpath image that is not there is the same answer as an override that is
+        // not there: nothing was supplied, draw without it. This used to throw, and the
+        // throw cost every launch a logged IOException and a stack trace for a logo the
+        // screen is designed not to need — the build has never shipped one.
+        return UkySplash.class.getResourceAsStream(classpathResource);
     }
 
     private static SplashTexture load(String classpathResource, String overrideName, boolean smooth) {
@@ -240,8 +255,25 @@ public final class UkySplash {
         private long startNanos;
         private float elapsed;
 
+        /** Seconds one pass of the indeterminate chunk takes. See drawWaiting. */
+        private static final float WAIT_PERIOD = 1.6F;
+
         /** Smoothed progress so the bar glides instead of jumping between steps. */
         private float shownProgress;
+
+        // Accounting for reportCost(). Touched only by this thread.
+        private int frames;
+        private long drawNanos;
+        private long presentNanos;
+
+        // Caption cache, one entry per bar slot. See caption(int, ProgressBar).
+        private final ProgressBar[] captionBar = new ProgressBar[3];
+        private final int[] captionStep = new int[3];
+        private final String[] captionText = new String[3];
+
+        /** The tip last passed through {@code splashSafe}, and which one it was. */
+        private int tipIndex = -1;
+        private String tipText;
 
         @Override
         public void run() {
@@ -256,14 +288,63 @@ public final class UkySplash {
                 startNanos = System.nanoTime();
                 while (!done) {
                     elapsed = (System.nanoTime() - startNanos) / 1_000_000_000.0F;
+
+                    long beforeDraw = System.nanoTime();
                     drawFrame();
+                    long beforePresent = System.nanoTime();
                     present();
-                    Display.sync(60);
+                    long afterPresent = System.nanoTime();
+
+                    frames++;
+                    drawNanos += beforePresent - beforeDraw;
+                    presentNanos += afterPresent - beforePresent;
+
+                    Display.sync(FPS);
                 }
             } finally {
+                reportCost();
                 deleteTextures();
                 releaseContext();
             }
+        }
+
+        /**
+         * What the loading screen cost, printed once when it hands the context back.
+         *
+         * This exists because the screen is the one part of the mod that runs for the
+         * whole of mod loading, on its own thread, and so is the one part whose cost
+         * cannot be read off a stack trace or inferred from the gaps between other
+         * mods' log lines. Three numbers separate the only explanations that matter:
+         *
+         * <ul>
+         * <li><b>{@code present}</b> dominating means the buffer swap is blocking —
+         *     the driver is pacing us to the refresh rate, and the fix is the frame
+         *     cap or the swap interval, not the drawing.
+         * <li><b>{@code draw}</b> dominating means the frame itself is too expensive,
+         *     and the fix is fewer draw calls per frame.
+         * <li><b>Both small against wall time</b> means the screen is idle in
+         *     {@code Display.sync} and is not what is slowing the load down,
+         *     whatever the before/after timings say.
+         * </ul>
+         *
+         * Printed through {@code System.err} for the same reason the rest of this
+         * class does: mods are still loading, and the logger belongs to the game.
+         */
+        private void reportCost() {
+            if (frames == 0) {
+                return;
+            }
+            long wallNanos = System.nanoTime() - startNanos;
+            System.err.println(String.format(
+                    "[UKY] loading screen: %d frames over %.1fs at %d fps requested"
+                            + " — draw %.1fs (%.2f ms/frame), present %.1fs (%.2f ms/frame)",
+                    Integer.valueOf(frames),
+                    Double.valueOf(wallNanos / 1e9),
+                    Integer.valueOf(FPS),
+                    Double.valueOf(drawNanos / 1e9),
+                    Double.valueOf(drawNanos / 1e6 / frames),
+                    Double.valueOf(presentNanos / 1e9),
+                    Double.valueOf(presentNanos / 1e6 / frames)));
         }
 
         private void loadFont() {
@@ -396,7 +477,7 @@ public final class UkySplash {
 
         /** Type-only header used when the pack ships no logo image. */
         private void drawWordmark(float w, float h, float alpha) {
-            String text = UiConfig.title;
+            String text = UiConfig.splashSafe(UiConfig.title);
             if (font == null || text == null || text.isEmpty()) {
                 return;
             }
@@ -444,6 +525,10 @@ public final class UkySplash {
                 }
             }
 
+            // A bar FML was given no step count for cannot say how far along it is,
+            // so it is drawn as motion instead of as a fraction. See drawWaiting.
+            boolean firstWaiting = first != null && first.getSteps() <= 0;
+
             float target = first == null ? 0.0F : progressOf(first);
             shownProgress += (target - shownProgress) * 0.12F;
             if (target < shownProgress) {
@@ -456,30 +541,98 @@ public final class UkySplash {
             float spacing = 26.0F;
 
             if (first != null) {
-                drawBar(first, barX, y, barWidth, alpha, shownProgress);
+                drawBar(0, first, barX, y, barWidth, alpha, shownProgress, firstWaiting);
                 y += spacing;
             }
             if (penult != null) {
-                drawBar(penult, barX, y, barWidth, alpha * 0.75F, progressOf(penult));
+                drawBar(1, penult, barX, y, barWidth, alpha * 0.75F,
+                        progressOf(penult), penult.getSteps() <= 0);
                 y += spacing;
             }
             if (last != null) {
-                drawBar(last, barX, y, barWidth, alpha * 0.75F, progressOf(last));
+                drawBar(2, last, barX, y, barWidth, alpha * 0.75F,
+                        progressOf(last), last.getSteps() <= 0);
             }
         }
 
-        private void drawBar(ProgressBar bar, float x, float y, float width, float alpha, float progress) {
+        /**
+         * A bar's caption, built once per change rather than once per frame.
+         *
+         * {@code describe} concatenates, {@code splashSafe} walks every character, and
+         * the answer only moves when the bar does — {@code ProgressBar.step} sets the
+         * message and increments the step together, so the step number is a sufficient
+         * key. Keyed by slot as well as by bar because the three slots hold different
+         * bars and a bar can move between them.
+         */
+        private String caption(int slot, ProgressBar bar) {
+            int step = bar.getStep();
+            if (captionBar[slot] != bar || captionStep[slot] != step) {
+                captionBar[slot] = bar;
+                captionStep[slot] = step;
+                captionText[slot] = UiConfig.splashSafe(describe(bar));
+            }
+            return captionText[slot];
+        }
+
+        /**
+         * One rule, its caption above it, and — where the bar knows its own length —
+         * the percentage in the margin beside it.
+         *
+         * <p>The reading sits outside the track rather than on it because the track is a
+         * hairline, with nothing to put text on. The margin is wide enough for it at
+         * every GUI scale: the bar is capped at just over half the width, so a quarter
+         * of the screen is free either side and "100%" needs about twenty pixels.
+         *
+         * @param waiting the bar reports no step count, so there is no fraction to draw
+         */
+        private void drawBar(int slot, ProgressBar bar, float x, float y, float width,
+                float alpha, float progress, boolean waiting) {
             if (font != null) {
-                drawCentered(describe(bar), x + width / 2.0F, y - 12.0F, 0xFFFFFF, 0.75F * alpha);
+                // Guarded too: a bar's caption is another mod's name, and nothing stops
+                // a mod being called something this font sheet has no glyphs for.
+                drawCentered(caption(slot, bar),
+                        x + width / 2.0F, y - 12.0F, 0xFFFFFF, 0.75F * alpha);
+                if (UiConfig.showPercent && !waiting) {
+                    drawText((int) (clamp01(progress) * 100.0F) + "%",
+                            x + width + 5.0F, y - 4.0F, 0xFFFFFF, 0.45F * alpha);
+                }
             }
             // Track: a hairline so the full length always reads, even at 0%.
             rectRGBA(x, y, x + width, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.18F * alpha);
+            if (waiting) {
+                drawWaiting(x, y, width, alpha);
+                return;
+            }
             float fill = width * clamp01(progress);
             if (fill > 0.0F) {
                 rectRGBA(x, y, x + fill, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.95F * alpha);
                 // Short bright head, the one bit of motion on an otherwise static frame.
                 rectRGBA(Math.max(x, x + fill - 12.0F), y - 0.5F, x + fill, y + 1.5F,
                         1.0F, 1.0F, 1.0F, 0.55F * alpha);
+            }
+        }
+
+        /**
+         * The fill for a bar that has no step count.
+         *
+         * FML lets a bar be created with zero steps and several mods do it, at which
+         * point the old drawing left an empty track for the whole of that stage — the
+         * one thing a loading screen must never look like, because it is exactly how a
+         * hung one looks. A chunk crossing the track says what an empty one cannot:
+         * this is working, it just cannot count.
+         *
+         * <p>It enters and leaves past the ends of the track and is eased at both, so
+         * the loop has no seam to restart on and nothing about it reads as a position.
+         */
+        private void drawWaiting(float x, float y, float width, float alpha) {
+            float phase = (elapsed % WAIT_PERIOD) / WAIT_PERIOD;
+            float eased = phase * phase * (3.0F - 2.0F * phase);
+            float chunk = width * 0.22F;
+            float head = x - chunk + (width + chunk) * eased;
+            float from = Math.max(x, head);
+            float to = Math.min(x + width, head + chunk);
+            if (to > from) {
+                rectRGBA(from, y, to, y + 1.0F, 1.0F, 1.0F, 1.0F, 0.95F * alpha);
             }
         }
 
@@ -497,7 +650,14 @@ public final class UkySplash {
             float phase = (elapsed % period) / period;
             float tipAlpha = clamp01(Math.min(phase / 0.15F, (1.0F - phase) / 0.15F));
 
-            drawCentered(tips[index], w / 2.0F, h - 26.0F, 0xFFFFFF, tipAlpha * 0.5F * alpha);
+            // Same reasoning as the bar captions: the text changes every 4.5s, not
+            // every frame, so it is scanned when it changes.
+            if (index != tipIndex) {
+                tipIndex = index;
+                tipText = UiConfig.splashSafe(tips[index]);
+            }
+            drawCentered(tipText, w / 2.0F, h - 26.0F,
+                    0xFFFFFF, tipAlpha * 0.5F * alpha);
         }
 
         private static String describe(ProgressBar bar) {
@@ -524,12 +684,18 @@ public final class UkySplash {
             if (alpha <= 0.01F) {
                 return;
             }
+            drawText(text, centerX - font.getStringWidth(text) / 2.0F, y, rgb, alpha);
+        }
+
+        private void drawText(String text, float x, float y, int rgb, float alpha) {
+            if (alpha <= 0.01F) {
+                return;
+            }
             int color = ((int) (clamp01(alpha) * 255.0F) << 24) | (rgb & 0xFFFFFF);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            int width = font.getStringWidth(text);
-            font.drawString(text, (int) (centerX - width / 2.0F), (int) y, color, false);
+            font.drawString(text, (int) x, (int) y, color, false);
             GL11.glDisable(GL11.GL_TEXTURE_2D);
             GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         }
@@ -590,6 +756,16 @@ public final class UkySplash {
             } catch (LWJGLException e) {
                 throw new RuntimeException("Splash thread could not take the GL context", e);
             }
+            // Unpace the swap for as long as we own the context.
+            //
+            // Minecraft applies the player's vsync setting in startGame, before mods are
+            // loaded, so by the time this screen is drawing the swap may be pinned to the
+            // refresh rate — and a swap that blocks for a frame interval blocks it inside
+            // present(), on a thread that is meant to be staying out of the way of mod
+            // loading. Our own Display.sync(FPS) is what paces this screen; the driver
+            // doing it as well only costs. Restored to the player's setting when the
+            // context goes back, and the game re-applies it later regardless.
+            setSwapInterval(0);
             int bg = UiConfig.colorBackground;
             GL11.glClearColor((bg >> 16 & 0xFF) / 255.0F, (bg >> 8 & 0xFF) / 255.0F,
                     (bg & 0xFF) / 255.0F, 1.0F);
@@ -599,8 +775,27 @@ public final class UkySplash {
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         }
 
+        /**
+         * Best effort, and deliberately silent about failing.
+         *
+         * A loading screen that cannot set the swap interval is a loading screen that
+         * runs at the refresh rate — slower than we asked for, and nothing worse. Not
+         * worth a line in a log that somebody is going to read while diagnosing
+         * something else.
+         */
+        private void setSwapInterval(int interval) {
+            try {
+                Display.setSwapInterval(interval);
+            } catch (Throwable ignored) {
+                // See above.
+            }
+        }
+
         private void releaseContext() {
             Minecraft mc = Minecraft.getMinecraft();
+            // Hand the player's vsync setting back with the context. The game sets it
+            // again itself later, so this only matters for the frames in between.
+            setSwapInterval(mc.gameSettings != null && mc.gameSettings.enableVsync ? 1 : 0);
             mc.displayWidth = Display.getWidth();
             mc.displayHeight = Display.getHeight();
             mc.resize(mc.displayWidth, mc.displayHeight);

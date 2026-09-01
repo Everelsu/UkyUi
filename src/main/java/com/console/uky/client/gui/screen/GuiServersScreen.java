@@ -1,5 +1,6 @@
 package com.console.uky.client.gui.screen;
 
+import cpw.mods.fml.client.FMLClientHandler;
 import com.console.uky.UkyUI;
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.gui.Transitions;
@@ -7,11 +8,12 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.Theme;
+import com.console.uky.client.sound.UkySounds;
+import com.console.uky.client.world.TileCracks;
+import com.console.uky.client.world.TileShatter;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiYesNo;
 import net.minecraft.client.gui.GuiYesNoCallback;
-import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
 import net.minecraft.client.network.ServerPinger;
@@ -33,6 +35,14 @@ import java.util.Map;
  * plays the same role the world capture does: blown up as the card's face,
  * blurred by the upscale, with the name and MOTD over it. Servers that publish no
  * icon get the same black plate an unvisited world gets.
+ *
+ * <p>Deleting one is the world picker's gesture too — hold the bin, or Shift-click it.
+ * It used to be a vanilla {@code GuiYesNo}, which was wrong in three ways at once: it
+ * threw the player out to a grey stone screen in the middle of a dark one, it asked a
+ * question the pointer had already answered by being on the bin, and it meant the two
+ * lists in this menu confirmed the same destructive action in two different ways. The
+ * hold is the confirmation — there is nothing to agree with, so the only thing that can
+ * mean "yes" is not letting go — and sliding off it is the cancel.
  */
 public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
@@ -68,7 +78,27 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private int lastMouseX;
     private int lastMouseY;
 
-    private int pendingDelete = -1;
+    // ---- deleting -----------------------------------------------------------
+    //
+    // The world picker's mechanism, whole: the same two durations, the same sound
+    // under the rise, the same fill inside the bin, and the same Shift-click past it.
+    // Both are the destructive action on a card in a grid, and a player who has
+    // learned one has learned the other.
+
+    /** Seconds the bin must be held; the length of the sound that plays under it. */
+    private static final float DELETE_HOLD_SECONDS = UkySounds.DELETE_HOLD_SECONDS;
+    /** Seconds to run the fill back down after letting go. */
+    private static final float DELETE_UNWIND_SECONDS = 0.14F;
+
+    /** Card whose bin is being held, or -1. */
+    private int holdCard = -1;
+    private float holdProgress;
+    /** Set by a Shift-click, cleared when the button comes up; see the world picker. */
+    private boolean holdSuppressed;
+    /** The break drawn on the card while the bin is held, and then broken along. */
+    private TileCracks cracks;
+    /** Plays after the entry is gone; holds nothing but pixels. */
+    private TileShatter shatter;
 
     public GuiServersScreen(GuiScreen parent) {
         super(parent);
@@ -93,6 +123,17 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     @Override
     protected void buildLayout() {
         if (this.servers == null) {
+            // Vanilla's multiplayer screen opens with this and it is not optional.
+            // FML keeps two maps of per-server data — what the server answered about
+            // its mod list, and whether it is blocked — and this call is the only
+            // thing that creates them; the fields have no initialiser. Skipping it
+            // left both null, and both are dereferenced on paths this screen uses:
+            // bindServerListData reads one on every ping reply, so no ping ever
+            // completed and every server eventually read as not answering, and
+            // connectToServer reads the other, so joining one died on an NPE that
+            // named this screen.
+            FMLClientHandler.instance().setupServerList();
+
             this.servers = new ServerList(this.mc);
             this.servers.loadServerList();
             this.pinger = new ServerPinger();
@@ -123,25 +164,144 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         clampScroll();
     }
 
+    // ------------------------------------------------------------------ ping --
+
+    private static final int PING_PENDING = 0;
+    private static final int PING_ONLINE = 1;
+    /** The address does not resolve: a typo, or a host that no longer exists. */
+    private static final int PING_UNRESOLVED = 2;
+    /** The address resolves but nothing answered: down, firewalled, wrong port. */
+    private static final int PING_UNREACHABLE = 3;
+    /** Answered nothing at all within {@link #PING_TIMEOUT_MS}. */
+    private static final int PING_TIMED_OUT = 4;
+
+    /**
+     * How long an entry may sit unanswered before it is called a failure.
+     *
+     * {@code OldServerPinger} has no timeout of its own: a host that accepts the
+     * connection and then says nothing leaves the entry pending for as long as the
+     * screen is open. Ten seconds is well past a working server on a bad line.
+     */
+    private static final long PING_TIMEOUT_MS = 10000L;
+
+    /**
+     * One entry's ping, as this screen sees it.
+     *
+     * {@link ServerData} cannot answer the question on its own.
+     * {@code OldServerPinger.func_147224_a} sets {@code pingToServer = -1} at the
+     * <em>start</em> of a probe, not only when one fails, so a negative ping means
+     * "pending or failed" and nothing can tell those apart — every server on the
+     * screen read as unreachable for as long as it was being asked. It also cannot
+     * distinguish a name that does not resolve from a host that does not answer,
+     * which are different problems with different fixes.
+     */
+    private static final class Probe {
+        /** Written by the ping thread, read every frame by the client thread. */
+        volatile int state = PING_PENDING;
+        /**
+         * When the probe actually began, not when it was queued.
+         *
+         * There are five threads for any number of servers, so a long list waits its
+         * turn. Timed from the queueing, an entry could burn its whole allowance
+         * sitting in that queue and be called unanswered before anything had asked
+         * it. Zero until a thread picks it up, which {@code stateOf} reads as "not
+         * started yet" and therefore never as late.
+         */
+        volatile long startedAt;
+    }
+
+    private Probe[] probes = new Probe[0];
+
+    /**
+     * Five threads, shared and reused, the way vanilla's own server list does it.
+     *
+     * A thread per entry meant a list of forty servers spawned forty threads, and
+     * every press of refresh spawned forty more — none of them bounded by anything.
+     */
+    private static final java.util.concurrent.ExecutorService PINGERS =
+            java.util.concurrent.Executors.newFixedThreadPool(5,
+                    new java.util.concurrent.ThreadFactory() {
+                        @Override
+                        public Thread newThread(Runnable task) {
+                            Thread thread = new Thread(task, "UKY Server Pinger");
+                            // Daemon: a probe against a black-holed address must never
+                            // be the reason the game will not close.
+                            thread.setDaemon(true);
+                            return thread;
+                        }
+                    });
+
     /** Kicks off a ping for every entry; results land asynchronously. */
     private void pingAll() {
-        for (int i = 0; i < this.servers.countServers(); i++) {
-            final ServerData data = this.servers.getServerData(i);
-            data.pingToServer = -2L;
-            data.serverMOTD = "";
-            data.populationInfo = "";
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        GuiServersScreen.this.pinger.ping(data);
-                    } catch (Exception e) {
-                        data.pingToServer = -1L;
-                        data.populationInfo = "";
-                    }
-                }
-            }, "UKY Server Pinger").start();
+        int count = this.servers.countServers();
+        Probe[] fresh = new Probe[count];
+        for (int i = 0; i < count; i++) {
+            fresh[i] = ping(this.servers.getServerData(i));
         }
+        this.probes = fresh;
+    }
+
+    /**
+     * Queues one entry's probe and hands back the record its answer lands in.
+     *
+     * Split out from {@link #pingAll} so that a server added or edited on this screen
+     * can be asked by itself. It used to have no way to be: {@link #probes} is indexed
+     * by position and was only ever rebuilt wholesale, so an entry added after the
+     * screen opened had no probe at all — {@code probeFor} returned null, which
+     * {@link #stateOf} reads as "still being asked", and the card sat on "Asking the
+     * server..." until the list was refreshed by hand.
+     */
+    private Probe ping(final ServerData data) {
+        final Probe probe = new Probe();
+
+        data.pingToServer = -2L;
+        data.serverMOTD = "";
+        data.populationInfo = "";
+
+        PINGERS.execute(new Runnable() {
+            @Override
+            public void run() {
+                probe.startedAt = System.currentTimeMillis();
+                try {
+                    GuiServersScreen.this.pinger.func_147224_a(data);
+                } catch (java.net.UnknownHostException e) {
+                    probe.state = PING_UNRESOLVED;
+                    data.populationInfo = "";
+                } catch (Exception e) {
+                    probe.state = PING_UNREACHABLE;
+                    data.populationInfo = "";
+                }
+            }
+        });
+        return probe;
+    }
+
+    /** Puts {@code probe} at {@code index}, growing the array when it is off the end. */
+    private void setProbe(int index, Probe probe) {
+        Probe[] snapshot = this.probes;
+        if (index < 0) {
+            return;
+        }
+        if (index < snapshot.length) {
+            snapshot[index] = probe;
+            return;
+        }
+        Probe[] grown = new Probe[index + 1];
+        System.arraycopy(snapshot, 0, grown, 0, snapshot.length);
+        grown[index] = probe;
+        this.probes = grown;
+    }
+
+    /**
+     * The probe for an entry, or null if the list has grown since the last ping.
+     *
+     * The array is replaced wholesale rather than resized, so a card drawn between a
+     * server being added and the next ping has nothing to look at. That is a missing
+     * status line for one frame, not an exception.
+     */
+    private Probe probeFor(int index) {
+        Probe[] snapshot = this.probes;
+        return index >= 0 && index < snapshot.length ? snapshot[index] : null;
     }
 
     private int rowCount() {
@@ -175,6 +335,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
         drawHeader();
         updateHover(mouseX, mouseY);
+        updateHold();
 
         Draw.beginClip(this.gridX, this.gridY, this.gridWidth, this.gridHeight);
         drawAddCard(0);
@@ -183,7 +344,26 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
         Draw.endClip();
 
+        drawShatter();
         drawEdgeFade();
+    }
+
+    /**
+     * The shards, drawn over everything and outside the grid's clip.
+     *
+     * Unclipped for the world picker's reason: a card bursting apart should be allowed
+     * to throw pieces past the edge of the list rather than have them vanish at a
+     * boundary the player cannot see.
+     */
+    private void drawShatter() {
+        if (this.shatter == null) {
+            return;
+        }
+        this.shatter.advance(this.delta);
+        this.shatter.draw(this.fadeAlpha);
+        if (this.shatter.isFinished()) {
+            this.shatter = null;
+        }
     }
 
     private void drawHeader() {
@@ -314,7 +494,9 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
 
         ServerData data = this.servers.getServerData(index);
-        float hover = this.hoverAmount[index];
+        // The hover array is sized by the layout; a server added since then is drawn
+        // unhighlighted rather than taking the screen down on an index.
+        float hover = index < this.hoverAmount.length ? this.hoverAmount[index] : 0.0F;
         float alpha = this.fadeAlpha;
         float x2 = x + this.tileWidth;
         float y2 = y + this.tileHeight;
@@ -337,12 +519,25 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         this.fontRenderer.drawString(name, x + 6, (int) (y2 - 28),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
 
-        String motd = data.serverMOTD == null ? "" : data.serverMOTD.replace('\n', ' ');
+        // Blank until the server has actually said something. The pinger writes its
+        // own untranslated "Pinging..." into the MOTD the moment a probe starts, and
+        // that is the status line's job to say, in the player's language.
+        String motd = stateOf(data, index) == PING_ONLINE
+                ? strip(data.serverMOTD).replace('\n', ' ')
+                : "";
         this.fontRenderer.drawString(
                 fit(motd, this.tileWidth - 12),
                 x + 6, (int) (y2 - 18), Draw.withAlpha(Theme.textDim, 0.85F * alpha));
 
-        drawStatus(data, x + 6, (int) (y2 - 9), alpha);
+        drawStatus(data, index, x + 6, (int) (y2 - 9), alpha);
+
+        if (this.holdCard == index && this.holdProgress > 0.0F && this.cracks != null) {
+            this.cracks.draw(x, y, this.tileWidth, this.tileHeight,
+                    Ease.clamp01(this.holdProgress), alpha);
+            Draw.border(x, y, x2, y2, 1.0F,
+                    Draw.withAlpha(Theme.danger,
+                            (0.3F + 0.7F * Ease.clamp01(this.holdProgress)) * alpha));
+        }
 
         if (hover > 0.02F) {
             drawCardActions(index, x, y, hover, alpha);
@@ -351,27 +546,80 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
-    /** Ping and population, with a dot coloured by how healthy the ping is. */
-    private void drawStatus(ServerData data, int x, int y, float alpha) {
+    /**
+     * Ping and population, with a dot coloured by how healthy the ping is.
+     *
+     * Every failure says what actually went wrong, in the player's own language.
+     * This used to ask for {@code multiplayer.status.cannot_connect}, which is a 1.8
+     * key: 1.7.10 has no {@code multiplayer.status.*} at all, so what a player saw
+     * on a server that was merely still being asked was the literal untranslated
+     * string "multiplayer.status.cannot_connect" across the card.
+     */
+    private void drawStatus(ServerData data, int index, int x, int y, float alpha) {
         String text;
         int dot;
-        if (data.pingToServer == -2L) {
-            text = "...";
-            dot = Theme.textDim;
-        } else if (data.pingToServer < 0L) {
-            text = I18n.format("multiplayer.status.cannot_connect", new Object[0]);
-            dot = Theme.danger;
-        } else {
-            text = data.pingToServer + " ms";
-            if (data.populationInfo != null && !data.populationInfo.isEmpty()) {
-                text = text + "   " + data.populationInfo.replaceAll("§.", "");
-            }
-            dot = data.pingToServer < 150L ? 0xFF6ECB63
-                    : (data.pingToServer < 400L ? Theme.accent : Theme.danger);
+        int state = stateOf(data, index);
+
+        switch (state) {
+            case PING_ONLINE:
+                text = data.pingToServer + " ms";
+                String population = strip(data.populationInfo);
+                if (!population.isEmpty()) {
+                    text = text + "   " + population;
+                }
+                dot = data.pingToServer < 150L ? 0xFF6ECB63
+                        : (data.pingToServer < 400L ? Theme.accent : Theme.danger);
+                break;
+            case PING_UNRESOLVED:
+                text = I18n.format("uky.server.status.unresolved", new Object[0]);
+                dot = Theme.danger;
+                break;
+            case PING_TIMED_OUT:
+                text = I18n.format("uky.server.status.timedOut", new Object[0]);
+                dot = Theme.danger;
+                break;
+            case PING_UNREACHABLE:
+                text = I18n.format("uky.server.status.unreachable", new Object[0]);
+                dot = Theme.danger;
+                break;
+            default:
+                text = I18n.format("uky.server.status.pinging", new Object[0]);
+                dot = Theme.textDim;
+                break;
         }
+
         Draw.rect(x, y + 1, x + 3, y + 4, Draw.withAlpha(dot, alpha));
-        this.fontRenderer.drawString(text, x + 7, y,
+        this.fontRenderer.drawString(fit(text, this.tileWidth - 18), x + 7, y,
                 Draw.withAlpha(Theme.textDim, 0.8F * alpha));
+    }
+
+    /**
+     * What this entry's ping amounts to right now.
+     *
+     * A successful reply is recognised by the ping going non-negative rather than by
+     * the worker reporting it: the reply is handled on the netty thread inside
+     * {@code OldServerPinger}, which has no idea this screen exists.
+     */
+    private int stateOf(ServerData data, int index) {
+        if (data.pingToServer >= 0L) {
+            return PING_ONLINE;
+        }
+        Probe probe = probeFor(index);
+        if (probe == null) {
+            return PING_PENDING;
+        }
+        if (probe.state != PING_PENDING) {
+            return probe.state;
+        }
+        long startedAt = probe.startedAt;
+        return startedAt != 0L && System.currentTimeMillis() - startedAt > PING_TIMEOUT_MS
+                ? PING_TIMED_OUT
+                : PING_PENDING;
+    }
+
+    /** Colour codes are section signs in this font; the card wants the words only. */
+    private static String strip(String text) {
+        return text == null ? "" : text.replaceAll("§.", "");
     }
 
     private void drawCardActions(int index, int x, float y, float hover, float alpha) {
@@ -390,8 +638,147 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
         drawIconButton(x + this.tileWidth - box * 2 - 8, y + 4, box, a,
                 this.hoveredAction == HIT_EDIT && this.hoveredCard == index, false);
-        drawIconButton(x + this.tileWidth - box - 4, y + 4, box, a,
-                this.hoveredAction == HIT_DELETE && this.hoveredCard == index, true);
+
+        float binX = x + this.tileWidth - box - 4;
+        boolean overBin = this.hoveredAction == HIT_DELETE && this.hoveredCard == index;
+        drawIconButton(binX, y + 4, box, a, overBin, true);
+        if (overBin && isShiftKeyDown()) {
+            // Full, because that is what Shift means: the next click is the one that
+            // does it, and the button already looks the way it looks a moment before
+            // a card breaks.
+            drawBinFill(binX, y + 4, box, alpha, 1.0F);
+        } else if (this.holdCard == index && this.holdProgress > 0.0F) {
+            drawBinFill(binX, y + 4, box, alpha, Ease.clamp01(this.holdProgress));
+        }
+    }
+
+    /**
+     * Advances or unwinds the hold on the bin.
+     *
+     * Driven from the button being physically down rather than from a click: the
+     * gesture is the confirmation, so the only thing that can go on meaning "yes" is
+     * going on holding. Moving off the bin unwinds it, which makes sliding away the
+     * natural cancel.
+     */
+    private void updateHold() {
+        boolean down = org.lwjgl.input.Mouse.isButtonDown(0);
+        if (!down) {
+            this.holdSuppressed = false;
+        }
+        boolean holding = down
+                && !this.holdSuppressed
+                // Shift already means "now", and the click has already done it.
+                && !isShiftKeyDown()
+                && this.hoveredAction == HIT_DELETE
+                && this.hoveredCard >= 0
+                && this.hoveredCard < this.servers.countServers()
+                && (this.holdCard == -1 || this.holdCard == this.hoveredCard);
+
+        if (holding) {
+            if (this.holdCard != this.hoveredCard || this.cracks == null) {
+                this.cracks = new TileCracks();
+            }
+            this.holdCard = this.hoveredCard;
+            // Started here rather than on the first frame of the press, so the sound
+            // and the fill begin together. Repeated calls after the first do nothing.
+            UkySounds.startDeleteHold();
+            this.holdProgress += this.delta / DELETE_HOLD_SECONDS;
+            if (this.holdProgress >= 1.0F) {
+                int index = this.holdCard;
+                this.holdCard = -1;
+                this.holdProgress = 0.0F;
+                // The rise has arrived; the break takes over from here.
+                UkySounds.stopDeleteHold();
+                destroyServer(index);
+            }
+            return;
+        }
+
+        if (this.holdProgress > 0.0F) {
+            // Let go before the end: the rise is cut off, because it is a rise towards
+            // something that is now not going to happen.
+            UkySounds.stopDeleteHold();
+        }
+
+        this.holdProgress -= this.delta / DELETE_UNWIND_SECONDS;
+        if (this.holdProgress <= 0.0F) {
+            this.holdProgress = 0.0F;
+            this.holdCard = -1;
+            // Dropped with the press it belonged to; see the world picker.
+            this.cracks = null;
+        }
+    }
+
+    /**
+     * Removes the entry at {@code index} and breaks its card apart where it stood.
+     *
+     * <p>The two parallel arrays are spliced rather than rebuilt, and that is the whole
+     * difficulty here. {@link #probes} and {@link #hoverAmount} are indexed by position
+     * in the server list, so removing an entry without removing theirs leaves every
+     * card below it reading the one above's ping and the one above's hover — a list
+     * where deleting the second server makes the third claim the second's latency.
+     * Re-pinging everything would fix it too, and would throw away every answer already
+     * received to solve a bookkeeping problem.
+     */
+    private void destroyServer(int index) {
+        if (index < 0 || index >= this.servers.countServers()) {
+            return;
+        }
+        UkySounds.play(UkySounds.DELETE_BREAK);
+
+        ServerData data = this.servers.getServerData(index);
+        ResourceLocation icon = iconFor(data);
+        float x = slotX(index + 1);
+        float y = slotY(index + 1);
+
+        this.servers.removeServerData(index);
+        this.servers.saveServerList();
+
+        this.probes = removeAt(this.probes, index);
+        this.hoverAmount = removeAt(this.hoverAmount, index);
+
+        TileCracks pattern = this.cracks != null ? this.cracks : new TileCracks();
+        this.cracks = null;
+        this.shatter = new TileShatter(pattern, icon, x, y, this.tileWidth, this.tileHeight);
+        clampScroll();
+    }
+
+    private static Probe[] removeAt(Probe[] array, int index) {
+        if (index < 0 || index >= array.length) {
+            return array;
+        }
+        Probe[] out = new Probe[array.length - 1];
+        System.arraycopy(array, 0, out, 0, index);
+        System.arraycopy(array, index + 1, out, index, array.length - index - 1);
+        return out;
+    }
+
+    private static float[] removeAt(float[] array, int index) {
+        if (index < 0 || index >= array.length) {
+            return array;
+        }
+        float[] out = new float[array.length - 1];
+        System.arraycopy(array, 0, out, 0, index);
+        System.arraycopy(array, index + 1, out, index, array.length - index - 1);
+        return out;
+    }
+
+    /**
+     * The hold filling the bin button up; the world picker's, to the pixel.
+     *
+     * @param sweep how full, 0 to 1 — a Shift-click draws it at 1 without any hold
+     */
+    private void drawBinFill(float x, float y, float box, float alpha, float sweep) {
+        Draw.rect(x, y + box * (1.0F - sweep), x + box, y + box,
+                Draw.withAlpha(Theme.danger, 0.55F * alpha));
+        // A brighter line riding the top of the fill, so the movement stays legible
+        // over the last few percent where the fill itself barely grows.
+        float edge = y + box * (1.0F - sweep);
+        Draw.rect(x, edge, x + box, edge + 1.0F, Draw.withAlpha(Theme.danger, alpha));
+        Draw.border(x, y, x + box, y + box, 1.0F, Draw.withAlpha(Theme.danger, alpha));
+
+        Icons.trash(x + box / 2.0F, y + box / 2.0F, box * 0.58F,
+                Draw.withAlpha(Draw.mix(Theme.danger, 0xFFFFFF, sweep), alpha));
     }
 
     private void drawIconButton(float x, float y, float box, float alpha, boolean hot,
@@ -420,14 +807,17 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             return null;
         }
         String key = data.serverIP + '|' + encoded.hashCode();
-        ResourceLocation cached = this.icons.get(key);
-        if (cached != null) {
-            return cached;
+        // containsKey, not a null check: a failed decode is cached as null on purpose,
+        // and asking again would re-run ImageIO and re-log the warning every frame for
+        // as long as the screen is open.
+        if (this.icons.containsKey(key)) {
+            return this.icons.get(key);
         }
         try {
             byte[] bytes = Base64.decodeBase64(encoded.getBytes("UTF-8"));
             BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
             if (image == null) {
+                this.icons.put(key, null);
                 return null;
             }
             ResourceLocation location = new ResourceLocation("uky",
@@ -472,7 +862,18 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     beginEditServer(this.hoveredCard, data);
                     return;
                 case HIT_DELETE:
-                    confirmDelete(this.hoveredCard);
+                    // Nothing on click. The bin is a hold, and a dialogue on top of a
+                    // hold would be two confirmations for one action.
+                    //
+                    // Shift stands in for the hold, as it does in the world picker.
+                    // A server entry is a name and an address rather than months of
+                    // play, so this is the list where the shortcut gets used — but it
+                    // is still the same key doing the same thing, which is the point of
+                    // it being the same key.
+                    if (isShiftKeyDown()) {
+                        this.holdSuppressed = true;
+                        destroyServer(this.hoveredCard);
+                    }
                     return;
                 default:
                     join(data);
@@ -492,8 +893,24 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
+    /**
+     * Joins a server the way FML requires, rather than the way it looks like it works.
+     *
+     * Constructing {@code GuiConnecting} and displaying it is what vanilla appears to
+     * do and is not enough. {@code FMLClientHandler.connectToServer} creates the
+     * {@code playClientBlock} latch as well, and FML's handshake waits on that latch
+     * from the Netty thread the moment login succeeds. Without it,
+     * {@code waitForPlayClient} dereferences null: the handshake dies with an NPE that
+     * never reaches the player, FML falls back to "Unexpected packet during modded
+     * negotiation - assuming vanilla", and the client sits on the connecting screen
+     * until it times out. Every modded server, every time.
+     *
+     * <p>It also does the blocked-server check that puts up {@code GuiAccessDenied},
+     * which going around it silently skipped, and it displays the screen itself — so
+     * there is nothing left for this method to do but hand over.
+     */
     private void join(ServerData data) {
-        this.mc.displayGuiScreen(new GuiConnecting(this, this.mc, data));
+        FMLClientHandler.instance().connectToServer(this, data);
     }
 
     // ---- adding, editing, connecting ----------------------------------------
@@ -506,7 +923,6 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     // never saved and editing one did nothing at all.
 
     private static final int MODE_NONE = 0;
-    private static final int MODE_DELETE = 1;
     private static final int MODE_ADD = 2;
     private static final int MODE_EDIT = 3;
     private static final int MODE_DIRECT = 4;
@@ -544,25 +960,12 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         this.mc.displayGuiScreen(new GuiServerEditScreen(this, GuiServerEditScreen.Mode.DIRECT, this.draft));
     }
 
-    private void confirmDelete(int index) {
-        this.mode = MODE_DELETE;
-        this.pendingDelete = index;
-        ServerData data = this.servers.getServerData(index);
-        this.mc.displayGuiScreen(new GuiYesNo(this,
-                I18n.format("selectServer.deleteQuestion", new Object[0]),
-                "'" + data.serverName + "' "
-                        + I18n.format("selectServer.deleteWarning", new Object[0]),
-                I18n.format("selectServer.deleteButton", new Object[0]),
-                I18n.format("gui.cancel", new Object[0]), 0));
-    }
-
     @Override
     public void confirmClicked(boolean confirmed, int id) {
         int finished = this.mode;
         this.mode = MODE_NONE;
 
         if (!confirmed) {
-            this.pendingDelete = -1;
             this.editIndex = -1;
             this.draft = null;
             this.mc.displayGuiScreen(this);
@@ -570,15 +973,13 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
 
         switch (finished) {
-            case MODE_DELETE:
-                if (this.pendingDelete >= 0 && this.pendingDelete < this.servers.countServers()) {
-                    this.servers.removeServerData(this.pendingDelete);
-                    this.servers.saveServerList();
-                }
-                break;
             case MODE_ADD:
                 this.servers.addServerData(this.draft);
                 this.servers.saveServerList();
+                // Asked for on its own rather than by re-pinging the list: appending
+                // keeps every answer already received, and the entry goes on the end,
+                // so its index is the one past what the array currently holds.
+                setProbe(this.servers.countServers() - 1, ping(this.draft));
                 break;
             case MODE_EDIT:
                 if (this.editIndex >= 0 && this.editIndex < this.servers.countServers()) {
@@ -587,13 +988,15 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     live.serverIP = this.draft.serverIP;
                     live.setResourceMode(this.draft.getResourceMode());
                     this.servers.saveServerList();
+                    // The address may be the thing that was edited, which makes the
+                    // answer on the card an answer about somewhere else.
+                    setProbe(this.editIndex, ping(live));
                 }
                 break;
             case MODE_DIRECT:
                 // Straight in, deliberately not saved: that is the whole point of a
                 // one-off connection.
                 join(this.draft);
-                this.pendingDelete = -1;
                 this.editIndex = -1;
                 this.draft = null;
                 return;
@@ -601,7 +1004,6 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                 break;
         }
 
-        this.pendingDelete = -1;
         this.editIndex = -1;
         this.draft = null;
         this.mc.displayGuiScreen(this);
@@ -612,8 +1014,15 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         this.mc.displayGuiScreen(this.parent);
     }
 
+    /**
+     * Leaving mid-hold must not leave the rise playing.
+     *
+     * The screen can go while the button is still down — Escape, or a server being
+     * joined from underneath — and nothing else would ever stop the sound.
+     */
     @Override
     public void onGuiClosed() {
+        UkySounds.stopDeleteHold();
         super.onGuiClosed();
         if (this.pinger != null) {
             this.pinger.clearPendingNetworks();

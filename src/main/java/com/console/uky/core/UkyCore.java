@@ -22,7 +22,10 @@ import java.util.Map;
  * across two class loaders and throws {@code IllegalAccessError}. Letting MixinBooter
  * queue it, which is what this interface is for, is what works.
  *
- * <p>See {@link UkyTweaker} for why naming that interface here is safe in a dev run.
+ * <p>Only the config that targets FML itself belongs here, for a second reason on top
+ * of that one: anything aimed at another mod has to be registered after mod discovery,
+ * and registering it this early does lasting damage rather than simply not working —
+ * see {@link LateMixins}.
  */
 @SuppressWarnings("deprecation")
 @IFMLLoadingPlugin.MCVersion("1.12.2")

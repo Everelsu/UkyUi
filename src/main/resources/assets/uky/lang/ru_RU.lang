@@ -31,6 +31,21 @@ uky.gamemode.hardcore.warning=Одна жизнь. Ты умрёшь навсе�
 
 uky.progress.none=Пока пусто.
 uky.progress.search=Поиск...
+uky.progress.filter.all=Все
+uky.progress.filter.done=Есть
+uky.progress.filter.left=Осталось
+uky.progress.requires=Нужно
+
+# ---- уведомления о квестах ----
+# Видно только тогда, когда до слов самого BetterQuesting не добраться: уведомление
+# называет себя ключом перевода, а ключ на экране — это не фраза.
+uky.quest.notice.complete=КВЕСТ ВЫПОЛНЕН
+uky.quest.notice.unlock=КВЕСТ ОТКРЫТ
+uky.quest.notice.update=КВЕСТ ОБНОВЛЁН
+
+# ---- всплывающая плашка достижения и строка о нём в чате ----
+uky.achievement.unlocked=ДОСТИЖЕНИЕ
+uky.achievement.open=Нажмите, чтобы открыть в списке достижений
 
 uky.controls.search=Поиск действия или клавиши...
 uky.controls.press=Нажмите клавишу
@@ -52,6 +67,39 @@ uky.settings.optifine.animations=Анимации
 uky.settings.optifine.other=Прочее
 uky.settings.shaderPacks=Шейдерные пакеты
 uky.settings.shaderPacks.open=Выбрать шейдерный пакет...
+# ---- экран шейдерных пакетов ----
+uky.shaderPacks.enabled=Шейдеры
+uky.shaderPacks.folder=Открыть папку
+uky.shaderPacks.options=Настройки пакета...
+uky.shaderPacks.apply=Применить
+uky.shaderPacks.reset=Сбросить
+uky.shaderPacks.none=Шейдерных пакетов нет.
+uky.shaderPacks.drop=Перетащи пакет в окно, чтобы добавить
+uky.shaderPacks.dropped=Добавлено пакетов:
+uky.shaderPacks.pending=не применено
+uky.shaderPacks.profile=Профиль
+uky.shaderPacks.profile.custom=Свой
+
+# ---- пресет графики ----
+# Один потолок над всем, что рисует мод. Он только понижает настройки,
+# поэтому «Максимально» — это то, как мод работал до появления пресета.
+uky.settings.effects=Эффекты UKY
+uky.settings.graphics=Графика UKY
+uky.graphics.potato=Картошка
+uky.graphics.minimal=Минимально
+uky.graphics.balanced=Средне
+uky.graphics.maximum=Максимально
+
+# ---- свои переключатели на вкладке «Звук и чат» ----
+uky.settings.chat=Чат UKY
+uky.settings.redesignChat=Свой вид чата
+uky.settings.achievementToast=Плашка достижения
+uky.settings.achievementChat=Короткая строка в чате
+uky.settings.tooltips=Подсказки UKY
+uky.settings.restyleTooltips=Свой вид подсказок
+# Переключатель списка блоков, о которых Waila молчит; сам список — в конфиге,
+# раздел [mods], ключ wailaHiddenBlocks.
+uky.settings.wailaHide=Молчать о простых блоках
 
 # ---- сцена смерти ----
 # По шесть строк на причину. Сцена выбирает одну на всю смерть.
@@ -108,3 +156,19 @@ uky.death.mob.3=Тебя посчитали, а не победили.
 uky.death.mob.4=Оно всё ещё там.
 uky.death.mob.5=Удар прошёл. Больше ничего.
 uky.death.mob.6=Ты сам дал последнюю щель.
+
+uky.server.status.pinging=Опрашиваем сервер...
+uky.server.status.unresolved=Адрес не найден
+uky.server.status.unreachable=Нет соединения
+uky.server.status.timedOut=Сервер не ответил
+
+uky.welcome.title=Добро пожаловать
+uky.welcome.body=Этот пак заменяет меню Minecraft. Всё, что здесь есть, можно изменить позже в настройках.
+uky.welcome.quality=Насколько сильно нагружать меню?
+uky.welcome.settings=Все настройки...
+uky.welcome.start=Начать
+uky.graphics.potato.hint=Без чёрной дыры. Фон — сплошной цвет, остальное меню без изменений.
+uky.graphics.minimal.hint=Дыра считается мелко и редко. Для слабых или старых видеокарт.
+uky.graphics.balanced.hint=Полное разрешение без суперсэмплинга. В движении почти неотличимо от максимума.
+uky.graphics.maximum.hint=Без ограничений. Всё рисуется как настроено.
+

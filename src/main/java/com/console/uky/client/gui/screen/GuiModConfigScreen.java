@@ -291,8 +291,10 @@ public class GuiModConfigScreen extends MenuScreen {
         }
 
         if (element.isList()) {
-            // Lists want an editor of their own; opening one here would be a worse
-            // answer than saying plainly that this one is not editable yet.
+            // Lists stay in the config file. An editor for them was written and taken
+            // out again: a row of text fields is a poor place to type a registry name
+            // or a URL, the file is where these are actually maintained, and every
+            // list this pack ships is documented there.
             return;
         }
 

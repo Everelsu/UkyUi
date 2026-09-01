@@ -5,6 +5,7 @@ import com.console.uky.client.death.DeathTheme;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
+import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.gui.GuiGameOver;
 import net.minecraft.client.multiplayer.WorldClient;
@@ -165,7 +166,7 @@ public class GuiDeathScreen extends GuiGameOver {
         advanceBeat(t);
         advanceGlitch();
 
-        float intensity = (float) UiConfig.deathIntensity;
+        float intensity = (float) UiConfig.deathIntensity * Quality.deathIntensity();
         float exit = advanceExit();
 
         drawBlackout(theme, t);

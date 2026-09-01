@@ -108,7 +108,16 @@ public final class LensLibrary {
      * them anyway would burn sixteen seconds and thirty-odd megabytes for nothing.
      */
     public static synchronized void warmUp() {
-        if (worker != null || (ShaderProgram.isSupported() && !forcedFallback)) {
+        if (worker != null) {
+            return;
+        }
+        // Only trace when the shader is known not to be an option — either the driver
+        // was asked and said no, or a program was built and would not run. Asked during
+        // mod loading the driver often cannot be reached at all (the loading screen owns
+        // the GL context, and LWJGL keeps capabilities per thread), and starting thirteen
+        // poses of CPU tracing on that maybe costs the load far more than the tables are
+        // worth. See ShaderProgram.isKnownUnsupported.
+        if (!forcedFallback && !ShaderProgram.isKnownUnsupported()) {
             return;
         }
         worker = new Thread(new Runnable() {

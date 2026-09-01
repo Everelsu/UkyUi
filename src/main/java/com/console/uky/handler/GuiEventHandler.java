@@ -1,6 +1,9 @@
 package com.console.uky.handler;
 
+import com.console.uky.client.gui.ChatOverlay;
+import com.console.uky.client.gui.PlayerListOverlay;
 import com.console.uky.client.gui.screen.GuiConnectingScreen;
+import com.console.uky.client.gui.screen.GuiUkyChat;
 import com.console.uky.client.render.UkyFontRenderer;
 import com.console.uky.client.gui.screen.GuiCreateWorldScreen;
 import com.console.uky.client.gui.screen.GuiDeathScreen;
@@ -13,11 +16,14 @@ import com.console.uky.client.gui.screen.GuiPauseScreen;
 import com.console.uky.client.gui.screen.GuiWorldLoadingScreen;
 import com.console.uky.client.gui.screen.GuiWorkingScreen;
 import com.console.uky.client.gui.screen.GuiWorldsScreen;
+import com.console.uky.client.mods.QuestBookTheme;
+import com.console.uky.client.mods.QuestBookTransition;
 import com.console.uky.client.sound.UkyMusicTicker;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.GuiIngameMenu;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.client.gui.GuiCreateWorld;
@@ -32,6 +38,8 @@ import net.minecraft.client.gui.GuiScreenWorking;
 import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraftforge.client.event.GuiOpenEvent;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
+import org.lwjgl.opengl.GL11;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -49,6 +57,55 @@ public class GuiEventHandler {
     /** Cached parent-screen field per screen class; see {@link #parentOf}. */
     private static final Map<Class<?>, Field> PARENT_FIELDS = new HashMap<Class<?>, Field>();
 
+    /**
+     * Replaces the Tab player list with ours.
+     *
+     * The list is not a screen, so it cannot be swapped like the others: vanilla draws
+     * it inline in {@code GuiIngame.renderGameOverlay}. Forge announces it as its own
+     * overlay element first, though, and cancelling that is enough to stop vanilla
+     * drawing it — leaving the space to draw in without touching {@code GuiIngame}.
+     */
+    @SubscribeEvent
+    public void onRenderOverlay(RenderGameOverlayEvent.Pre event) {
+        if (event.type != RenderGameOverlayEvent.ElementType.PLAYER_LIST) {
+            return;
+        }
+        if (!UiConfig.replacePlayerList) {
+            return;
+        }
+        Minecraft mc = Minecraft.getMinecraft();
+        if (!PlayerListOverlay.shouldDraw(mc)) {
+            return;
+        }
+        event.setCanceled(true);
+        PlayerListOverlay.draw(mc, event.resolution);
+    }
+
+    /**
+     * Replaces the chat's own drawing with ours.
+     *
+     * Its own event, not the {@code Pre} above, because this one carries where the
+     * chat is about to be drawn — Forge posts it <em>before</em> applying that
+     * translation, so a listener that cancels the draw has to apply it itself.
+     */
+    @SubscribeEvent
+    public void onRenderChat(RenderGameOverlayEvent.Chat event) {
+        if (!UiConfig.redesignChat) {
+            return;
+        }
+        GL11.glPushMatrix();
+        GL11.glTranslatef(event.posX, event.posY, 0.0F);
+        boolean drawn;
+        try {
+            drawn = ChatOverlay.draw(Minecraft.getMinecraft(), event.posY);
+        } finally {
+            GL11.glPopMatrix();
+        }
+        if (drawn) {
+            event.setCanceled(true);
+        }
+    }
+
     @SubscribeEvent
     public void onGuiOpen(GuiOpenEvent event) {
         // The menu track follows the menus: it survives moving between title,
@@ -64,6 +121,11 @@ public class GuiEventHandler {
         keepLatinCrisp();
         UkyFontRenderer.install(Minecraft.getMinecraft());
 
+        // Before the null check below, because closing the quest book to no screen at
+        // all is exactly the change this needs to hear about. The screen being replaced
+        // is still the current one at this point; the event carries the new one.
+        QuestBookTransition.screenChanged(Minecraft.getMinecraft().currentScreen, event.getGui());
+
         if (event.getGui() == null) {
             return;
         }
@@ -71,6 +133,13 @@ public class GuiEventHandler {
 
         if (UiConfig.replaceMainMenu && type == GuiMainMenu.class) {
             event.setGui(new GuiTitleScreen());
+            return;
+        }
+
+        // Only when the redesign is on: with it off the chat screen is left entirely
+        // alone, which is one fewer vanilla screen this mod is standing in front of.
+        if (UiConfig.redesignChat && type == GuiChat.class) {
+            event.gui = new GuiUkyChat(defaultChatText(event.gui));
             return;
         }
 
@@ -150,6 +219,13 @@ public class GuiEventHandler {
             return;
         }
 
+        // BetterQuesting's own screens, left exactly as they are and drawn in our
+        // palette. See QuestBookTheme for why this is the moment it is done.
+        if (type.getName().startsWith(QuestBookTheme.SCREEN_PREFIX)) {
+            QuestBookTheme.ensureApplied();
+            return;
+        }
+
         // FML's mid-load question. Restyled rather than replaced: it stays a
         // GuiNotification because that type is what FML's own draw-and-input path
         // looks for while the game loop is parked. See GuiStartupQueryScreen.
@@ -165,6 +241,34 @@ public class GuiEventHandler {
             event.setGui(new GuiSettingsScreen(parentOf(event.getGui()),
                     Minecraft.getMinecraft().gameSettings));
         }
+    }
+
+    /**
+     * The text a chat screen was opened pre-filled with, or "".
+     *
+     * Pressing the command key opens the chat with a "/" already typed, and that is
+     * carried in a private field — so replacing the screen without reading it turned
+     * the command key into a second chat key. Located by value rather than by name:
+     * the screen has two String fields, both empty at the moment it is handed to us,
+     * except the one that was constructed with something in it.
+     */
+    private static String defaultChatText(GuiScreen screen) {
+        for (Field candidate : screen.getClass().getDeclaredFields()) {
+            if (candidate.getType() != String.class
+                    || java.lang.reflect.Modifier.isStatic(candidate.getModifiers())) {
+                continue;
+            }
+            candidate.setAccessible(true);
+            try {
+                Object value = candidate.get(screen);
+                if (value instanceof String && !((String) value).isEmpty()) {
+                    return (String) value;
+                }
+            } catch (IllegalAccessException e) {
+                return "";
+            }
+        }
+        return "";
     }
 
     /**

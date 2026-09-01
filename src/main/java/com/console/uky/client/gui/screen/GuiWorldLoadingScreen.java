@@ -23,6 +23,9 @@ public class GuiWorldLoadingScreen extends GuiScreen {
 
     private final GuiScreen delegate;
     private final ResourceLocation preview;
+    /** Size the delegate was set up at; -1 until it has been. */
+    private int delegateWidth = -1;
+    private int delegateHeight = -1;
 
     private long lastFrameNanos = System.nanoTime();
     private float elapsed;
@@ -39,6 +42,23 @@ public class GuiWorldLoadingScreen extends GuiScreen {
 
     @Override
     public void initGui() {
+        prepareDelegate();
+    }
+
+    /**
+     * Hands the delegate a world and a resolution, if that has not happened yet.
+     *
+     * Same reasoning as the connecting screen's: {@code initGui} is skipped outright
+     * whenever a mod cancels {@code GuiScreenEvent.InitGuiEvent.Pre}, and the delegate
+     * is what notices the world is ready. Started from whichever of the tick and the
+     * draw arrives first, so nothing can leave it unstarted.
+     */
+    private void prepareDelegate() {
+        if (this.delegateWidth == this.width && this.delegateHeight == this.height) {
+            return;
+        }
+        this.delegateWidth = this.width;
+        this.delegateHeight = this.height;
         this.delegate.mc = this.mc;
         this.delegate.setWorldAndResolution(this.mc, this.width, this.height);
     }
@@ -47,6 +67,7 @@ public class GuiWorldLoadingScreen extends GuiScreen {
     public void updateScreen() {
         // The delegate is what actually watches for the world becoming ready and
         // hands control back to the game; skipping it would hang here forever.
+        prepareDelegate();
         this.delegate.updateScreen();
     }
 
@@ -70,6 +91,7 @@ public class GuiWorldLoadingScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        prepareDelegate();
         long now = System.nanoTime();
         this.elapsed += Math.min((now - this.lastFrameNanos) / 1_000_000_000.0F, 0.1F);
         this.lastFrameNanos = now;
@@ -89,6 +111,14 @@ public class GuiWorldLoadingScreen extends GuiScreen {
 
         Draw.vignette(this.width, this.height, 0.8F, 0xFF000000);
 
+        // Full strength from the first frame, and deliberately not faded in.
+        //
+        // Fading it was tried and is wrong. This screen does not follow the dark — it
+        // follows UkyLoadingScreen, which draws its own headline at this exact position
+        // with this exact alpha and its bar at the same height, precisely so the two
+        // phases of loading read as one continuous shot. Fading in here would make the
+        // caption dip out and return at the handover between them, which is a seam where
+        // there had not been one.
         String message = I18n.format("multiplayer.downloadingTerrain", new Object[0]);
         this.drawCenteredString(this.fontRenderer, message,
                 this.width / 2, this.height - 40, Draw.withAlpha(Theme.text, 0.9F));

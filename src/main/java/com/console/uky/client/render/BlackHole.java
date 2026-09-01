@@ -1,6 +1,7 @@
 package com.console.uky.client.render;
 
 import com.console.uky.UkyUI;
+import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ResourceLocation;
@@ -272,9 +273,67 @@ public final class BlackHole {
         render(cx, cy, radius, intensity, warp, false);
     }
 
+    /**
+     * The sky, and nothing in front of it.
+     *
+     * <p>The same starfield the hole is set against, drawn with no lens: a shadow of
+     * zero swallows nothing, an Einstein radius of zero puts each star's two images
+     * back on top of each other at its true position, and the magnification the lens
+     * formula gives for that is exactly one. So it is the same drift, the same
+     * distribution and the same colours as every other menu — a screen using this does
+     * not look like a different mod, it looks like the same room with the hole out of
+     * frame.
+     *
+     * <p>For screens where the hole itself would be in the way of the thing being
+     * judged. The shader packs screen is the case it was added for: a pack is chosen by
+     * how the world looks with it, and a black hole burning in the corner of the panel
+     * is a light source the shader is not responsible for.
+     *
+     * @param intensity master fade, 0..1
+     */
+    public void renderStars(float cx, float cy, float intensity) {
+        if (intensity <= 0.01F || starX == null) {
+            return;
+        }
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GL11.glShadeModel(GL11.GL_SMOOTH);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+
+        drawStars(cx, cy, 0.0F, 0.0F, intensity);
+
+        GL11.glShadeModel(GL11.GL_FLAT);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
     /** @param mirrored kept for callers that want the image flipped outright */
     public void render(float cx, float cy, float radius, float intensity, float warp,
                        boolean mirrored) {
+        render(cx, cy, radius, intensity, intensity, warp, mirrored);
+    }
+
+    /**
+     * The hole and the sky at separate brightnesses.
+     *
+     * <p>For the one case where they part company: a screen that wants the sky and not
+     * the hole fades the second out over half a second rather than cutting it, and the
+     * stars behind it must not dim with it — they are what is left afterwards.
+     *
+     * <p>The two ends meet exactly, which is what makes that fade seamless rather than
+     * a dissolve between two pictures. As the radius goes to nothing the Einstein
+     * radius goes with it, and the lens formula puts every star back where an unbent
+     * sky would have it — which is precisely where {@link #renderStars} draws it. So
+     * the last frame of the shrinking hole and the first frame without it are the same
+     * starfield.
+     *
+     * @param intensity     how bright the disk and the shadow are
+     * @param starIntensity how bright the sky behind them is
+     */
+    public void render(float cx, float cy, float radius, float intensity,
+                       float starIntensity, float warp, boolean mirrored) {
         if (intensity <= 0.01F || radius <= 0.5F) {
             return;
         }
@@ -285,7 +344,7 @@ public final class BlackHole {
         GL11.glShadeModel(GL11.GL_SMOOTH);
 
         GL11.glDisable(GL11.GL_TEXTURE_2D);
-        drawStars(cx, cy, shadow, shadow * 1.30F * warp, intensity);
+        drawStars(cx, cy, shadow, shadow * 1.30F * warp, starIntensity);
 
         // Nothing at all until the resting pose lands, then the whole thing fades
         // up as a unit. Showing a stand-in silhouette first meant the core appeared
@@ -444,7 +503,7 @@ public final class BlackHole {
         float halfH = shadow * FRAME_HALF_H;
         float halfW = shadow * FRAME_HALF_W;
 
-        int percent = Math.min(200, Math.max(50, UiConfig.blackHoleResolution));
+        int percent = Quality.blackHoleResolution();
         // Always through the buffer now, even at 100%. It costs one full-screen blit
         // and buys the ability to keep last frame's trace — see traceIsStale.
         if (offscreen.isUsable()
@@ -457,23 +516,21 @@ public final class BlackHole {
     // ---- trace rate ----------------------------------------------------------
 
     /**
-     * Gap between traces on a settled menu.
+     * Gap between traces, idle and while the camera is moving.
      *
      * The trace is the whole cost of this effect — tens of milliseconds of it — so
      * what governs the load is how often it runs, not how fast it is. Seven times a
      * second is enough to carry the disk's drift once the dissolve is smoothing
      * between them, and it is roughly a seventh of the work of tracing every frame.
+     * A screen change swings the pose over a few hundred milliseconds, and dissolving
+     * across that at the idle rate reads as the hole lagging behind the screen, so the
+     * rate goes up for as long as the movement lasts and drops back after.
+     *
+     * <p>Both numbers come from {@link Quality}: they are the cheapest of the three
+     * factors in this effect's cost to spend, so they are the first thing the graphics
+     * preset lowers.
      */
     private static final long TRACE_INTERVAL_NANOS = 140_000_000L;
-
-    /**
-     * Gap while the camera is still easing to a new framing.
-     *
-     * A screen change swings the pose over a few hundred milliseconds. Dissolving
-     * across that at the idle rate reads as the hole lagging behind the screen, so
-     * the rate goes up for as long as the movement lasts and drops back after.
-     */
-    private static final long TRACE_INTERVAL_MOVING_NANOS = 50_000_000L;
 
     /** Pose change per trace above which the camera counts as still moving. */
     private static final float POSE_MOVING_EPSILON = 0.0015F;
@@ -526,7 +583,7 @@ public final class BlackHole {
 
         boolean moving = !Float.isNaN(lastTracePose)
                 && Math.abs(pose - lastTracePose) > POSE_MOVING_EPSILON;
-        long interval = moving ? TRACE_INTERVAL_MOVING_NANOS : TRACE_INTERVAL_NANOS;
+        long interval = Quality.traceIntervalNanos(moving);
 
         if (Float.isNaN(lastTracePose) || now - lastTraceNanos >= interval) {
             lastTraceNanos = now;
@@ -742,7 +799,7 @@ public final class BlackHole {
         shader.set("uSpin", this.spin);
         shader.set("uIntensity", intensity);
         shader.set("uGain", DISK_GAIN * SHADER_GAIN_TRIM);
-        shader.set("uSteps", UiConfig.blackHoleQuality);
+        shader.set("uSteps", Quality.blackHoleQuality());
 
         setColour("uHot", UiConfig.colorBlackHoleHot);
         setColour("uMid", UiConfig.colorBlackHoleMid);
@@ -914,9 +971,10 @@ public final class BlackHole {
      */
     private void drawStars(float cx, float cy, float shadow, float einstein, float intensity) {
         float scale = this.height;
+        int stars = Quality.starCount(STAR_COUNT);
 
         GL11.glBegin(GL11.GL_QUADS);
-        for (int i = 0; i < STAR_COUNT; i++) {
+        for (int i = 0; i < stars; i++) {
             float sx = (starX[i] + drift) % 3.0F;
             if (sx > 1.5F) {
                 sx -= 3.0F;
@@ -983,8 +1041,12 @@ public final class BlackHole {
     // ---- infall overlay ------------------------------------------------------
 
     private void drawInfall(float cx, float cy, float shadow, float intensity) {
+        int count = Quality.infallCount(INFALL_COUNT);
+        if (count <= 0) {
+            return;
+        }
         GL11.glBegin(GL11.GL_QUADS);
-        for (int i = 0; i < INFALL_COUNT; i++) {
+        for (int i = 0; i < count; i++) {
             float r = fallR[i];
             float tilt = INFALL_TILT + (1.0F - INFALL_TILT) * fallIncline[i];
             float cos = (float) Math.cos(fallTheta[i]);
