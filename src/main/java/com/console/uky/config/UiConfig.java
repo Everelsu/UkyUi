@@ -115,12 +115,63 @@ public final class UiConfig {
 
     // ---- other mods ----
     /**
+     * The blocks a tooltip is worth least on, out of the box.
+     *
+     * Vanilla terrain only, and deliberately so: these are the blocks every pack has,
+     * every player already knows by sight, and every landscape is made of. Nothing
+     * modded is guessed at from here — a pack that wants its own filler quiet says so
+     * in the config, which is what the list is for.
+     */
+    private static final String[] DEFAULT_WAILA_HIDDEN = {
+        "minecraft:stone",
+        "minecraft:grass",
+        "minecraft:dirt",
+        "minecraft:sand",
+        "minecraft:gravel",
+        "minecraft:cobblestone",
+        "minecraft:sandstone",
+        "minecraft:netherrack",
+        "minecraft:end_stone",
+        "minecraft:bedrock",
+        "minecraft:water",
+        "minecraft:flowing_water",
+        "minecraft:lava",
+        "minecraft:flowing_lava",
+        "minecraft:tallgrass",
+        "minecraft:snow_layer",
+    };
+
+    /**
      * Draw Waila's block tooltip as one of our panels.
      *
      * Only the box and the text colour: what goes inside it is Waila's, down to the
      * last provider a pack has registered. Nothing here knows what a tooltip says.
      */
     public static boolean restyleWaila = true;
+    /**
+     * Blocks Waila should say nothing about at all.
+     *
+     * The tooltip is worth having over a machine and worth nothing over the ground: a
+     * player who is walking across a hillside spends the whole walk with a box in the
+     * corner of the screen naming the stone they are standing on. Which blocks those
+     * are is a per-pack question — one pack's filler is another pack's ore — so it is a
+     * list rather than a rule, and {@link #wailaHideListed} is the single switch that
+     * turns the whole thing off without anyone having to empty it.
+     *
+     * <p>Entries are registry names: {@code minecraft:grass}, optionally with a
+     * metadata value after it ({@code minecraft:stone:1} for granite, leaving ordinary
+     * stone alone). The domain may be left off — {@code grass} matches
+     * {@code minecraft:grass} — which is what most people will type.
+     */
+    public static String[] wailaHiddenBlocks = DEFAULT_WAILA_HIDDEN;
+    /**
+     * Whether {@link #wailaHiddenBlocks} is obeyed.
+     *
+     * Separate from the list so that turning the feature off for an evening does not
+     * cost the list, and so the answer to "why is Waila not showing" is one line rather
+     * than a diff.
+     */
+    public static boolean wailaHideListed = true;
     /**
      * Hand BetterQuesting a theme built from the palette below — once.
      *
@@ -177,6 +228,15 @@ public final class UiConfig {
     /** Slow zoom/drift on the background image. */
     public static boolean backgroundDrift = true;
     public static boolean buttonSounds = true;
+    /**
+     * Let a comet cross the backdrop, and light the star that sends one.
+     *
+     * Roughly one every forty seconds, several seconds to cross, drawn large enough to
+     * be noticed — the first version was astronomically modest and read as a star that
+     * had come loose. The backdrop is otherwise a still image that moves: nothing in it
+     * ever happens, and this is the one thing that does.
+     */
+    public static boolean comets = true;
     /**
      * Lay a shadow under the text in this mod's screens.
      *
@@ -543,6 +603,29 @@ public final class UiConfig {
                         + "the filled part while there is still work to do.\n"
                         + "What the box says is untouched, including everything other "
                         + "mods add to it.");
+        wailaHideListed = bool(CAT_MODS, "wailaHideListed", wailaHideListed,
+                "Obey 'wailaHiddenBlocks' below. Off shows Waila's tooltip over "
+                        + "everything again, without anyone having to empty the list "
+                        + "to get there.\n"
+                        + "Independent of restyleWaila: that is what the tooltip looks "
+                        + "like, this is whether there is one at all.");
+        wailaHiddenBlocks = strList(CAT_MODS, "wailaHiddenBlocks", wailaHiddenBlocks,
+                "Blocks Waila says nothing about. Look at one of these and no tooltip "
+                        + "appears at all.\n"
+                        + "The tooltip earns its place over a machine and earns nothing "
+                        + "over the ground: naming the stone underfoot for the whole of "
+                        + "a walk across a hillside is a box in the corner of the screen "
+                        + "that is never once read. Which blocks those are is a question "
+                        + "about the pack rather than about Waila, so it is a list.\n"
+                        + "One registry name per line: 'minecraft:grass'. Add a metadata "
+                        + "value to name one variant only — 'minecraft:stone:1' hides "
+                        + "granite and leaves ordinary stone alone. The domain may be "
+                        + "left off, so 'grass' works as well as 'minecraft:grass'.\n"
+                        + "The default is vanilla terrain and nothing else. Modded "
+                        + "filler is not guessed at: it is the same name the block goes "
+                        + "by in commands and recipes, which NEI shows under an item "
+                        + "once item ids are turned on in its options.\n"
+                        + "Emptying the list has the same effect as wailaHideListed=false.");
         restyleQuestBook = bool(CAT_MODS, "restyleQuestBook", restyleQuestBook,
                 "Hand BetterQuesting's quest book the UKY theme, once. The theme is "
                         + "built from the palette in [theme] below, so it follows the "
@@ -636,6 +719,21 @@ public final class UiConfig {
         backgroundDrift = bool(CAT_EFFECTS, "backgroundDrift", backgroundDrift,
                 "Slow zoom and pan on the menu background image.");
         buttonSounds = bool(CAT_EFFECTS, "buttonSounds", buttonSounds, "Play a click sound on button press.");
+        comets = bool(CAT_EFFECTS, "comets", comets,
+                "Let a comet cross the backdrop: roughly one every forty seconds, with "
+                        + "a head, a halo and a tail a third of the screen long, taking "
+                        + "several seconds to cross.\n"
+                        + "The backdrop is otherwise a still image that moves — the "
+                        + "stars drift, the disk turns, and nothing in it ever happens. "
+                        + "This is the one thing that does, so it is drawn to be seen "
+                        + "rather than to be astronomically modest.\n"
+                        + "They cross every screen that draws our own sky, the title "
+                        + "screen included; in a world there is no sky to cross.\n"
+                        + "This also turns off the star that answers: one star high on "
+                        + "the left twinkles on its own, lights up under the pointer, "
+                        + "and sends a comet when it is clicked. It is on the screens "
+                        + "inside rather than on the title screen, which has enough "
+                        + "things on it to press already.");
         textShadow = bool(CAT_EFFECTS, "textShadow", textShadow,
                 "Draw a shadow under the text in this mod's screens, the way Minecraft "
                         + "draws its own.\n"
@@ -877,6 +975,19 @@ public final class UiConfig {
     public static void setAchievementChatLink(boolean value) {
         achievementChatLink = value;
         write(CAT_HUD, "achievementChatLink", value);
+    }
+
+    /**
+     * The Waila filter, from the settings screen.
+     *
+     * Only the switch has a control. What is on the list is a per-pack decision made
+     * once, in a file, with a registry name that nobody is going to type on a screen
+     * with no keyboard focus — so the screen offers the half of it that is worth
+     * changing mid-game and the config keeps the half that is not.
+     */
+    public static void setWailaHideListed(boolean value) {
+        wailaHideListed = value;
+        write(CAT_MODS, "wailaHideListed", value);
     }
 
     private static void write(String cat, String key, boolean value) {

@@ -55,7 +55,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int COLUMN_GAP = 22;
 
     /** Rows each tab lays out, used to size the whole grid so it always fits. */
-    private static final int[] TAB_ROWS = {5, 7, 7, 5};
+    private static final int[] TAB_ROWS = {5, 7, 7, 7};
 
     private final GameSettings settings;
     /** Remembered across openings: coming back to the tab you left is the least surprising. */
@@ -395,6 +395,27 @@ public class GuiSettingsScreen extends MenuScreen {
                                 UiConfig.setRestyleTooltips(value);
                             }
                         });
+                // Beside it, and only where there is a Waila to quieten. What it hides
+                // is a list in the config — a registry name is not something anyone is
+                // going to type on this screen — so what is offered here is the switch
+                // over that list and nothing else.
+                if (cpw.mods.fml.common.Loader.isModLoaded("waila")) {
+                    addFlag(ID_WAILA_HIDE, this.rightColumn, y, "uky.settings.wailaHide",
+                            new Flag() {
+                                @Override
+                                boolean get() {
+                                    return UiConfig.wailaHideListed;
+                                }
+
+                                @Override
+                                void set(boolean value) {
+                                    UiConfig.setWailaHideListed(value);
+                                }
+                            });
+                    // Which blocks it hides is a list, and lists live in the config
+                    // file: see [mods] wailaHiddenBlocks. The switch over that list is
+                    // the half worth having on a screen.
+                }
                 break;
         }
     }
@@ -494,6 +515,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int ID_ACHIEVEMENT_TOAST = 113;
     private static final int ID_ACHIEVEMENT_LINK = 114;
     private static final int ID_TOOLTIPS = 115;
+    private static final int ID_WAILA_HIDE = 116;
     /**
      * Every renderer option shares one id.
      *
@@ -1249,6 +1271,13 @@ public class GuiSettingsScreen extends MenuScreen {
                 openSub(VideoSettingsTakeover.open(this, this.settings));
                 break;
             case ID_SHADER_PACKS:
+                // Ours where the packs can be read, and the renderer's own screen where
+                // they cannot: a shader list is not worth a second style, but no way at
+                // all to reach the packs is worse than either.
+                if (GuiShaderPacksScreen.available()) {
+                    openSub(new GuiShaderPacksScreen(this));
+                    break;
+                }
                 GuiScreen shaders = AngelicaOptions.shaderPackScreen(this);
                 if (shaders != null) {
                     openSub(shaders);

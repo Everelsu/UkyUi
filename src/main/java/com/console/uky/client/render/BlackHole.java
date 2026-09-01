@@ -273,9 +273,67 @@ public final class BlackHole {
         render(cx, cy, radius, intensity, warp, false);
     }
 
+    /**
+     * The sky, and nothing in front of it.
+     *
+     * <p>The same starfield the hole is set against, drawn with no lens: a shadow of
+     * zero swallows nothing, an Einstein radius of zero puts each star's two images
+     * back on top of each other at its true position, and the magnification the lens
+     * formula gives for that is exactly one. So it is the same drift, the same
+     * distribution and the same colours as every other menu — a screen using this does
+     * not look like a different mod, it looks like the same room with the hole out of
+     * frame.
+     *
+     * <p>For screens where the hole itself would be in the way of the thing being
+     * judged. The shader packs screen is the case it was added for: a pack is chosen by
+     * how the world looks with it, and a black hole burning in the corner of the panel
+     * is a light source the shader is not responsible for.
+     *
+     * @param intensity master fade, 0..1
+     */
+    public void renderStars(float cx, float cy, float intensity) {
+        if (intensity <= 0.01F || starX == null) {
+            return;
+        }
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GL11.glShadeModel(GL11.GL_SMOOTH);
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+
+        drawStars(cx, cy, 0.0F, 0.0F, intensity);
+
+        GL11.glShadeModel(GL11.GL_FLAT);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
     /** @param mirrored kept for callers that want the image flipped outright */
     public void render(float cx, float cy, float radius, float intensity, float warp,
                        boolean mirrored) {
+        render(cx, cy, radius, intensity, intensity, warp, mirrored);
+    }
+
+    /**
+     * The hole and the sky at separate brightnesses.
+     *
+     * <p>For the one case where they part company: a screen that wants the sky and not
+     * the hole fades the second out over half a second rather than cutting it, and the
+     * stars behind it must not dim with it — they are what is left afterwards.
+     *
+     * <p>The two ends meet exactly, which is what makes that fade seamless rather than
+     * a dissolve between two pictures. As the radius goes to nothing the Einstein
+     * radius goes with it, and the lens formula puts every star back where an unbent
+     * sky would have it — which is precisely where {@link #renderStars} draws it. So
+     * the last frame of the shrinking hole and the first frame without it are the same
+     * starfield.
+     *
+     * @param intensity     how bright the disk and the shadow are
+     * @param starIntensity how bright the sky behind them is
+     */
+    public void render(float cx, float cy, float radius, float intensity,
+                       float starIntensity, float warp, boolean mirrored) {
         if (intensity <= 0.01F || radius <= 0.5F) {
             return;
         }
@@ -286,7 +344,7 @@ public final class BlackHole {
         GL11.glShadeModel(GL11.GL_SMOOTH);
 
         GL11.glDisable(GL11.GL_TEXTURE_2D);
-        drawStars(cx, cy, shadow, shadow * 1.30F * warp, intensity);
+        drawStars(cx, cy, shadow, shadow * 1.30F * warp, starIntensity);
 
         // Nothing at all until the resting pose lands, then the whole thing fades
         // up as a unit. Showing a stand-in silhouette first meant the core appeared

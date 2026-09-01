@@ -57,6 +57,8 @@ public class MenuButton extends GuiButton {
 
     /** Seconds to wait before this button plays its entrance animation. */
     private float entranceDelay;
+    /** How long that animation then takes. */
+    private static final float ENTRANCE_SECONDS = 0.35F;
 
     /** Marquee speed, GUI units per second — a comfortable reading pace. */
     private static final float SCROLL_UNITS_PER_SECOND = 26.0F;
@@ -86,6 +88,25 @@ public class MenuButton extends GuiButton {
 
     public MenuButton entrance(float delaySeconds) {
         this.entranceDelay = delaySeconds;
+        return this;
+    }
+
+    /**
+     * Puts this button at the end of its entrance rather than at the start of it.
+     *
+     * For controls that are being rebuilt under a screen that is already open — a
+     * settings tab changed, a section folded away, a list filtered. The entrance is
+     * how a screen arrives, and replaying it every time a row moved meant every tab
+     * click and every fold blinked the whole panel out and staggered it back in, which
+     * is what it looked like: not an animation, a flicker.
+     *
+     * <p>The age is what is set, not the progress, because {@link #advance} recomputes
+     * the progress from the age on every frame — assigning the progress alone would be
+     * undone before anything was drawn with it.
+     */
+    public MenuButton settle() {
+        this.age = this.entranceDelay + ENTRANCE_SECONDS;
+        this.entrance = 1.0F;
         return this;
     }
 
@@ -160,7 +181,7 @@ public class MenuButton extends GuiButton {
         this.hover = Ease.approach(this.hover, target, 0.055F, deltaSeconds);
         this.press = Ease.approach(this.press, this.pressed ? 1.0F : 0.0F, 0.030F, deltaSeconds);
 
-        float t = (this.age - this.entranceDelay) / 0.35F;
+        float t = (this.age - this.entranceDelay) / ENTRANCE_SECONDS;
         this.entrance = Ease.outQuint(t);
         // The marquee only runs under the pointer, and rewinds the moment it leaves,
         // so a list of long labels is not a wall of moving text.

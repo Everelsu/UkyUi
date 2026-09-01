@@ -4,6 +4,7 @@ import com.console.uky.UkyUI;
 import com.console.uky.client.gui.AchievementToast;
 import com.console.uky.config.UiConfig;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.StatCollector;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -37,6 +38,12 @@ import java.util.List;
 public final class QuestToast {
 
     private static final String NOTIFICATION = "betterquesting.client.QuestNotification";
+
+    /** Where the quest book's translation helper has lived, newest first. */
+    private static final String[] TRANSLATION_CLASSES = {
+        "betterquesting.api2.utils.QuestTranslation",
+        "betterquesting.api.utils.QuestTranslation",
+    };
 
     private static boolean unavailable;
     private static Field noticesField;
@@ -111,33 +118,98 @@ public final class QuestToast {
      * moment it draws. Taking the notice without taking that step put the key itself on
      * screen, which is what it looked like.
      *
+     * <p>Three attempts, in the order of who has the best answer:
+     *
+     * <ol>
+     *   <li>{@code QuestTranslation}, which is what the quest book's own renderer
+     *       calls. Two package names are tried, because the class moved into
+     *       {@code api2} and a pack can be running either side of that.</li>
+     *   <li>The game's own table. BetterQuesting's keys are ordinary lang keys, so its
+     *       file answers just as well read directly, and vanilla already falls back to
+     *       English for a language whose own file is missing the line.</li>
+     *   <li>Our own wording, under {@code uky.quest.notice.*}. Only reached when the
+     *       quest book is a version nothing above could read, and it is the difference
+     *       between a sentence and a raw lang key on screen — which is exactly what
+     *       was on screen.</li>
+     * </ol>
+     *
+     * <p>Failing all three the key is returned, which is what BetterQuesting itself
+     * would have drawn. A failure here costs the translation and nothing else — the raw
+     * text is still a good deal more use on screen than no notice at all — so it does
+     * not mark the whole integration unavailable the way an unreadable notice does.
+     *
      * <p>Only this line. The quest's own name arrives already resolved, and the
      * renderer does not translate it either; putting it through here as well would be
      * inventing a step BetterQuesting does not take.
-     *
-     * <p>A failure here costs the translation and nothing else — the raw text is still
-     * a good deal more use on screen than no notice at all — so it does not mark the
-     * whole integration unavailable the way an unreadable notice does.
      */
     private static String translate(String key) {
         if (key == null || key.isEmpty()) {
             return "";
         }
+        String questBook = viaQuestBook(key);
+        if (questBook != null && !key.equals(questBook)) {
+            return questBook;
+        }
+        String vanilla = StatCollector.translateToLocal(key);
+        if (!key.equals(vanilla)) {
+            return vanilla;
+        }
+        return ourOwn(key);
+    }
+
+    /** {@code QuestTranslation.translate}, or null when there is no reaching it. */
+    private static String viaQuestBook(String key) {
         try {
             if (!translateSearched) {
                 translateSearched = true;
-                translate = Class.forName("betterquesting.api2.utils.QuestTranslation")
-                        .getMethod("translate", String.class, Object[].class);
+                translate = findTranslate();
             }
             if (translate == null) {
-                return key;
+                return null;
             }
             Object out = translate.invoke(null, key, new Object[0]);
-            return out == null ? key : out.toString();
+            return out == null ? null : out.toString();
         } catch (Throwable t) {
             translate = null;
+            return null;
+        }
+    }
+
+    /**
+     * The helper, wherever this version of the quest book keeps it.
+     *
+     * {@code api2} is where it lives now and where it has lived for every version this
+     * mod is likely to meet; the older package is tried after it rather than instead of
+     * it, so the current one costs one lookup and only the fallback costs a failed one.
+     */
+    private static Method findTranslate() {
+        for (int i = 0; i < TRANSLATION_CLASSES.length; i++) {
+            try {
+                return Class.forName(TRANSLATION_CLASSES[i])
+                        .getMethod("translate", String.class, Object[].class);
+            } catch (Throwable missing) {
+                // Next candidate. All of them missing is a quest book we cannot ask,
+                // which the caller answers out of the game's own table instead.
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Our own wording for a notice nothing else could name.
+     *
+     * Keyed on the last segment — {@code complete}, {@code unlock}, {@code update} —
+     * rather than on the whole key, so what has to be recognised is the kind of notice
+     * rather than the exact string a given version of the mod spells it with.
+     */
+    private static String ourOwn(String key) {
+        int dot = key.lastIndexOf('.');
+        if (dot < 0 || dot == key.length() - 1) {
             return key;
         }
+        String ours = "uky.quest.notice." + key.substring(dot + 1);
+        String out = StatCollector.translateToLocal(ours);
+        return ours.equals(out) ? key : out;
     }
 
     private static List<?> notices() throws Exception {

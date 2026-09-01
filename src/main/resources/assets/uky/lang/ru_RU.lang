@@ -26,6 +26,13 @@ uky.progress.filter.done=Есть
 uky.progress.filter.left=Осталось
 uky.progress.requires=Нужно
 
+# ---- уведомления о квестах ----
+# Видно только тогда, когда до слов самого BetterQuesting не добраться: уведомление
+# называет себя ключом перевода, а ключ на экране — это не фраза.
+uky.quest.notice.complete=КВЕСТ ВЫПОЛНЕН
+uky.quest.notice.unlock=КВЕСТ ОТКРЫТ
+uky.quest.notice.update=КВЕСТ ОБНОВЛЁН
+
 # ---- всплывающая плашка достижения и строка о нём в чате ----
 uky.achievement.unlocked=ДОСТИЖЕНИЕ
 uky.achievement.open=Нажмите, чтобы открыть в списке достижений
@@ -45,6 +52,18 @@ uky.settings.videoTakeover=Открыть экран рендера...
 uky.settings.renderer=Рендер
 uky.settings.shaderPacks=Шейдерные пакеты
 uky.settings.shaderPacks.open=Выбрать шейдерный пакет...
+# ---- экран шейдерных пакетов ----
+uky.shaderPacks.enabled=Шейдеры
+uky.shaderPacks.folder=Открыть папку
+uky.shaderPacks.options=Настройки пакета...
+uky.shaderPacks.apply=Применить
+uky.shaderPacks.reset=Сбросить
+uky.shaderPacks.none=Шейдерных пакетов нет.
+uky.shaderPacks.drop=Перетащи пакет в окно, чтобы добавить
+uky.shaderPacks.dropped=Добавлено пакетов:
+uky.shaderPacks.pending=не применено
+uky.shaderPacks.profile=Профиль
+uky.shaderPacks.profile.custom=Свой
 
 # ---- пресет графики ----
 # Один потолок над всем, что рисует мод. Он только понижает настройки,
@@ -63,6 +82,9 @@ uky.settings.achievementToast=Плашка достижения
 uky.settings.achievementChat=Короткая строка в чате
 uky.settings.tooltips=Подсказки UKY
 uky.settings.restyleTooltips=Свой вид подсказок
+# Переключатель списка блоков, о которых Waila молчит; сам список — в конфиге,
+# раздел [mods], ключ wailaHiddenBlocks.
+uky.settings.wailaHide=Молчать о простых блоках
 
 # ---- сцена смерти ----
 # По шесть строк на причину. Сцена выбирает одну на всю смерть.

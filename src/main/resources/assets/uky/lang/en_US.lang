@@ -35,6 +35,14 @@ uky.progress.filter.left=Left
 # another one — which is the only thing vanilla's tree of arrows actually said.
 uky.progress.requires=Needs
 
+# ---- quest notices ----
+# Only ever seen when BetterQuesting's own wording could not be reached: the notice
+# names itself with a lang key, and a key on screen is not a sentence. Keyed on the
+# last part of that key, so a version that renames the notice still lands here.
+uky.quest.notice.complete=QUEST COMPLETE
+uky.quest.notice.unlock=QUEST UNLOCKED
+uky.quest.notice.update=QUEST UPDATED
+
 # ---- the achievement popup and its chat line ----
 uky.achievement.unlocked=ACHIEVEMENT
 uky.achievement.open=Click to open it in the achievements list
@@ -54,6 +62,24 @@ uky.settings.videoTakeover=Open the renderer's own screen...
 uky.settings.renderer=Renderer
 uky.settings.shaderPacks=Shader packs
 uky.settings.shaderPacks.open=Choose a shader pack...
+# ---- the shader pack screen ----
+# Iris names the screen itself where its own translation is present; these are ours.
+uky.shaderPacks.enabled=Shaders
+uky.shaderPacks.folder=Open folder
+uky.shaderPacks.options=Pack settings...
+uky.shaderPacks.apply=Apply
+uky.shaderPacks.reset=Reset
+uky.shaderPacks.none=No shader packs found.
+# Under the title while the screen is open: a pack can be dragged onto the window.
+uky.shaderPacks.drop=Drop a pack on the window to add it
+uky.shaderPacks.dropped=Packs added:
+# Shown while something has been picked and not yet loaded. Short: it sits beside the
+# screen's own title, in the corner the eye is already in.
+uky.shaderPacks.pending=not applied
+# The pack's profile row: a named set of values for everything else on the menu.
+# "Custom" is what it reads as once any of those has been changed by hand.
+uky.shaderPacks.profile=Profile
+uky.shaderPacks.profile.custom=Custom
 
 # ---- graphics preset ----
 # One ceiling over everything this mod draws. It only ever lowers a setting, so
@@ -72,6 +98,9 @@ uky.settings.achievementToast=Achievement popup
 uky.settings.achievementChat=Short achievement line
 uky.settings.tooltips=UKY tooltips
 uky.settings.restyleTooltips=Restyle tooltips
+# The switch over the list of blocks Waila is asked to say nothing about; the list
+# itself is in the config, under [mods] wailaHiddenBlocks.
+uky.settings.wailaHide=Quiet Waila on plain blocks
 
 # ---- death scene ----
 # Six lines per cause. The scene picks one at random and holds it for that death.

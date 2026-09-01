@@ -452,6 +452,19 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         return this.fadeAlpha * this.intro.uiAlpha() * (1.0F - Transitions.blackout());
     }
 
+    /**
+     * The front door has no easter egg on it.
+     *
+     * Comets cross this sky like every other — it is the same sky — but the star that
+     * answers a click lives a screen further in. This one already has five things on it
+     * that are meant to be clicked, and every pixel of it is somebody's first
+     * impression of the pack.
+     */
+    @Override
+    protected boolean showsWishStar() {
+        return false;
+    }
+
     /** How long the black carried over from the loading screen takes to lift. */
     private static final float ARRIVAL_SECONDS = 0.9F;
     /** Only the first title screen of the session arrives from the splash. */
@@ -519,12 +532,15 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             blackHole.lookFrom(blackHolePose());
             // Shared camera, so arriving from another screen glides into place.
             advanceCamera(blackHoleCenterX(), blackHoleCenterY(), blackHoleRadius());
-            // Pointer parallax rides on top without disturbing that easing.
-            blackHole.render(
-                    cameraX + this.parallaxX * 6.0F,
+            // Pointer parallax rides on top without disturbing that easing. Through
+            // drawSky rather than straight to the hole, so this screen shares the
+            // recede-and-return the shader screens use — nothing here ever asks for it,
+            // but arriving from a screen that did should finish the move rather than
+            // snap out of it.
+            drawSky(cameraX + this.parallaxX * 6.0F,
                     cameraY + this.parallaxY * 4.0F,
                     cameraRadius * Transitions.holeScale(),
-                    this.fadeAlpha * this.intro.holeIntensity(),
+                    this.intro.holeIntensity(),
                     this.intro.warp());
             return;
         }
