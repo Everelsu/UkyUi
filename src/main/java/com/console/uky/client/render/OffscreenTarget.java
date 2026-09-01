@@ -1,5 +1,6 @@
 package com.console.uky.client.render;
 
+import net.minecraft.client.renderer.GlStateManager;
 import com.console.uky.UkyUI;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.EXTFramebufferObject;
@@ -131,7 +132,7 @@ public final class OffscreenTarget {
     }
 
     public void bindTexture() {
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.texture);
+        GlStateManager.bindTexture(this.texture);
     }
 
     private void allocate(int width, int height) {
@@ -144,7 +145,7 @@ public final class OffscreenTarget {
                 Integer.valueOf(width), Integer.valueOf(height));
 
         this.texture = GL11.glGenTextures();
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.texture);
+        GlStateManager.bindTexture(this.texture);
         // Linear, so the upscale is a smooth stretch rather than blocks.
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);

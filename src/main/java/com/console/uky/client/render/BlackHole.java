@@ -738,18 +738,24 @@ public final class BlackHole {
                     1.0F / Math.max(1, mc.displayHeight));
             dissolve.set("uRingLift", ringLift(mc.displayWidth));
 
-            GL13.glActiveTexture(GL13.GL_TEXTURE1);
+            // Through GlStateManager, not GL13. It keeps one cached binding per
+            // texture unit and decides which one to record from its own idea of the
+            // active unit — so switching units behind its back files the next bind
+            // under the wrong unit. Everything drawn afterwards then samples whatever
+            // was really left bound, which is how the menu's own text came out as
+            // fragments of the black hole's texture.
+            GlStateManager.setActiveTexture(GL13.GL_TEXTURE1);
             GlStateManager.enableTexture2D();
             offscreen.bindTexture();
-            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            GlStateManager.setActiveTexture(GL13.GL_TEXTURE0);
             (fading ? previous : offscreen).bindTexture();
 
             blitQuad(cx, cy, halfW, halfH, 1.0F);
 
-            GL13.glActiveTexture(GL13.GL_TEXTURE1);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
+            GlStateManager.setActiveTexture(GL13.GL_TEXTURE1);
+            GlStateManager.bindTexture(0);
             GlStateManager.disableTexture2D();
-            GL13.glActiveTexture(GL13.GL_TEXTURE0);
+            GlStateManager.setActiveTexture(GL13.GL_TEXTURE0);
             ShaderProgram.unbind();
         } else {
             offscreen.bindTexture();

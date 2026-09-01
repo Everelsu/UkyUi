@@ -30,9 +30,13 @@ import org.lwjgl.opengl.GL11;
  * tooltips out: ours drew with the texture and lighting state the game did not know
  * about, and vanilla's own tooltip drew over the top with its own.
  *
- * <p>Vertices ({@code glBegin}/{@code glVertex}/{@code glEnd}), the scissor box and the
- * matrix stack stay on GL11 deliberately: none of them is cached, so a raw call there
- * cannot desync anything.
+ * <p>The same goes for texture binding and for the active texture unit, which are
+ * cached the same way and one per unit at that — see {@code BlackHole}, where binding
+ * a second buffer behind the cache's back left the game's own font drawing sampling it.
+ *
+ * <p>Vertices ({@code glBegin}/{@code glVertex}/{@code glEnd}), the scissor box, the
+ * matrix stack and the framebuffer stay on GL11 deliberately: none of them is cached,
+ * so a raw call there cannot desync anything.
  */
 public final class Draw {
 

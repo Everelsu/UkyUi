@@ -1,5 +1,6 @@
 package com.console.uky.client.render;
 
+import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -135,7 +136,7 @@ public final class BakedHole {
 
         shade(spin, argb, y0, y1);
 
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.emissionTex);
+        GlStateManager.bindTexture(this.emissionTex);
         staging.clear();
         staging.put(argb, y0 * this.width, (y1 - y0) * this.width);
         staging.flip();
@@ -162,11 +163,11 @@ public final class BakedHole {
     }
 
     public void bindOcclusion() {
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.occlusionTex);
+        GlStateManager.bindTexture(this.occlusionTex);
     }
 
     public void bindEmission() {
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.emissionTex);
+        GlStateManager.bindTexture(this.emissionTex);
     }
 
     public boolean hasTextures() {
@@ -200,7 +201,7 @@ public final class BakedHole {
 
     private int allocate() {
         int id = GL11.glGenTextures();
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, id);
+        GlStateManager.bindTexture(id);
         // Linear filtering is what lets the table fill a large area cleanly.
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);

@@ -1,6 +1,7 @@
 package com.console.uky.client.world;
 
 import com.console.uky.UkyUI;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -253,7 +254,7 @@ public final class WorldPreviews {
             height = fb.framebufferTextureHeight;
             int size = width * height;
             ensureBuffer(size);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, fb.framebufferTexture);
+            GlStateManager.bindTexture(fb.framebufferTexture);
             GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL12.GL_BGRA,
                     GL12.GL_UNSIGNED_INT_8_8_8_8_REV, pixelBuffer);
         } else {
