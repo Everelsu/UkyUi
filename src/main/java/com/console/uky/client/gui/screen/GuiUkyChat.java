@@ -1,6 +1,8 @@
 package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.gui.AchievementLinks;
+import com.console.uky.client.gui.ChatOverlay;
+import com.console.uky.config.UiConfig;
 import com.console.uky.client.gui.CommandLine;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
@@ -71,6 +73,31 @@ public class GuiUkyChat extends GuiChat {
         return this.commandLine;
     }
 
+    /**
+     * Where the chat log was drawn from, in scaled units.
+     *
+     * The same number Forge hands the chat overlay — {@code height - 48} — and it is
+     * recomputed here rather than remembered because this screen and that overlay are
+     * two different objects that never meet.
+     */
+    /**
+     * The chat line under the pointer, from whoever actually drew the chat.
+     *
+     * One method for the tooltip and the click both, because the two disagreeing is
+     * exactly the bug this replaced: the tooltip came from one hit test and the click
+     * from another, so a line could show its tooltip and then not answer the click.
+     */
+    private ITextComponent hoveredComponent() {
+        if (UiConfig.redesignChat) {
+            return ChatOverlay.componentAt(this.mc, chatOriginY());
+        }
+        return this.mc.ingameGUI.getChatGUI().getChatComponent(Mouse.getX(), Mouse.getY());
+    }
+
+    private int chatOriginY() {
+        return new ScaledResolution(this.mc).getScaledHeight() - 48;
+    }
+
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         drawInputBar();
@@ -80,8 +107,10 @@ public class GuiUkyChat extends GuiChat {
             line.drawSuggestions(mouseX, mouseY);
         }
 
-        ITextComponent hovered =
-                this.mc.ingameGUI.getChatGUI().getChatComponent(Mouse.getX(), Mouse.getY());
+        // Whoever drew the chat is who knows where its lines are. With the redesign on
+        // that is ChatOverlay, and asking vanilla instead put the tooltip a line or two
+        // off the thing it belonged to.
+        ITextComponent hovered = hoveredComponent();
         if (hovered != null && hovered.getStyle().getHoverEvent() != null) {
             // 1.12 draws every kind of hover itself — item, entity and text — so there
             // is nothing here to reproduce. 1.7.10 had no such method, which is why
@@ -211,9 +240,16 @@ public class GuiUkyChat extends GuiChat {
             return;
         }
         if (mouseButton == 0 && !isShiftKeyDown()) {
-            ITextComponent clicked =
-                    this.mc.ingameGUI.getChatGUI().getChatComponent(Mouse.getX(), Mouse.getY());
+            ITextComponent clicked = hoveredComponent();
             if (AchievementLinks.handleClick(clicked)) {
+                return;
+            }
+            // Vanilla's own click handling asks vanilla where the line is, which is the
+            // wrong answer while we are drawing the chat — so with the redesign on the
+            // click is resolved here and handled by the same method vanilla would have
+            // used, rather than left to a second, disagreeing hit test.
+            if (UiConfig.redesignChat && clicked != null
+                    && handleComponentClick(clicked)) {
                 return;
             }
         }

@@ -183,6 +183,89 @@ public final class ChatOverlay {
      * is null over the empty half of a short line, and a row that stops being
      * highlighted halfway along itself looks broken.
      */
+    /**
+     * The chat component under the pointer, or null.
+     *
+     * <p>Ours rather than {@code GuiNewChat.getChatComponent}, and it has to be.
+     * Vanilla's works the layout out again from its own constants — the chat's origin
+     * at 27 scaled pixels off the bottom of the window, nine per line — and compares
+     * that against the raw mouse position. It is right about where <em>vanilla</em>
+     * draws the chat. This class draws it, and while the rows land in the same places,
+     * the two arrive there by different arithmetic and disagree by a line or two once
+     * the GUI scale, the chat scale and the window height stop dividing evenly. What
+     * that looks like is a tooltip that belongs to the line under the pointer being
+     * shown for a line above it.
+     *
+     * <p>So the test is derived from the same numbers the drawing uses — the row
+     * geometry of {@link #hoveredRow}, which is the layout — and only then walks the
+     * line's own parts to find which one the pointer is on, the way vanilla does.
+     *
+     * @param originY the y the chat was translated to, as handed to {@link #draw}
+     */
+    public static ITextComponent componentAt(Minecraft mc, int originY) {
+        if (!UiConfig.redesignChat || unavailable || mc.ingameGUI == null) {
+            return null;
+        }
+        GuiNewChat chat = mc.ingameGUI.getChatGUI();
+        if (chat == null || !chat.getChatOpen()) {
+            return null;
+        }
+        List<ChatLine> lines = readLines(chat);
+        if (lines == null || lines.isEmpty()) {
+            return null;
+        }
+        float scale = chat.getChatScale();
+        int width = MathHelper.ceil(chat.getChatWidth() / scale);
+        int scroll = readScroll(chat);
+        int rows = Math.min(chat.getLineCount(), lines.size() - scroll);
+
+        int row = hoveredRow(mc, originY, scale, width, rows);
+        if (row < 0 || row + scroll >= lines.size()) {
+            return null;
+        }
+        ChatLine line = lines.get(row + scroll);
+        if (line == null) {
+            return null;
+        }
+        return partAt(mc, line.getChatComponent(), pointerX(mc, scale));
+    }
+
+    /** How far into the line, in the units the line is laid out in. */
+    private static float pointerX(Minecraft mc, float scale) {
+        ScaledResolution res = new ScaledResolution(mc);
+        float mouseX = Mouse.getX() * res.getScaledWidth() / (float) mc.displayWidth;
+        return (mouseX - 2.0F) / scale;
+    }
+
+    /**
+     * Which part of a line the pointer is on.
+     *
+     * The same walk vanilla makes: the pieces of a chat line are laid end to end, so
+     * running the widths up until they pass the pointer names the piece it is inside.
+     * Only literal pieces are measured, because a translation's own siblings are its
+     * arguments and would be counted twice.
+     */
+    private static ITextComponent partAt(Minecraft mc, ITextComponent line, float x) {
+        if (line == null || x < 0.0F) {
+            return null;
+        }
+        float run = 0.0F;
+        for (ITextComponent part : line) {
+            if (!(part instanceof net.minecraft.util.text.TextComponentString)) {
+                continue;
+            }
+            run += mc.fontRenderer.getStringWidth(
+                    net.minecraft.client.gui.GuiUtilRenderComponents
+                            .removeTextColorsIfConfigured(
+                                    ((net.minecraft.util.text.TextComponentString) part)
+                                            .getText(), false));
+            if (run > x) {
+                return part;
+            }
+        }
+        return null;
+    }
+
     private static int hoveredRow(Minecraft mc, int originY, float scale, int width, int rows) {
         if (mc.currentScreen == null) {
             return -1;
