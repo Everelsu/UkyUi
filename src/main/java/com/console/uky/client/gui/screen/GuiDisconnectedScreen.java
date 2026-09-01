@@ -100,13 +100,13 @@ public class GuiDisconnectedScreen extends GuiScreen {
     /**
      * The font renderer, from the game if this screen was never handed one.
      *
-     * Same reason as {@link #ensureLayout}: {@code fontRendererObj} is assigned in
+     * Same reason as {@link #ensureLayout}: {@code fontRenderer} is assigned in
      * {@code setWorldAndResolution}, and a screen can reach a draw without that
      * having happened in the order it expects.
      */
     private net.minecraft.client.gui.FontRenderer font() {
-        return this.fontRendererObj != null
-                ? this.fontRendererObj
+        return this.fontRenderer != null
+                ? this.fontRenderer
                 : net.minecraft.client.Minecraft.getMinecraft().fontRenderer;
     }
 

@@ -4,7 +4,8 @@ import com.console.uky.config.UiConfig;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.init.Blocks;
-import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -66,29 +67,36 @@ public final class WailaHidden {
         }
 
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc == null || mc.theWorld == null) {
+        if (mc == null || mc.world == null) {
             return false;
         }
-        MovingObjectPosition hit = mc.objectMouseOver;
-        if (hit == null || hit.typeOfHit != MovingObjectPosition.MovingObjectType.BLOCK) {
+        RayTraceResult hit = mc.objectMouseOver;
+        if (hit == null || hit.typeOfHit != RayTraceResult.Type.BLOCK) {
             // An entity, or nothing at all. This list is about blocks; anything else is
             // Waila's business as it always was.
             return false;
         }
 
-        Block block = mc.theWorld.getBlock(hit.blockX, hit.blockY, hit.blockZ);
-        if (block == null || block == Blocks.air) {
+        BlockPos pos = hit.getBlockPos();
+        if (pos == null) {
             return false;
         }
-        Object registered = Block.blockRegistry.getNameForObject(block);
-        if (!(registered instanceof String)) {
+        net.minecraft.block.state.IBlockState state = mc.world.getBlockState(pos);
+        Block block = state.getBlock();
+        if (block == null || block == Blocks.AIR) {
+            return false;
+        }
+        // 1.12 keeps the registry name as a ResourceLocation rather than a bare
+        // string, and it is the same "domain:path" either way once it is written out.
+        Object registered = Block.REGISTRY.getNameForObject(block);
+        if (registered == null) {
             return false;
         }
         // Lowered to match the entries, which were lowered when they were read: a
         // registry name is conventionally lower case and a handful of mods do not know
         // that, and the config should not have to.
-        String name = ((String) registered).toLowerCase(Locale.ROOT);
-        int meta = mc.theWorld.getBlockMetadata(hit.blockX, hit.blockY, hit.blockZ);
+        String name = registered.toString().toLowerCase(Locale.ROOT);
+        int meta = block.getMetaFromState(state);
         return matches(list, name, meta);
     }
 

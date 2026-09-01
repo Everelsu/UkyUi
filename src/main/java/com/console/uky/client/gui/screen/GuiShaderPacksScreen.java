@@ -335,7 +335,7 @@ public class GuiShaderPacksScreen extends MenuScreen {
      */
     @Override
     protected boolean isStarfieldOnly() {
-        return this.mc.theWorld == null;
+        return this.mc.world == null;
     }
 
     /**
@@ -347,7 +347,7 @@ public class GuiShaderPacksScreen extends MenuScreen {
      */
     @Override
     protected void drawBackdrop() {
-        if (this.mc.theWorld == null) {
+        if (this.mc.world == null) {
             super.drawBackdrop();
             return;
         }
@@ -360,7 +360,7 @@ public class GuiShaderPacksScreen extends MenuScreen {
 
     @Override
     protected void drawOverlay() {
-        if (this.mc.theWorld != null) {
+        if (this.mc.world != null) {
             // No grain or scanlines over live gameplay — they would be read as the
             // shader doing it, which is the one thing this screen must not do.
             Draw.vignette(this.width, this.height, 0.5F * this.fadeAlpha, 0xFF000000);
@@ -378,7 +378,7 @@ public class GuiShaderPacksScreen extends MenuScreen {
 
         drawPanel(this.panelX1, this.panelY1, this.panelX2, this.panelY2, this.fadeAlpha);
 
-        this.fontRendererObj.drawString(title().toUpperCase(),
+        this.fontRenderer.drawString(title().toUpperCase(),
                 this.panelX1 + this.padding, this.panelY1 + 14,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
@@ -388,12 +388,12 @@ public class GuiShaderPacksScreen extends MenuScreen {
         if (this.droppedNotice > 0.0F) {
             String said = I18n.format("uky.shaderPacks.dropped", new Object[0])
                     + " " + this.droppedCount;
-            this.fontRendererObj.drawString(said, this.panelX1 + this.padding,
+            this.fontRenderer.drawString(said, this.panelX1 + this.padding,
                     this.panelY1 + 26,
                     Draw.withAlpha(Theme.accent,
                             Math.min(1.0F, this.droppedNotice) * 0.95F * this.fadeAlpha));
         } else if (ShaderPacks.fileDropSupported()) {
-            this.fontRendererObj.drawString(
+            this.fontRenderer.drawString(
                     I18n.format("uky.shaderPacks.drop", new Object[0]),
                     this.panelX1 + this.padding, this.panelY1 + 26,
                     Draw.withAlpha(Theme.textDim, 0.7F * this.fadeAlpha));
@@ -403,8 +403,8 @@ public class GuiShaderPacksScreen extends MenuScreen {
         // is that the screen is not showing the state of the game yet.
         if (dirty()) {
             String note = I18n.format("uky.shaderPacks.pending", new Object[0]);
-            this.fontRendererObj.drawString(note,
-                    this.panelX2 - this.padding - this.fontRendererObj.getStringWidth(note),
+            this.fontRenderer.drawString(note,
+                    this.panelX2 - this.padding - this.fontRenderer.getStringWidth(note),
                     this.panelY1 + 14,
                     Draw.withAlpha(Theme.accent, 0.9F * this.fadeAlpha));
         }
@@ -415,10 +415,10 @@ public class GuiShaderPacksScreen extends MenuScreen {
             // The folder button below is the answer to this, so the sentence only has
             // to say that there is nothing rather than what to do about it.
             String empty = I18n.format("uky.shaderPacks.none", new Object[0]);
-            this.fontRendererObj.drawString(empty,
+            this.fontRenderer.drawString(empty,
                     this.panelX1 + this.padding
                             + (this.panelX2 - this.panelX1 - this.padding * 2
-                                    - this.fontRendererObj.getStringWidth(empty)) / 2,
+                                    - this.fontRenderer.getStringWidth(empty)) / 2,
                     this.listTop + 14,
                     Draw.withAlpha(Theme.textDisabled, 0.85F * this.fadeAlpha));
         }
@@ -475,7 +475,7 @@ public class GuiShaderPacksScreen extends MenuScreen {
             }
 
             int colour = staged ? Theme.textHover : (live ? Theme.text : Theme.textDim);
-            GuiShaderPacksScreen.this.fontRendererObj.drawString(
+            GuiShaderPacksScreen.this.fontRenderer.drawString(
                     GuiShaderPacksScreen.this.fit(pack, rowWidth - 30),
                     rowX + 10, rowY + 6, Draw.withAlpha(colour, alpha));
 
@@ -500,7 +500,7 @@ public class GuiShaderPacksScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
         if (this.list.mouseClicked(mouseX, mouseY)) {
@@ -516,13 +516,13 @@ public class GuiShaderPacksScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+    protected void mouseReleased(int mouseX, int mouseY, int state) {
         this.list.mouseReleased();
-        super.mouseMovedOrUp(mouseX, mouseY, state);
+        super.mouseReleased(mouseX, mouseY, state);
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel != 0) {
@@ -531,7 +531,7 @@ public class GuiShaderPacksScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             discard();
             switchBack();

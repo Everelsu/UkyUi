@@ -6,7 +6,7 @@
   "target": "@env(DEFAULT)",
   "mixins": [],
   "client": [
-    "MixinGuiAchievement",
+    "MixinGuiToast",
     "MixinGuiScreenTooltip",
     "MixinSplashProgress"
   ],

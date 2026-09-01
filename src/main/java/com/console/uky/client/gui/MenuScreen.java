@@ -815,7 +815,7 @@ public abstract class MenuScreen extends GuiScreen {
      * be handled against a layout that does not exist yet.
      */
     @Override
-    public void handleInput() {
+    public void handleInput() throws java.io.IOException {
         ensureInitialised();
         super.handleInput();
     }
@@ -857,7 +857,7 @@ public abstract class MenuScreen extends GuiScreen {
     }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         if (clickedBackdrop(mouseX, mouseY)) {
             return;
         }
@@ -878,9 +878,9 @@ public abstract class MenuScreen extends GuiScreen {
                 continue;
             }
             GuiButton widget = (GuiButton) entry;
-            if (widget.visible && mouseX >= widget.xPosition && mouseY >= widget.yPosition
-                    && mouseX < widget.xPosition + widget.width
-                    && mouseY < widget.yPosition + widget.height) {
+            if (widget.visible && mouseX >= widget.x && mouseY >= widget.y
+                    && mouseX < widget.x + widget.width
+                    && mouseY < widget.y + widget.height) {
                 return true;
             }
         }

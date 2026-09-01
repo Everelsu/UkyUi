@@ -101,6 +101,53 @@ public class GuiProgressScreen extends MenuScreen {
         return TAB_ADVANCEMENTS;
     }
 
+    /**
+     * The advancement a chat link asked for, and what to do about it.
+     *
+     * <p>Kept until the screen is laid out rather than acted on here: this is called
+     * before {@code initGui}, so there is no search box to type into and no list to
+     * scroll yet. See {@link #revealFocus}.
+     */
+    private Advancement focus;
+
+    /**
+     * Opens on this advancement: searched for, selected, and scrolled to.
+     *
+     * <p>The search box is what does the narrowing, because it is the mechanism this
+     * screen already has and the one whose state the player can see — a row picked out
+     * of a list of four hundred with no visible reason would look like the screen had
+     * chosen it at random. The box can be cleared to get the rest back.
+     *
+     * @see com.console.uky.client.gui.AchievementLinks the chat link that calls this
+     */
+    public void focusOn(Advancement advancement) {
+        this.focus = advancement;
+        activeTab = TAB_ADVANCEMENTS;
+    }
+
+    /**
+     * Puts the layout on the focused row, once there is a layout.
+     *
+     * The title goes into the search box and the filter is re-run, which leaves the
+     * asked-for advancement — and anything else sharing its name — as the whole of the
+     * list. Selecting the row as well is what says which one of those it was.
+     */
+    private void revealFocus() {
+        if (this.focus == null || this.search == null || this.list == null) {
+            return;
+        }
+        this.search.setText(com.console.uky.client.gui.AchievementLinks.titleOf(this.focus));
+        applyFilter();
+        int index = this.advancements.indexOf(this.focus);
+        if (index >= 0) {
+            this.list.setSelected(index);
+            this.list.scrollToCenter(index);
+        }
+        // Once. Coming back to this screen later should not re-run somebody's old
+        // click, and neither should a window resize.
+        this.focus = null;
+    }
+
     public static int statsTab() {
         return TAB_STATS;
     }
@@ -172,6 +219,9 @@ public class GuiProgressScreen extends MenuScreen {
                 Math.max(40, doneY - 12 - listTop), 22);
 
         applyFilter();
+        // After the list exists and has been filled: a link that brought us here is
+        // asking for one of its rows.
+        revealFocus();
 
         MenuButton done = new MenuButton(ID_DONE, this.panelX1 + 15, doneY,
                 panelWidth - 30, doneHeight, I18n.format("gui.done", new Object[0]),

@@ -12,7 +12,8 @@ import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
-import net.minecraft.stats.Achievement;
+import net.minecraft.advancements.Advancement;
+import net.minecraft.advancements.DisplayInfo;
 import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
@@ -119,37 +120,95 @@ public final class AchievementToast {
     // ------------------------------------------------------------------ input --
 
     /**
-     * Queues the popup for an achievement that was just earned.
+     * Takes a toast the game was about to queue, if it is an advancement's.
      *
-     * @return whether we took it — false leaves vanilla's own popup to appear, which
-     *         is what the config switch turns back on
+     * <p>Handed the toast as an {@code Object} rather than typed, so that this class
+     * stays something the rest of the mod can call without knowing what a vanilla toast
+     * is. Anything that is not an advancement toast is left alone and goes on to
+     * vanilla's own queue — the recipe unlock, the tutorial hints and the "world backed
+     * up" notice all live there too, and none of them is ours to redraw.
+     *
+     * <p>The advancement itself is read reflectively, by both names it goes by: MCP
+     * calls the field {@code advancement} in a development workspace and SRG calls it
+     * {@code field_193679_c} in a built pack. This project ships no refmap, so a mixin
+     * accessor would resolve in one of those and not the other; two field lookups and a
+     * cache cost less than that asymmetry.
+     *
+     * @return whether we took it, in which case the caller should not queue it
      */
-    public static boolean show(Achievement achievement) {
-        if (!UiConfig.achievementToast || achievement == null) {
+    public static boolean showVanillaToast(Object toast) {
+        if (!UiConfig.achievementToast || toast == null
+                || !ADVANCEMENT_TOAST.equals(toast.getClass().getName())) {
             return false;
         }
-        enqueue(new Toast(achievement, achievement.theItemStack,
-                I18n.format("uky.achievement.unlocked", new Object[0]),
-                nameOf(achievement), false));
-        return true;
+        Advancement advancement = advancementOf(toast);
+        return advancement != null && show(advancement);
+    }
+
+    /** Vanilla's own advancement toast, by name — it is not on our compile path. */
+    private static final String ADVANCEMENT_TOAST =
+            "net.minecraft.client.gui.toasts.AdvancementToast";
+
+    /** The two names that field goes by; see {@link #showVanillaToast}. */
+    private static final String[] ADVANCEMENT_FIELDS = {"advancement", "field_193679_c"};
+
+    private static java.lang.reflect.Field advancementField;
+    private static boolean advancementFieldSearched;
+
+    private static Advancement advancementOf(Object toast) {
+        try {
+            if (!advancementFieldSearched) {
+                advancementFieldSearched = true;
+                for (int i = 0; i < ADVANCEMENT_FIELDS.length; i++) {
+                    try {
+                        advancementField = toast.getClass()
+                                .getDeclaredField(ADVANCEMENT_FIELDS[i]);
+                        advancementField.setAccessible(true);
+                        break;
+                    } catch (NoSuchFieldException next) {
+                        // The other name, then nothing.
+                    }
+                }
+            }
+            if (advancementField == null) {
+                return null;
+            }
+            Object value = advancementField.get(toast);
+            return value instanceof Advancement ? (Advancement) value : null;
+        } catch (Throwable t) {
+            // A toast we cannot read is a toast vanilla should keep.
+            advancementField = null;
+            return null;
+        }
     }
 
     /**
-     * Queues the inventory hint — vanilla's second use of the same popup, which
-     * describes an achievement rather than announcing one.
+     * Queues the popup for an advancement that was just made.
+     *
+     * <p>The upper line is the kind of advancement rather than the word "achievement":
+     * 1.12 has three of them — a task, a goal and a challenge — and it is the one piece
+     * of information vanilla's own toast leads with. {@code advancements.toast.*} are
+     * the game's own keys for those, so the wording matches every other place the
+     * player meets them.
+     *
+     * <p>An advancement with no display is one that exists only to hold others
+     * together; there is nothing to announce and vanilla shows nothing either.
+     *
+     * @return whether we took it — false leaves vanilla's own toast to appear, which
+     *         is what the config switch turns back on
      */
-    public static boolean showHint(Achievement achievement) {
-        if (!UiConfig.achievementToast || achievement == null) {
+    public static boolean show(Advancement advancement) {
+        if (!UiConfig.achievementToast || advancement == null) {
             return false;
         }
-        String description;
-        try {
-            description = achievement.getDescription();
-        } catch (Throwable t) {
-            description = "";
+        DisplayInfo display = advancement.getDisplay();
+        if (display == null || !display.shouldShowToast()) {
+            return false;
         }
-        enqueue(new Toast(achievement, achievement.theItemStack,
-                nameOf(achievement), description, true));
+        enqueue(new Toast(advancement, display.getIcon(),
+                I18n.format("advancements.toast." + display.getFrame().getName(),
+                        new Object[0]),
+                nameOf(advancement), false));
         return true;
     }
 
@@ -229,7 +288,7 @@ public final class AchievementToast {
         }
         // Leaving a world with a panel still up would otherwise carry it onto the
         // title screen, where it belongs to nothing.
-        if (mc.thePlayer == null || mc.theWorld == null) {
+        if (mc.player == null || mc.world == null) {
             clear();
             return true;
         }
@@ -270,7 +329,7 @@ public final class AchievementToast {
      * arranged a GUI-space matrix for us.
      */
     private static void beginOverlay(Minecraft mc) {
-        ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+        ScaledResolution res = new ScaledResolution(mc);
         GL11.glViewport(0, 0, mc.displayWidth, mc.displayHeight);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
         GL11.glPushMatrix();
@@ -315,7 +374,7 @@ public final class AchievementToast {
 
     private static void drawToast(Minecraft mc, Toast toast, float elapsed, float dwell) {
         FontRenderer font = mc.fontRenderer;
-        ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+        ScaledResolution res = new ScaledResolution(mc);
         int screenWidth = res.getScaledWidth();
 
         float textWidth = Math.max(font.getStringWidth(toast.title),
@@ -601,12 +660,13 @@ public final class AchievementToast {
         return font.trimStringToWidth(text, maxWidth);
     }
 
-    private static String nameOf(Achievement achievement) {
+    private static String nameOf(Advancement advancement) {
         try {
-            return achievement.func_150951_e().getUnformattedText();
+            return advancement.getDisplay().getTitle().getUnformattedText();
         } catch (Throwable t) {
-            // A modded achievement with a broken name must not cost the popup.
-            return achievement.statId;
+            // A modded advancement with a broken title must not cost the popup; its
+            // id is at least a name, which is what this line is for.
+            return String.valueOf(advancement.getId());
         }
     }
 }

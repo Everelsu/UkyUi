@@ -202,14 +202,14 @@ public class GuiShareScreen extends MenuScreen {
             blurb = blurb + " " + second;
         }
 
-        int lineHeight = this.fontRendererObj.FONT_HEIGHT;
+        int lineHeight = this.fontRenderer.FONT_HEIGHT;
         int room = (this.modeY + this.modeHeight - 6 - y) / lineHeight;
         if (room <= 0) {
             return;
         }
-        List<?> lines = this.fontRendererObj.listFormattedStringToWidth(blurb, maxWidth);
+        List<?> lines = this.fontRenderer.listFormattedStringToWidth(blurb, maxWidth);
         for (int i = 0; i < lines.size() && i < room; i++) {
-            this.fontRendererObj.drawString(String.valueOf(lines.get(i)), x, y + i * lineHeight,
+            this.fontRenderer.drawString(String.valueOf(lines.get(i)), x, y + i * lineHeight,
                     Draw.withAlpha(Theme.textDim, 0.7F * this.fadeAlpha));
         }
     }

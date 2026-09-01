@@ -6,7 +6,7 @@ import com.console.uky.config.UiConfig;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.RenderHelper;
-import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.text.TextFormatting;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 
@@ -126,7 +126,7 @@ public final class UkyTooltip {
             if (dropped > 0) {
                 text = new ArrayList<String>(text.subList(0, fits));
                 text.set(text.size() - 1,
-                        EnumChatFormatting.DARK_GRAY + "... +" + (dropped + 1));
+                        TextFormatting.DARK_GRAY + "... +" + (dropped + 1));
                 width = 0;
                 for (int i = 0; i < text.size(); i++) {
                     width = Math.max(width, font.getStringWidth(text.get(i)));

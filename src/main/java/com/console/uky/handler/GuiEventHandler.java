@@ -67,7 +67,7 @@ public class GuiEventHandler {
      */
     @SubscribeEvent
     public void onRenderOverlay(RenderGameOverlayEvent.Pre event) {
-        if (event.type != RenderGameOverlayEvent.ElementType.PLAYER_LIST) {
+        if (event.getType() != RenderGameOverlayEvent.ElementType.PLAYER_LIST) {
             return;
         }
         if (!UiConfig.replacePlayerList) {
@@ -78,7 +78,7 @@ public class GuiEventHandler {
             return;
         }
         event.setCanceled(true);
-        PlayerListOverlay.draw(mc, event.resolution);
+        PlayerListOverlay.draw(mc, event.getResolution());
     }
 
     /**
@@ -94,10 +94,10 @@ public class GuiEventHandler {
             return;
         }
         GL11.glPushMatrix();
-        GL11.glTranslatef(event.posX, event.posY, 0.0F);
+        GL11.glTranslatef(event.getPosX(), event.getPosY(), 0.0F);
         boolean drawn;
         try {
-            drawn = ChatOverlay.draw(Minecraft.getMinecraft(), event.posY);
+            drawn = ChatOverlay.draw(Minecraft.getMinecraft(), event.getPosY());
         } finally {
             GL11.glPopMatrix();
         }
@@ -139,7 +139,7 @@ public class GuiEventHandler {
         // Only when the redesign is on: with it off the chat screen is left entirely
         // alone, which is one fewer vanilla screen this mod is standing in front of.
         if (UiConfig.redesignChat && type == GuiChat.class) {
-            event.gui = new GuiUkyChat(defaultChatText(event.gui));
+            event.setGui(new GuiUkyChat(defaultChatText(event.getGui())));
             return;
         }
 

@@ -151,12 +151,12 @@ public class WorldCaptureHandler {
     /** The scrim, in its own projection because nothing else is set one up here. */
     private static void drawFade(float opacity) {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.theWorld == null) {
+        if (mc.world == null) {
             finish();
             return;
         }
         ScaledResolution resolution =
-                new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+                new ScaledResolution(mc);
         int width = resolution.getScaledWidth();
         int height = resolution.getScaledHeight();
 

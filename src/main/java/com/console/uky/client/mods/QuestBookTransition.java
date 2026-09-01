@@ -4,8 +4,8 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
@@ -149,7 +149,7 @@ public final class QuestBookTransition {
     private static void drawTail(float alpha) {
         Minecraft mc = Minecraft.getMinecraft();
         ScaledResolution resolution =
-                new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+                new ScaledResolution(mc);
         int width = resolution.getScaledWidth();
         int height = resolution.getScaledHeight();
 
@@ -186,7 +186,7 @@ public final class QuestBookTransition {
 
         @SubscribeEvent
         public void onDrawPre(GuiScreenEvent.DrawScreenEvent.Pre event) {
-            drawPre(event.gui);
+            drawPre(event.getGui());
         }
 
         @SubscribeEvent

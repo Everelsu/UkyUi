@@ -412,11 +412,12 @@ public final class Draw {
         GL11.glDisable(GL11.GL_CULL_FACE);
         color(argb);
 
-        Tessellator t = Tessellator.instance;
-        t.startDrawing(GL11.GL_TRIANGLES);
-        t.addVertexWithUV(x1, y1, 0.0D, u1, v1);
-        t.addVertexWithUV(x2, y2, 0.0D, u2, v2);
-        t.addVertexWithUV(x3, y3, 0.0D, u3, v3);
+        Tessellator t = Tessellator.getInstance();
+        BufferBuilder b = t.getBuffer();
+        b.begin(GL11.GL_TRIANGLES, DefaultVertexFormats.POSITION_TEX);
+        b.pos(x1, y1, 0.0D).tex(u1, v1).endVertex();
+        b.pos(x2, y2, 0.0D).tex(u2, v2).endVertex();
+        b.pos(x3, y3, 0.0D).tex(u3, v3).endVertex();
         t.draw();
 
         GL11.glDisable(GL11.GL_BLEND);

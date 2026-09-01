@@ -33,8 +33,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(targets = "mcp.mobius.waila.overlay.OverlayRenderer", remap = false)
 public abstract class MixinWailaOverlay {
 
+    // require = 0 like the two below it, and for a sharper reason on this version:
+    // 1.12's Waila is HWYLA, a fork that has had years to move this method. A box we
+    // cannot take is Waila drawing its own, which is what the config switch does
+    // anyway; a hard failure here would take the tooltip out of the game entirely.
     @Inject(method = "drawTooltipBox(IIIIIII)V", at = @At("HEAD"), cancellable = true,
-            remap = false)
+            remap = false, require = 0)
     private static void uky$drawOurPanel(int x, int y, int width, int height,
                                          int background, int gradient1, int gradient2,
                                          CallbackInfo ci) {

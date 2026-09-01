@@ -11,9 +11,9 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiNewChat;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.event.ClickEvent;
-import net.minecraft.util.IChatComponent;
-import net.minecraft.util.MathHelper;
+import net.minecraft.util.text.event.ClickEvent;
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.math.MathHelper;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
@@ -103,9 +103,9 @@ public final class ChatOverlay {
         }
 
         boolean open = chat.getChatOpen();
-        float scale = chat.func_146244_h();
-        int visibleLines = chat.func_146232_i();
-        int width = MathHelper.ceiling_float_int(chat.func_146228_f() / scale);
+        float scale = chat.getChatScale();
+        int visibleLines = chat.getLineCount();
+        int width = MathHelper.ceil(chat.getChatWidth() / scale);
         float opacity = mc.gameSettings.chatOpacity * 0.9F + 0.1F;
         int scroll = readScroll(chat);
         int counter = mc.ingameGUI.getUpdateCounter();
@@ -186,7 +186,7 @@ public final class ChatOverlay {
         if (mc.currentScreen == null) {
             return -1;
         }
-        ScaledResolution res = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+        ScaledResolution res = new ScaledResolution(mc);
         float mouseX = Mouse.getX() * res.getScaledWidth() / (float) mc.displayWidth;
         float mouseY = res.getScaledHeight()
                 - Mouse.getY() * res.getScaledHeight() / (float) mc.displayHeight - 1.0F;
@@ -267,7 +267,7 @@ public final class ChatOverlay {
         // looked for. It cannot move the text: everything to the left of here is
         // exactly where vanilla would have put it, which is what keeps clicking a
         // link landing on the link.
-        String text = line.func_151461_a().getFormattedText();
+        String text = line.getChatComponent().getFormattedText();
         if (open) {
             String stamp = timestamp(age);
             int stampWidth = font.getStringWidth(stamp);
@@ -370,8 +370,8 @@ public final class ChatOverlay {
     /** Whether this line is one of ours, i.e. carries an achievement link. */
     private static boolean isLink(ChatLine line) {
         try {
-            IChatComponent component = line.func_151461_a();
-            ClickEvent click = component.getChatStyle().getChatClickEvent();
+            ITextComponent component = line.getChatComponent();
+            ClickEvent click = component.getStyle().getClickEvent();
             return click != null
                     && click.getAction() == ClickEvent.Action.RUN_COMMAND
                     && click.getValue() != null

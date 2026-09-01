@@ -1,7 +1,7 @@
 package com.console.uky.client.mods;
 
 import com.console.uky.UkyUI;
-import cpw.mods.fml.relauncher.ReflectionHelper;
+import net.minecraftforge.fml.relauncher.ReflectionHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerControllerMP;
 
@@ -39,7 +39,7 @@ public final class WailaMining {
     public static float progress() {
         Minecraft mc = Minecraft.getMinecraft();
         PlayerControllerMP controller = mc.playerController;
-        if (controller == null || mc.thePlayer == null) {
+        if (controller == null || mc.player == null) {
             return 0.0F;
         }
         search();

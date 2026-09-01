@@ -1,6 +1,6 @@
 package com.console.uky.client.gui.screen;
 
-import cpw.mods.fml.client.FMLClientHandler;
+import net.minecraftforge.fml.client.FMLClientHandler;
 import com.console.uky.UkyUI;
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.gui.Transitions;
@@ -263,7 +263,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             public void run() {
                 probe.startedAt = System.currentTimeMillis();
                 try {
-                    GuiServersScreen.this.pinger.func_147224_a(data);
+                    GuiServersScreen.this.pinger.ping(data);
                 } catch (java.net.UnknownHostException e) {
                     probe.state = PING_UNRESOLVED;
                     data.populationInfo = "";

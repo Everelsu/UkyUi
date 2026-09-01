@@ -2,7 +2,7 @@ package com.console.uky.client.render;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderHelper;
-import net.minecraft.client.renderer.entity.RenderItem;
+import net.minecraft.client.renderer.RenderItem;
 import net.minecraft.item.ItemStack;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -61,7 +61,9 @@ public final class ItemIcon {
             return;
         }
         if (renderer == null) {
-            renderer = new RenderItem();
+            // 1.12 hands one out rather than having one made: it needs the model
+            // manager, which only the game has.
+            renderer = Minecraft.getMinecraft().getRenderItem();
         }
         Minecraft mc = Minecraft.getMinecraft();
 
@@ -92,8 +94,7 @@ public final class ItemIcon {
         GL11.glScalef(scale, scale, scale);
 
         try {
-            renderer.renderItemAndEffectIntoGUI(mc.fontRenderer, mc.getTextureManager(),
-                    stack, -SIZE / 2, -SIZE / 2);
+            renderer.renderItemAndEffectIntoGUI(stack, -SIZE / 2, -SIZE / 2);
         } catch (Throwable t) {
             // A modded item can carry a renderer that throws. One bad icon must not
             // take the screen — or the frame — with it.

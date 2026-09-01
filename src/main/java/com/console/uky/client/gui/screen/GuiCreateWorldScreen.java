@@ -158,7 +158,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
         screen.initialName = I18n.format("selectWorld.newWorld.copyOf",
                 new Object[] { info.getWorldName() });
         screen.initialSeed = String.valueOf(info.getSeed());
-        screen.selectedType = info.getTerrainType().getWorldTypeID();
+        screen.selectedType = info.getTerrainType().getId();
         screen.generatorOptions = info.getGeneratorOptions();
         screen.generateStructures = info.isMapFeaturesEnabled();
         screen.allowCheats = info.areCommandsAllowed();
@@ -989,7 +989,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
      * worked out that the grid has pages will reach for first.
      */
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel == 0 || this.typePageCount <= 1) {
@@ -1120,7 +1120,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
         java.util.Set<String> taken = new java.util.HashSet<String>();
         try {
             @SuppressWarnings("unchecked")
-            java.util.List<net.minecraft.world.storage.SaveFormatComparator> saves =
+            java.util.List<net.minecraft.world.storage.WorldSummary> saves =
                     this.mc.getSaveLoader().getSaveList();
             for (int i = 0; i < saves.size(); i++) {
                 String existing = saves.get(i).getDisplayName();

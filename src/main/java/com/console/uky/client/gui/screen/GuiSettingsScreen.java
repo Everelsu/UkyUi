@@ -410,7 +410,7 @@ public class GuiSettingsScreen extends MenuScreen {
                 // is a list in the config — a registry name is not something anyone is
                 // going to type on this screen — so what is offered here is the switch
                 // over that list and nothing else.
-                if (cpw.mods.fml.common.Loader.isModLoaded("waila")) {
+                if (net.minecraftforge.fml.common.Loader.isModLoaded("waila")) {
                     addFlag(ID_WAILA_HIDE, this.rightColumn, y, "uky.settings.wailaHide",
                             new Flag() {
                                 @Override
@@ -1352,9 +1352,9 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     @Override
-    protected void mouseMovedOrUp(int mouseX, int mouseY, int state) {
+    protected void mouseReleased(int mouseX, int mouseY, int state) {
         this.scrollbarDragging = false;
-        super.mouseMovedOrUp(mouseX, mouseY, state);
+        super.mouseReleased(mouseX, mouseY, state);
     }
 
     @Override

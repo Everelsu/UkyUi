@@ -129,12 +129,12 @@ public class GuiWelcomeScreen extends MenuScreen {
         String heading = UiConfig.title == null || UiConfig.title.isEmpty()
                 ? I18n.format("uky.welcome.title", new Object[0])
                 : UiConfig.title;
-        this.fontRendererObj.drawString(fit(heading, wrapWidth), x, panelY1 + 16,
+        this.fontRenderer.drawString(fit(heading, wrapWidth), x, panelY1 + 16,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
         drawWrapped(I18n.format("uky.welcome.body", new Object[0]), x, panelY1 + 34, wrapWidth);
 
-        this.fontRendererObj.drawString(
+        this.fontRenderer.drawString(
                 I18n.format("uky.welcome.quality", new Object[0]), x, panelY1 + 84,
                 Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
 
@@ -146,9 +146,9 @@ public class GuiWelcomeScreen extends MenuScreen {
     @SuppressWarnings("unchecked")
     private void drawWrapped(String text, int x, int y, int width) {
         java.util.List<String> lines =
-                this.fontRendererObj.listFormattedStringToWidth(text, Math.max(20, width));
+                this.fontRenderer.listFormattedStringToWidth(text, Math.max(20, width));
         for (int i = 0; i < lines.size() && i < 3; i++) {
-            this.fontRendererObj.drawString(lines.get(i), x, y + i * 10,
+            this.fontRenderer.drawString(lines.get(i), x, y + i * 10,
                     Draw.withAlpha(Theme.textDim, 0.8F * this.fadeAlpha));
         }
     }
@@ -175,7 +175,7 @@ public class GuiWelcomeScreen extends MenuScreen {
     }
 
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1 || keyCode == 28) {
             switchBack();
             return;

@@ -4,7 +4,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.gui.GuiPlayerInfo;
+import net.minecraft.client.network.NetworkPlayerInfo;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.scoreboard.Score;
@@ -50,25 +50,25 @@ public final class PlayerListOverlay {
      * player on their own world has nothing to look at.
      */
     public static boolean shouldDraw(Minecraft mc) {
-        if (mc.thePlayer == null || mc.theWorld == null) {
+        if (mc.player == null || mc.world == null) {
             return false;
         }
         return !mc.isIntegratedServerRunning()
-                || mc.thePlayer.sendQueue.playerInfoList.size() > 1
+                || mc.player.connection.getPlayerInfoMap().size() > 1
                 || objective(mc) != null;
     }
 
     /** The objective a server puts in the list, or null when there is none. */
     private static ScoreObjective objective(Minecraft mc) {
-        Scoreboard scoreboard = mc.theWorld.getScoreboard();
-        return scoreboard == null ? null : scoreboard.func_96539_a(0);
+        Scoreboard scoreboard = mc.world.getScoreboard();
+        return scoreboard == null ? null : scoreboard.getObjectiveInDisplaySlot(0);
     }
 
     @SuppressWarnings("unchecked")
     public static void draw(Minecraft mc, ScaledResolution resolution) {
-        NetHandlerPlayClient connection = mc.thePlayer.sendQueue;
-        List<GuiPlayerInfo> players =
-                new ArrayList<GuiPlayerInfo>(connection.playerInfoList);
+        NetHandlerPlayClient connection = mc.player.connection;
+        List<NetworkPlayerInfo> players =
+                new ArrayList<NetworkPlayerInfo>(connection.getPlayerInfoMap());
         if (players.isEmpty()) {
             return;
         }
@@ -84,8 +84,8 @@ public final class PlayerListOverlay {
         // read as a broken layout rather than as a deliberate one.
         int columnWidth = 0;
         for (int i = 0; i < players.size(); i++) {
-            GuiPlayerInfo info = players.get(i);
-            int width = font.getStringWidth(info.name) + PING_GAP
+            NetworkPlayerInfo info = players.get(i);
+            int width = font.getStringWidth(name(info)) + PING_GAP
                     + font.getStringWidth(pingText(info));
             String score = scoreText(mc, objective, info);
             if (!score.isEmpty()) {
@@ -127,10 +127,10 @@ public final class PlayerListOverlay {
                 Draw.withAlpha(Theme.accent, 0.75F), Draw.withAlpha(Theme.accent, 0.0F));
     }
 
-    private static void drawRow(Minecraft mc, FontRenderer font, GuiPlayerInfo info,
+    private static void drawRow(Minecraft mc, FontRenderer font, NetworkPlayerInfo info,
                                 ScoreObjective objective, int x, int y, int width) {
-        boolean self = mc.thePlayer != null
-                && info.name.equals(mc.thePlayer.getCommandSenderName());
+        boolean self = mc.player != null
+                && name(info).equals(mc.player.getName());
 
         if (self) {
             // You, marked. In a list of twenty names finding your own row otherwise
@@ -139,13 +139,13 @@ public final class PlayerListOverlay {
                     Draw.withAlpha(Theme.accent, 0.10F));
         }
 
-        font.drawString(info.name, x, y,
+        font.drawString(name(info), x, y,
                 Draw.withAlpha(self ? Theme.textHover : Theme.text, 0.92F));
 
         String ping = pingText(info);
         int pingWidth = font.getStringWidth(ping);
         font.drawString(ping, x + width - pingWidth, y,
-                Draw.withAlpha(pingColour(info.responseTime), 0.9F));
+                Draw.withAlpha(pingColour(info.getResponseTime()), 0.9F));
 
         String score = scoreText(mc, objective, info);
         if (!score.isEmpty()) {
@@ -161,8 +161,8 @@ public final class PlayerListOverlay {
      * A negative response time is what the server sends for a player it has not timed
      * yet, which is not the same as a bad connection and should not be drawn as one.
      */
-    private static String pingText(GuiPlayerInfo info) {
-        return info.responseTime < 0 ? "--" : info.responseTime + "ms";
+    private static String pingText(NetworkPlayerInfo info) {
+        return info.getResponseTime() < 0 ? "--" : info.getResponseTime() + "ms";
     }
 
     private static int pingColour(int responseTime) {
@@ -176,12 +176,12 @@ public final class PlayerListOverlay {
     }
 
     /** The player's score in the list objective, or empty when the server sets none. */
-    private static String scoreText(Minecraft mc, ScoreObjective objective, GuiPlayerInfo info) {
+    private static String scoreText(Minecraft mc, ScoreObjective objective, NetworkPlayerInfo info) {
         if (objective == null) {
             return "";
         }
         try {
-            Score score = mc.theWorld.getScoreboard().func_96529_a(info.name, objective);
+            Score score = mc.world.getScoreboard().getOrCreateScore(name(info), objective);
             return String.valueOf(score.getScorePoints());
         } catch (Throwable t) {
             // A scoreboard is server-authored data; a malformed one is not worth the HUD.
@@ -189,14 +189,26 @@ public final class PlayerListOverlay {
         }
     }
 
+    /**
+     * What to call this player.
+     *
+     * 1.12 keeps the name on the game profile rather than on the list entry, and it
+     * keeps a display name beside it that a server or a team may have rewritten. The
+     * profile name is the one used here for the same reason the scoreboard uses it: it
+     * is what a score is filed under, and a decorated name would not match.
+     */
+    private static String name(NetworkPlayerInfo info) {
+        return info.getGameProfile().getName();
+    }
+
     private static String heading(int online, int max) {
         return max > 0 ? online + " / " + max : String.valueOf(online);
     }
 
-    private static final Comparator<GuiPlayerInfo> BY_NAME = new Comparator<GuiPlayerInfo>() {
+    private static final Comparator<NetworkPlayerInfo> BY_NAME = new Comparator<NetworkPlayerInfo>() {
         @Override
-        public int compare(GuiPlayerInfo a, GuiPlayerInfo b) {
-            return a.name.compareToIgnoreCase(b.name);
+        public int compare(NetworkPlayerInfo a, NetworkPlayerInfo b) {
+            return name(a).compareToIgnoreCase(name(b));
         }
     };
 }

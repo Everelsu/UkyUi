@@ -7,7 +7,7 @@ import com.console.uky.client.render.Theme;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.network.NetworkManager;
-import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.text.TextComponentString;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -186,8 +186,8 @@ public class GuiConnectingScreen extends GuiScreen {
                 Draw.fade(Draw.mix(Theme.separator, Theme.accent, this.cancelHover), 0.9F));
 
         String label = I18n.format("gui.cancel", new Object[0]);
-        int labelWidth = this.fontRendererObj.getStringWidth(label);
-        this.fontRendererObj.drawString(label, x + (width - labelWidth) / 2, y + 6,
+        int labelWidth = this.fontRenderer.getStringWidth(label);
+        this.fontRenderer.drawString(label, x + (width - labelWidth) / 2, y + 6,
                 Draw.withAlpha(Draw.mix(Theme.textDim, Theme.textHover, this.cancelHover), 0.95F));
     }
 
@@ -216,7 +216,7 @@ public class GuiConnectingScreen extends GuiScreen {
             markAborted();
             NetworkManager manager = fieldOfType(NetworkManager.class);
             if (manager != null) {
-                manager.closeChannel(new ChatComponentText("Aborted"));
+                manager.closeChannel(new TextComponentString("Aborted"));
             }
         } catch (Throwable t) {
             // Leaving matters more than leaving tidily: a screen with no way out is
@@ -259,7 +259,7 @@ public class GuiConnectingScreen extends GuiScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int button) {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws java.io.IOException {
         int x = cancelX();
         int y = cancelY();
         if (mouseX >= x && mouseX < x + cancelWidth() && mouseY >= y && mouseY < y + 20) {

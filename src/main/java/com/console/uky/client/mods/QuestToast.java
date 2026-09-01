@@ -4,7 +4,7 @@ import com.console.uky.UkyUI;
 import com.console.uky.client.gui.AchievementToast;
 import com.console.uky.config.UiConfig;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.StatCollector;
+import net.minecraft.client.resources.I18n;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -150,7 +150,7 @@ public final class QuestToast {
         if (questBook != null && !key.equals(questBook)) {
             return questBook;
         }
-        String vanilla = StatCollector.translateToLocal(key);
+        String vanilla = I18n.format(key);
         if (!key.equals(vanilla)) {
             return vanilla;
         }
@@ -208,7 +208,7 @@ public final class QuestToast {
             return key;
         }
         String ours = "uky.quest.notice." + key.substring(dot + 1);
-        String out = StatCollector.translateToLocal(ours);
+        String out = I18n.format(ours);
         return ours.equals(out) ? key : out;
     }
 

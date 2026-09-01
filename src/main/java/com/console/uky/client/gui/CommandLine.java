@@ -6,8 +6,8 @@ import com.console.uky.client.render.Theme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiTextField;
-import net.minecraft.network.play.client.C14PacketTabComplete;
-import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.network.play.client.CPacketTabComplete;
+import net.minecraft.util.text.TextFormatting;
 import net.minecraftforge.client.ClientCommandHandler;
 import org.lwjgl.opengl.GL11;
 
@@ -282,7 +282,7 @@ public final class CommandLine {
      * list when it lands.
      */
     private void request(boolean manual) {
-        if (this.mc.thePlayer == null) {
+        if (this.mc.player == null) {
             return;
         }
         int cursor = this.field.getCursorPosition();
@@ -300,7 +300,7 @@ public final class CommandLine {
         this.requestedContext = context();
         this.candidates.clear();
         if (beforeCursor.charAt(0) == '/') {
-            ClientCommandHandler.instance.autoComplete(beforeCursor, currentWord());
+            ClientCommandHandler.instance.autoComplete(beforeCursor);
             String[] local = ClientCommandHandler.instance.latestAutoComplete;
             if (local != null) {
                 addAll(local);
@@ -310,9 +310,24 @@ public final class CommandLine {
         // completes a player's name, and a box of names is worth as much as a box of
         // commands. Vanilla's answer to the same reply is to write the names into the
         // chat log.
-        this.mc.thePlayer.sendQueue.addToSendQueue(new C14PacketTabComplete(beforeCursor));
+        this.mc.player.connection.sendPacket(new CPacketTabComplete(beforeCursor,
+                targetBlock(), false));
         this.awaitingServer = true;
         narrow();
+    }
+
+    /**
+     * The block the player is looking at, for the server to complete against.
+     *
+     * 1.12 added this to the request so that a command aimed at a block — a command
+     * block being edited, a sign — can be completed with what is actually there.
+     * Null whenever nothing is under the crosshair, which is what vanilla sends too.
+     */
+    private net.minecraft.util.math.BlockPos targetBlock() {
+        net.minecraft.util.math.RayTraceResult hit = this.mc.objectMouseOver;
+        return hit != null
+                && hit.typeOfHit == net.minecraft.util.math.RayTraceResult.Type.BLOCK
+                ? hit.getBlockPos() : null;
     }
 
     /** The server's reply, handed over by the chat screen. */
@@ -340,7 +355,7 @@ public final class CommandLine {
             if (value == null) {
                 continue;
             }
-            String clean = EnumChatFormatting.getTextWithoutFormattingCodes(value);
+            String clean = TextFormatting.getTextWithoutFormattingCodes(value);
             if (clean == null || clean.isEmpty() || this.candidates.contains(clean)) {
                 continue;
             }
@@ -369,7 +384,7 @@ public final class CommandLine {
     }
 
     private int wordStart() {
-        return this.field.func_146197_a(-1, this.field.getCursorPosition(), false);
+        return this.field.getNthWordFromPos(-1, this.field.getCursorPosition());
     }
 
     private void apply(String suggestion) {
@@ -398,8 +413,8 @@ public final class CommandLine {
         String visible = this.font.trimStringToWidth(text.substring(offset),
                 this.field.getWidth());
         int visibleEnd = offset + visible.length();
-        int x = this.field.xPosition;
-        int y = this.field.yPosition;
+        int x = this.field.x;
+        int y = this.field.y;
 
         drawSelection(text, offset, visibleEnd, x, y);
 
@@ -511,14 +526,14 @@ public final class CommandLine {
         String text = this.field.getText();
         int offset = Math.min(scrollOffset(), text.length());
         int start = Math.max(wordStart(), offset);
-        float anchor = this.field.xPosition
+        float anchor = this.field.x
                 + this.font.getStringWidth(text.substring(offset, Math.min(start, text.length())));
 
         float width = widest + 14.0F;
         float x1 = Math.min(anchor - 3.0F, this.mc.currentScreen.width - width - 4.0F);
         x1 = Math.max(2.0F, x1);
         float x2 = x1 + width;
-        float y2 = this.field.yPosition - 5.0F;
+        float y2 = this.field.y - 5.0F;
         float y1 = y2 - rows * ROW_HEIGHT - 2.0F;
 
         this.boxX1 = x1;

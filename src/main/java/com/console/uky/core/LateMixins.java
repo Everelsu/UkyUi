@@ -1,88 +1,73 @@
 package com.console.uky.core;
 
-import com.gtnewhorizon.gtnhmixins.ILateMixinLoader;
-import com.gtnewhorizon.gtnhmixins.LateMixin;
-import cpw.mods.fml.relauncher.FMLLaunchHandler;
+import net.minecraftforge.fml.relauncher.FMLLaunchHandler;
+import zone.rong.mixinbooter.Context;
+import zone.rong.mixinbooter.ILateMixinLoader;
+import zone.rong.mixinbooter.MixinLoader;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Mixin configs that target other mods, handed over once those mods exist.
  *
- * <p><b>These cannot be declared the way {@link UkyCore} declares ours</b>, and they
- * cannot be added by hand either. Both have been tried and both fail, in different and
- * equally quiet ways:
+ * <p><b>These cannot be declared the way {@link UkyCore} declares ours.</b> A config
+ * named in the jar manifest, or returned from an early loader, is registered while FML
+ * is still loading core mods, and Mixin resolves a config's target classes the moment
+ * it registers one. Ordinary mods are not on the classpath yet, so the lookup fails —
+ * and LaunchWrapper remembers a class it could not find, permanently. When the mod's
+ * jar joins the classpath a minute later that class is already condemned: every load
+ * returns nothing, surfacing as {@code NoClassDefFoundError} inside the other mod, on
+ * its own code, with our name nowhere in the stack trace.
  *
- * <ul>
- * <li>A config named in the jar manifest, or returned from {@code getMixinConfigs()},
- *     is registered while FML is still loading core mods, and Mixin resolves a config's
- *     target classes the moment it registers one. Ordinary mods are not on the
- *     classpath yet, so the lookup fails — and LaunchWrapper remembers a class it could
- *     not find, in {@code negativeResourceCache}, permanently. When the mod's jar joins
- *     the classpath a minute later that class is already condemned: every load returns
- *     nothing, surfacing as {@code NoClassDefFoundError} inside the other mod, on its
- *     own code, with our name nowhere in the stack trace. Registering the Waila config
- *     early took Waila out of the game entirely.
- * <li>Calling {@code Mixins.addConfiguration} from {@code FMLConstructionEvent} avoids
- *     that, and does nothing. By then the transformer is long past the point where it
- *     goes looking for configs it has not seen, so the config sits in the pending list
- *     and is never selected. No error, no warning, no mixin.
- * </ul>
+ * <p>MixinBooter's late loader is the answer to that: a class annotated
+ * {@link MixinLoader}, found through FML's annotation table, asked for its configs once
+ * the mod list is known. It also asks the right question — {@link Context} can be asked
+ * whether a mod is present, so the config is queued only when there is something for it
+ * to attach to.
  *
- * <p>The mechanism that does work is this one, which is what every mod in a GTNH-shaped
- * pack that mixes into another mod uses: a class annotated {@link LateMixin}, found
- * through FML's annotation table, asked for its config once the mod list is known.
- * GTNHMixins adds the config and then forces the select-and-prepare pass by hand, which
- * is the step the two approaches above are each missing one half of.
- *
- * <p>It also asks the right question. {@link #getMixins} is handed the set of loaded
- * mods, so a mixin is offered only when the mod it aims at is actually installed —
- * rather than being registered and left to fail politely.
+ * <p>One config for all of them, unlike the 1.7.10 branch, where the loader interface
+ * takes a mixin list and can name them one at a time. Here the granularity is the
+ * config, so the mixins inside it carry their own guards instead: each is
+ * {@code @Pseudo} or names its target by string, and each is written to apply to
+ * nothing quietly when its mod is absent.
  */
-@LateMixin
+// Deprecated in MixinBooter in favour of a config queued at mod-load time, which is
+// no use to us for the same reason UkyCore's early loader is not deprecated away: a
+// config that arrives that late has already missed the classes it targets. Suppressed
+// rather than worked around, exactly as UkyCore does.
+@SuppressWarnings("deprecation")
+@MixinLoader
 public class LateMixins implements ILateMixinLoader {
 
-    /** The config itself declares no mixins; the list below is the whole of it. */
-    @Override
-    public String getMixinConfig() {
-        return "mixins.uky.mods.client.json";
-    }
+    /** Mods this config has something to say about. */
+    private static final String[] TARGETS = {
+        // Waila (HWYLA on this version) — the block tooltip's panel and its filter.
+        "waila",
+        // CodeChickenLib, which is where NEI routes every item tooltip through.
+        "codechickenlib", "nei", "notenoughitems",
+        // The quest book: its notices, and its own copy of the tooltip code.
+        "betterquesting",
+    };
 
     @Override
-    public List<String> getMixins(Set<String> loadedMods) {
-        List<String> mixins = new ArrayList<String>();
-        // Every screen and overlay this mod restyles is client-side; a dedicated
-        // server has nothing here to apply.
+    public List<String> getMixinConfigs() {
+        return Collections.singletonList("mixins.uky.mods.client.json");
+    }
+
+    /**
+     * Whether any of the mods this config is for is installed.
+     *
+     * Every screen and overlay it restyles is client-side, so a dedicated server is
+     * told no outright.
+     */
+    @Override
+    public boolean shouldMixinConfigQueue(Context context) {
         if (!FMLLaunchHandler.side().isClient()) {
-            return mixins;
+            return false;
         }
-        // "Waila" with the capital, which is what its mcmod.info declares — matched
-        // loosely all the same, because a fork is free to disagree about the capital
-        // and nothing else about this depends on getting it exactly right.
-        if (isLoaded(loadedMods, "Waila")) {
-            mixins.add("MixinWailaOverlay");
-        }
-        // CodeChickenLib is not a mod and has no id of its own — it is a library
-        // shipped inside CodeChickenCore, which is what NEI loads it for. Either id
-        // means its classes are on the classpath, and NEI is the reason this matters:
-        // it routes every item tooltip through them. See MixinCclTooltip.
-        if (isLoaded(loadedMods, "CodeChickenCore") || isLoaded(loadedMods, "NotEnoughItems")) {
-            mixins.add("MixinCclTooltip");
-        }
-        // The quest book keeps its own copy of vanilla's tooltip code, so it is the one
-        // place neither of the hooks above can reach. See MixinBqTooltip.
-        if (isLoaded(loadedMods, "betterquesting")) {
-            mixins.add("MixinBqTooltip");
-            mixins.add("MixinBqNotice");
-        }
-        return mixins;
-    }
-
-    private static boolean isLoaded(Set<String> loadedMods, String modId) {
-        for (String loaded : loadedMods) {
-            if (modId.equalsIgnoreCase(loaded)) {
+        for (int i = 0; i < TARGETS.length; i++) {
+            if (context.isModPresent(TARGETS[i])) {
                 return true;
             }
         }

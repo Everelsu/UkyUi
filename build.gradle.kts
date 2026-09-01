@@ -227,6 +227,7 @@ tasks.named<Jar>("jar").configure {
 // nobody reads.
 tasks.named<JavaCompile>("compileJava").configure {
     options.compilerArgs.addAll(listOf("-Xlint:deprecation"))
+}
 
 // ---- Release: Modrinth and CurseForge ----
 //

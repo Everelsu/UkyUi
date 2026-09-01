@@ -4,25 +4,12 @@ import com.console.uky.client.gui.AchievementLinks;
 import com.console.uky.client.gui.CommandLine;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
-import com.google.common.base.Splitter;
-import com.google.common.collect.Lists;
 import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.event.HoverEvent;
-import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.JsonToNBT;
-import net.minecraft.nbt.NBTBase;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.stats.Achievement;
-import net.minecraft.stats.StatBase;
-import net.minecraft.stats.StatList;
-import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.EnumChatFormatting;
-import net.minecraft.util.IChatComponent;
+import net.minecraft.util.text.ITextComponent;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -92,10 +79,13 @@ public class GuiUkyChat extends GuiChat {
             line.drawSuggestions(mouseX, mouseY);
         }
 
-        IChatComponent hovered =
-                this.mc.ingameGUI.getChatGUI().func_146236_a(Mouse.getX(), Mouse.getY());
-        if (hovered != null && hovered.getChatStyle().getChatHoverEvent() != null) {
-            drawHover(hovered.getChatStyle().getChatHoverEvent(), mouseX, mouseY);
+        ITextComponent hovered =
+                this.mc.ingameGUI.getChatGUI().getChatComponent(Mouse.getX(), Mouse.getY());
+        if (hovered != null && hovered.getStyle().getHoverEvent() != null) {
+            // 1.12 draws every kind of hover itself — item, entity and text — so there
+            // is nothing here to reproduce. 1.7.10 had no such method, which is why
+            // this screen used to carry a copy of all three.
+            this.handleComponentHover(hovered, mouseX, mouseY);
             GL11.glDisable(GL11.GL_LIGHTING);
         }
         // GuiScreen.drawScreen draws buttons and labels; this screen has neither, and
@@ -111,7 +101,7 @@ public class GuiUkyChat extends GuiChat {
      * which is the behaviour being replaced rather than one to fall back on.
      */
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         CommandLine line = commandLine();
         if (line != null && line.keyTyped(typedChar, keyCode)) {
             return;
@@ -133,7 +123,7 @@ public class GuiUkyChat extends GuiChat {
      * else to show them, and this now has somewhere.
      */
     @Override
-    public void func_146406_a(String[] suggestions) {
+    public void setCompletions(String... suggestions) {
         CommandLine line = commandLine();
         if (line != null) {
             line.onServerSuggestions(suggestions);
@@ -141,12 +131,11 @@ public class GuiUkyChat extends GuiChat {
     }
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         CommandLine line = commandLine();
         int wheel = Mouse.getEventDWheel();
         if (wheel != 0 && line != null && line.isOpen()) {
-            ScaledResolution res = new ScaledResolution(this.mc,
-                    this.mc.displayWidth, this.mc.displayHeight);
+            ScaledResolution res = new ScaledResolution(this.mc);
             int mouseX = Mouse.getEventX() * res.getScaledWidth() / this.mc.displayWidth;
             int mouseY = res.getScaledHeight()
                     - Mouse.getEventY() * res.getScaledHeight() / this.mc.displayHeight - 1;
@@ -201,88 +190,28 @@ public class GuiUkyChat extends GuiChat {
         int max = this.inputField == null ? 100 : this.inputField.getMaxStringLength();
         if (text.length() > max - 30) {
             String left = String.valueOf(max - text.length());
-            int width = this.fontRendererObj.getStringWidth(left);
+            int width = this.fontRenderer.getStringWidth(left);
             // Above the bar rather than inside it: a long line has already scrolled to
             // fill the box, so anything drawn in there lands on top of the text it is
             // counting. The strip above is empty — the chat's own lines stop higher.
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            this.fontRendererObj.drawString(left, (int) (x2 - 2 - width), (int) (y1 - 10),
+            this.fontRenderer.drawString(left, (int) (x2 - 2 - width), (int) (y1 - 10),
                     Draw.withAlpha(text.length() >= max ? Theme.danger : Theme.textDim, 0.75F));
         }
     }
 
-    /**
-     * The three hover kinds chat carries, reproduced from {@link GuiChat}.
-     *
-     * Item hovers are wrapped: the NBT in one comes off the network as text, and a
-     * malformed one should show nothing rather than take the chat screen down.
-     */
-    private void drawHover(HoverEvent hover, int mouseX, int mouseY) {
-        if (hover.getAction() == HoverEvent.Action.SHOW_ITEM) {
-            ItemStack stack = null;
-            try {
-                NBTBase parsed = JsonToNBT.func_150315_a(hover.getValue().getUnformattedText());
-                if (parsed instanceof NBTTagCompound) {
-                    stack = ItemStack.loadItemStackFromNBT((NBTTagCompound) parsed);
-                }
-            } catch (Throwable t) {
-                stack = null;
-            }
-            if (stack != null) {
-                this.renderToolTip(stack, mouseX, mouseY);
-            } else {
-                this.drawCreativeTabHoveringText(EnumChatFormatting.RED + "Invalid Item!",
-                        mouseX, mouseY);
-            }
-            return;
-        }
-
-        if (hover.getAction() == HoverEvent.Action.SHOW_TEXT) {
-            this.func_146283_a(Splitter.on("\n").splitToList(
-                    hover.getValue().getFormattedText()), mouseX, mouseY);
-            return;
-        }
-
-        if (hover.getAction() != HoverEvent.Action.SHOW_ACHIEVEMENT) {
-            return;
-        }
-        StatBase stat = StatList.func_151177_a(hover.getValue().getUnformattedText());
-        if (stat == null) {
-            this.drawCreativeTabHoveringText(
-                    EnumChatFormatting.RED + "Invalid statistic/achievement!", mouseX, mouseY);
-            return;
-        }
-        ChatComponentTranslation kind = new ChatComponentTranslation(
-                "stats.tooltip.type." + (stat.isAchievement() ? "achievement" : "statistic"),
-                new Object[0]);
-        kind.getChatStyle().setItalic(Boolean.TRUE);
-        List<String> lines = Lists.newArrayList(
-                stat.func_150951_e().getFormattedText(), kind.getFormattedText());
-        if (stat instanceof Achievement) {
-            String description = ((Achievement) stat).getDescription();
-            if (description != null) {
-                lines.addAll(new ArrayList<String>(
-                        this.fontRendererObj.listFormattedStringToWidth(description, 150)));
-            }
-        }
-        // One more line than vanilla shows, because this tooltip now has somewhere to
-        // go and nothing else says so.
-        lines.add(EnumChatFormatting.DARK_GRAY
-                + net.minecraft.client.resources.I18n.format("uky.achievement.open", new Object[0]));
-        this.func_146283_a(lines, mouseX, mouseY);
-    }
 
     @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) {
+    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws java.io.IOException {
         // The completion box is on top of everything else here, so it is asked first.
         CommandLine line = commandLine();
         if (line != null && line.mouseClicked(mouseX, mouseY, mouseButton)) {
             return;
         }
         if (mouseButton == 0 && !isShiftKeyDown()) {
-            IChatComponent clicked =
-                    this.mc.ingameGUI.getChatGUI().func_146236_a(Mouse.getX(), Mouse.getY());
+            ITextComponent clicked =
+                    this.mc.ingameGUI.getChatGUI().getChatComponent(Mouse.getX(), Mouse.getY());
             if (AchievementLinks.handleClick(clicked)) {
                 return;
             }

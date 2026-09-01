@@ -257,12 +257,12 @@ public class GuiShaderOptionsScreen extends MenuScreen {
     /** The same sky the pack list sits on, and for the same reason. */
     @Override
     protected boolean isStarfieldOnly() {
-        return this.mc.theWorld == null;
+        return this.mc.world == null;
     }
 
     @Override
     protected void drawBackdrop() {
-        if (this.mc.theWorld == null) {
+        if (this.mc.world == null) {
             super.drawBackdrop();
             return;
         }
@@ -272,7 +272,7 @@ public class GuiShaderOptionsScreen extends MenuScreen {
 
     @Override
     protected void drawOverlay() {
-        if (this.mc.theWorld != null) {
+        if (this.mc.world != null) {
             Draw.vignette(this.width, this.height, 0.5F * this.fadeAlpha, 0xFF000000);
             return;
         }
@@ -290,7 +290,7 @@ public class GuiShaderOptionsScreen extends MenuScreen {
         String heading = this.screenId == null
                 ? ShaderPacks.selected()
                 : ShaderOptions.pageTitle(this.screenId);
-        this.fontRendererObj.drawString(fit(heading, this.panelX2 - this.panelX1
+        this.fontRenderer.drawString(fit(heading, this.panelX2 - this.panelX1
                         - this.padding * 2 - 60).toUpperCase(),
                 this.panelX1 + this.padding, this.panelY1 + 14,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
@@ -298,8 +298,8 @@ public class GuiShaderOptionsScreen extends MenuScreen {
         // What is waiting to be compiled, said in the one place the eye already is.
         if (ShaderOptions.pending()) {
             String note = I18n.format("uky.shaderPacks.pending", new Object[0]);
-            this.fontRendererObj.drawString(note,
-                    this.panelX2 - this.padding - this.fontRendererObj.getStringWidth(note),
+            this.fontRenderer.drawString(note,
+                    this.panelX2 - this.padding - this.fontRenderer.getStringWidth(note),
                     this.panelY1 + 14,
                     Draw.withAlpha(Theme.accent, 0.9F * this.fadeAlpha));
         }
@@ -328,7 +328,7 @@ public class GuiShaderOptionsScreen extends MenuScreen {
                 continue;
             }
             ShaderOptions.Entry entry = this.rows.get(i);
-            float cy = widget.yPosition + widget.height / 2.0F;
+            float cy = widget.y + widget.height / 2.0F;
             if (entry.kind() == ShaderOptions.Kind.LINK) {
                 Icons.forward(this.panelX2 - this.padding - 7, cy, 8,
                         Draw.withAlpha(Theme.accent, 0.8F * this.fadeAlpha));
@@ -356,21 +356,21 @@ public class GuiShaderOptionsScreen extends MenuScreen {
             if (!widget.visible || this.rows.get(i).comment() == null) {
                 continue;
             }
-            if (this.mouseX < widget.xPosition || this.mouseX > widget.xPosition + widget.width
-                    || this.mouseY < widget.yPosition
-                    || this.mouseY > widget.yPosition + widget.height) {
+            if (this.mouseX < widget.x || this.mouseX > widget.x + widget.width
+                    || this.mouseY < widget.y
+                    || this.mouseY > widget.y + widget.height) {
                 continue;
             }
             int width = this.panelX2 - this.panelX1 - this.padding * 2;
             // Wrapped, not cut. The last line is elided only when the description is
             // longer than the room reserved for it, and then it is elided at the end of
             // that line rather than at the end of the first.
-            java.util.List<String> lines = this.fontRendererObj
+            java.util.List<String> lines = this.fontRenderer
                     .listFormattedStringToWidth(this.rows.get(i).comment(), width);
             for (int line = 0; line < lines.size() && line < this.commentLines; line++) {
                 String text = lines.get(line);
                 boolean last = line == this.commentLines - 1 && lines.size() > this.commentLines;
-                this.fontRendererObj.drawString(last ? fit(text + " ...", width) : text,
+                this.fontRenderer.drawString(last ? fit(text + " ...", width) : text,
                         this.panelX1 + this.padding, this.commentTop + line * LINE_HEIGHT,
                         Draw.withAlpha(Theme.textDim, 0.9F * this.fadeAlpha));
             }
@@ -409,9 +409,9 @@ public class GuiShaderOptionsScreen extends MenuScreen {
         int offset = Math.round(this.scroll);
         for (int i = 0; i < this.widgets.size(); i++) {
             MenuButton widget = this.widgets.get(i);
-            widget.yPosition = this.nominalY.get(i).intValue() - offset;
-            widget.visible = widget.yPosition >= this.contentTop
-                    && widget.yPosition + widget.height <= this.commentTop - 4;
+            widget.y = this.nominalY.get(i).intValue() - offset;
+            widget.visible = widget.y >= this.contentTop
+                    && widget.y + widget.height <= this.commentTop - 4;
         }
     }
 
@@ -434,7 +434,7 @@ public class GuiShaderOptionsScreen extends MenuScreen {
     // ----------------------------------------------------------------- input --
 
     @Override
-    public void handleMouseInput() {
+    public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int wheel = org.lwjgl.input.Mouse.getEventDWheel();
         if (wheel == 0 || maxScroll() <= 0.5F) {
@@ -492,7 +492,7 @@ public class GuiShaderOptionsScreen extends MenuScreen {
      * pack, and that is where it is.
      */
     @Override
-    protected void keyTyped(char typedChar, int keyCode) {
+    protected void keyTyped(char typedChar, int keyCode) throws java.io.IOException {
         if (keyCode == 1) {
             switchBack();
             return;

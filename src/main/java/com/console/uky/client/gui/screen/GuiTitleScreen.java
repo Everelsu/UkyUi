@@ -764,7 +764,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         GL11.glPopMatrix();
 
         loose.update(this.delta, this.holeCenterX, this.holeCenterY, this.holeRadius);
-        loose.draw(this.fontRendererObj, this.contentAlpha);
+        loose.draw(this.fontRenderer, this.contentAlpha);
 
         // Accent rule under the wordmark, growing outwards from the centre.
         float grow = Ease.outCubic((this.elapsed - 0.25F) / 0.8F);

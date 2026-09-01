@@ -3,5 +3,13 @@
   "minVersion": "0.8",
   "compatibilityLevel": "JAVA_8",
   "package": "com.console.uky.mixins.mods",
-  "target": "@env(DEFAULT)"
+  "target": "@env(DEFAULT)",
+  "mixins": [],
+  "client": [
+    "MixinBqNotice",
+    "MixinBqTooltip",
+    "MixinCclTooltip",
+    "MixinWailaOverlay"
+  ],
+  "server": []
 }

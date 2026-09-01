@@ -1,15 +1,18 @@
 package com.console.uky.client.gui;
 
+import net.minecraft.advancements.Advancement;
+import net.minecraft.client.Minecraft;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.ICommandSender;
+import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.client.ClientCommandHandler;
 
 /**
- * The other end of an achievement link in chat.
+ * The other end of an advancement link in chat.
  *
  * Registered with Forge's client command handler, which means it is dispatched from
  * {@code EntityClientPlayerMP.sendChatMessage} before anything is sent anywhere — so
- * a click on one of our chat lines opens the achievements list and the server never
+ * a click on one of our chat lines opens the advancements list and the server never
  * hears about it. That is also what makes the link independent of which chat screen
  * is installed: every one of them ends up sending the command the same way.
  *
@@ -35,7 +38,7 @@ public final class AchievementCommand extends CommandBase {
     }
 
     @Override
-    public String getCommandName() {
+    public String getName() {
         return NAME;
     }
 
@@ -43,8 +46,8 @@ public final class AchievementCommand extends CommandBase {
     private static final String PREVIEW = "demo";
 
     @Override
-    public String getCommandUsage(ICommandSender sender) {
-        return "/" + NAME + " <achievement id|" + PREVIEW + ">";
+    public String getUsage(ICommandSender sender) {
+        return "/" + NAME + " <advancement id|" + PREVIEW + ">";
     }
 
     /**
@@ -57,12 +60,12 @@ public final class AchievementCommand extends CommandBase {
      * "You do not have permission to use this command".
      */
     @Override
-    public boolean canCommandSenderUseCommand(ICommandSender sender) {
+    public boolean checkPermission(MinecraftServer server, ICommandSender sender) {
         return true;
     }
 
     @Override
-    public void processCommand(ICommandSender sender, String[] args) {
+    public void execute(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 1) {
             return;
         }
@@ -71,16 +74,44 @@ public final class AchievementCommand extends CommandBase {
         // It is worth a line of code for one reason: the popup lasts four seconds and
         // happens when the player is doing something else, so the only way to judge
         // the animation — or to see a change to it — is to be able to ask for one.
-        // Taking a second argument would be a way to preview any given achievement,
+        // Taking a second argument would be a way to preview any given advancement,
         // and is deliberately not offered: /ukyach <id> already exists and would then
         // mean two different things depending on a word.
         if (PREVIEW.equalsIgnoreCase(args[0])) {
-            AchievementToast.show(net.minecraft.stats.AchievementList.openInventory);
+            AchievementToast.show(anyAdvancement());
             return;
         }
         // Silent when the id is unknown. It can only be unknown if a pack removed the
-        // achievement between the line being written and it being clicked, and a chat
+        // advancement between the line being written and it being clicked, and a chat
         // error about an internal id would explain nothing to whoever clicked it.
         AchievementLinks.open(args[0]);
+    }
+
+    /**
+     * Something to show the popup with.
+     *
+     * 1.7.10 had a constant to hand — {@code AchievementList.openInventory}, the
+     * inventory achievement every game has. Advancements are data, so there is no such
+     * constant and no advancement this code can be sure exists; the first one the
+     * client knows about that has anything to draw is as good as any, and there is
+     * nothing to preview on a client that knows none.
+     */
+    private static Advancement anyAdvancement() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.player == null || mc.player.connection == null) {
+            return null;
+        }
+        try {
+            for (Advancement candidate
+                    : mc.player.connection.getAdvancementManager()
+                            .getAdvancementList().getAdvancements()) {
+                if (candidate.getDisplay() != null) {
+                    return candidate;
+                }
+            }
+        } catch (Throwable t) {
+            return null;
+        }
+        return null;
     }
 }
