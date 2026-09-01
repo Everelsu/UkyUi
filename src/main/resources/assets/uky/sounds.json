@@ -27,7 +27,7 @@
   "achievement": {
     "category": "master",
     "sounds": [
-      { "name": "achivement_bass", "stream": false }
+      { "name": "uky:achivement_bass", "stream": false }
     ]
   },
   "heartbeat": {

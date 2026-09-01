@@ -1,5 +1,6 @@
 package com.console.uky.client.render;
 
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.BufferBuilder;
@@ -19,6 +20,19 @@ import org.lwjgl.opengl.GL11;
  *
  * Every method leaves the GL state as it found it (texturing enabled, blending
  * disabled, color white), so callers can mix these freely with vanilla drawing.
+ *
+ * <p><b>State goes through {@code GlStateManager}, never through {@code GL11}.</b>
+ * 1.7.10 had no such class — vanilla called GL11 directly and so did this — but 1.12
+ * caches every one of those states, and a raw call leaves the cache asserting the
+ * opposite of the truth. The next {@code GlStateManager.enableTexture2D()} anywhere in
+ * the game then does nothing, because the cache believes textures are already on, and
+ * something unrelated renders wrong several frames later. That is what took the item
+ * tooltips out: ours drew with the texture and lighting state the game did not know
+ * about, and vanilla's own tooltip drew over the top with its own.
+ *
+ * <p>Vertices ({@code glBegin}/{@code glVertex}/{@code glEnd}), the scissor box and the
+ * matrix stack stay on GL11 deliberately: none of them is cached, so a raw call there
+ * cannot desync anything.
  */
 public final class Draw {
 
@@ -28,10 +42,10 @@ public final class Draw {
     // ---------------------------------------------------------------- state --
 
     private static void beginShapes() {
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glShadeModel(GL11.GL_SMOOTH);
+        GlStateManager.disableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
 
         // Face culling has to go, and it is not optional.
         //
@@ -45,23 +59,23 @@ public final class Draw {
         // Alpha testing goes for the same reason: the world render leaves it on with
         // a threshold of 0.1, and the soft glows here are deliberately fainter than
         // that, so they were being thrown away a fragment at a time.
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glDisable(GL11.GL_ALPHA_TEST);
+        GlStateManager.disableCull();
+        GlStateManager.disableAlpha();
     }
 
     private static void endShapes() {
-        GL11.glShadeModel(GL11.GL_FLAT);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GlStateManager.shadeModel(GL11.GL_FLAT);
+        GlStateManager.disableBlend();
+        GlStateManager.enableTexture2D();
         // Alpha testing is put back because vanilla's own widget and font drawing
         // relies on it. Culling is not: 2D drawing never wants it, and the world
         // renderer turns it back on itself every frame.
-        GL11.glEnable(GL11.GL_ALPHA_TEST);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.enableAlpha();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private static void color(int argb) {
-        GL11.glColor4f(
+        GlStateManager.color(
                 (argb >> 16 & 0xFF) / 255.0F,
                 (argb >> 8 & 0xFF) / 255.0F,
                 (argb & 0xFF) / 255.0F,
@@ -361,15 +375,15 @@ public final class Draw {
                                     float halfW, float halfH, float degrees,
                                     float u1, float v1, float u2, float v2, int argb) {
         Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_CULL_FACE);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableCull();
         color(argb);
 
-        GL11.glPushMatrix();
-        GL11.glTranslatef(cx, cy, 0.0F);
-        GL11.glRotatef(degrees, 0.0F, 0.0F, 1.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(cx, cy, 0.0F);
+        GlStateManager.rotate(degrees, 0.0F, 0.0F, 1.0F);
 
         Tessellator t = Tessellator.getInstance();
         BufferBuilder b = t.getBuffer();
@@ -380,9 +394,9 @@ public final class Draw {
         b.pos(-halfW, -halfH, 0.0D).tex(u1, v1).endVertex();
         t.draw();
 
-        GL11.glPopMatrix();
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.popMatrix();
+        GlStateManager.disableBlend();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     /**
@@ -405,11 +419,11 @@ public final class Draw {
                                        float x3, float y3, float u3, float v3,
                                        int argb) {
         Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         // Shards tumble, so half of them are wound the other way by the time they land.
-        GL11.glDisable(GL11.GL_CULL_FACE);
+        GlStateManager.disableCull();
         color(argb);
 
         Tessellator t = Tessellator.getInstance();
@@ -420,15 +434,15 @@ public final class Draw {
         b.pos(x3, y3, 0.0D).tex(u3, v3).endVertex();
         t.draw();
 
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.disableBlend();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     public static void texture(ResourceLocation tex, float x, float y, float w, float h, int argb) {
         Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         color(argb);
 
         Tessellator t = Tessellator.getInstance();
@@ -440,8 +454,8 @@ public final class Draw {
         b.pos(x, y, 0.0D).tex(0.0D, 0.0D).endVertex();
         t.draw();
 
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.disableBlend();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     /**
@@ -464,9 +478,9 @@ public final class Draw {
         float v0 = (1.0F - vSpan) * 0.5F * (1.0F + panY);
 
         Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         color(argb);
 
         Tessellator t = Tessellator.getInstance();
@@ -478,8 +492,8 @@ public final class Draw {
         b.pos(x, y, 0.0D).tex(u0, v0).endVertex();
         t.draw();
 
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.disableBlend();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     // --------------------------------------------------------------- effects --
@@ -546,13 +560,13 @@ public final class Draw {
 
     /** Scales around ({@code cx}, {@code cy}); pair with {@link #popScale()}. */
     public static void pushScale(float cx, float cy, float scale) {
-        GL11.glPushMatrix();
-        GL11.glTranslatef(cx, cy, 0.0F);
-        GL11.glScalef(scale, scale, 1.0F);
-        GL11.glTranslatef(-cx, -cy, 0.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(cx, cy, 0.0F);
+        GlStateManager.scale(scale, scale, 1.0F);
+        GlStateManager.translate(-cx, -cy, 0.0F);
     }
 
     public static void popScale() {
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
     }
 }

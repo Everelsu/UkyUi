@@ -3,6 +3,7 @@ package com.console.uky.client.gui;
 import com.console.uky.UkyUI;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiTextField;
@@ -384,7 +385,13 @@ public final class CommandLine {
     }
 
     private int wordStart() {
-        return this.field.getNthWordFromPos(-1, this.field.getCursorPosition());
+        // The whitespace-aware form, with skipping off — which is the one vanilla's own
+        // completer uses, and the difference is the whole of why this looked broken.
+        // getNthWordFromPos skips whitespace before it starts counting, so with the
+        // cursor after "/give " it walked back over the space and answered "give":
+        // every request asked the server to complete the word already typed instead of
+        // the empty argument after it, so the box never moved on to the next one.
+        return this.field.getNthWordFromPosWS(-1, this.field.getCursorPosition(), false);
     }
 
     private void apply(String suggestion) {
@@ -418,8 +425,8 @@ public final class CommandLine {
 
         drawSelection(text, offset, visibleEnd, x, y);
 
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         List<Span> spans = spans(text);
         for (int i = 0; i < spans.size(); i++) {
             Span span = spans.get(i);
@@ -563,8 +570,8 @@ public final class CommandLine {
                         Draw.withAlpha(Theme.text, 0.07F));
             }
 
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             String entry = this.shown.get(index);
             // The part already typed is dimmed and the part being offered is not, so
             // the box shows what it is about to add rather than what is already there.

@@ -12,6 +12,7 @@ import com.console.uky.client.render.UkyFontRenderer;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.FontRenderer;
@@ -440,8 +441,8 @@ public abstract class MenuScreen extends GuiScreen {
         // that knows what a screen coordinate means in our units.
         comets.pointer(localX, localY);
         Draw.setClipScale(this.uiScaleFactor);
-        GL11.glPushMatrix();
-        GL11.glScalef(this.uiScaleX, this.uiScaleY, 1.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(this.uiScaleX, this.uiScaleY, 1.0F);
         // Text in this mod's screens gets a shadow under it, which is what the rest of the
         // game has and what these screens were missing everywhere. Turned on here and off
         // in the finally below, because it changes what the plain drawString means: left
@@ -476,7 +477,7 @@ public abstract class MenuScreen extends GuiScreen {
             // above would otherwise leave every string in the game shadowed for the rest
             // of the session, from a screen that is no longer even on top.
             UkyFontRenderer.setShadowed(false);
-            GL11.glPopMatrix();
+            GlStateManager.popMatrix();
             Draw.clearClipScale();
         }
     }

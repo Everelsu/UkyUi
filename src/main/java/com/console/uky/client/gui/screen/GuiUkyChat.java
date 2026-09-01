@@ -4,6 +4,7 @@ import com.console.uky.client.gui.AchievementLinks;
 import com.console.uky.client.gui.CommandLine;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.text.ITextComponent;
@@ -86,7 +87,7 @@ public class GuiUkyChat extends GuiChat {
             // is nothing here to reproduce. 1.7.10 had no such method, which is why
             // this screen used to carry a copy of all three.
             this.handleComponentHover(hovered, mouseX, mouseY);
-            GL11.glDisable(GL11.GL_LIGHTING);
+            GlStateManager.disableLighting();
         }
         // GuiScreen.drawScreen draws buttons and labels; this screen has neither, and
         // GuiChat's own is what we are replacing — so there is nothing left to call.
@@ -194,8 +195,8 @@ public class GuiUkyChat extends GuiChat {
             // Above the bar rather than inside it: a long line has already scrolled to
             // fill the box, so anything drawn in there lands on top of the text it is
             // counting. The strip above is empty — the chat's own lines stop higher.
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             this.fontRenderer.drawString(left, (int) (x2 - 2 - width), (int) (y1 - 10),
                     Draw.withAlpha(text.length() >= max ? Theme.danger : Theme.textDim, 0.75F));
         }

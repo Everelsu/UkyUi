@@ -5,6 +5,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import net.minecraftforge.fml.client.GuiNotification;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.LoadingScreenRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
@@ -205,15 +206,15 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
                 resolution.getScaledHeight_double(), 0.0D, 100.0D, 300.0D);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
-        GL11.glTranslatef(0.0F, 0.0F, -200.0F);
+        GlStateManager.translate(0.0F, 0.0F, -200.0F);
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 
-        GL11.glDisable(GL11.GL_LIGHTING);
+        GlStateManager.disableLighting();
         GL11.glDisable(GL11.GL_FOG);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.disableDepth();
+        GlStateManager.disableCull();
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 
         int mouseX = Mouse.getX() * width / this.mc.displayWidth;
         int mouseY = height - Mouse.getY() * height / this.mc.displayHeight - 1;
@@ -291,16 +292,16 @@ public class UkyLoadingScreen extends LoadingScreenRenderer {
                 resolution.getScaledHeight_double(), 0.0D, 100.0D, 300.0D);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glLoadIdentity();
-        GL11.glTranslatef(0.0F, 0.0F, -200.0F);
+        GlStateManager.translate(0.0F, 0.0F, -200.0F);
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT);
 
         // Nothing else has set this state up: there is no render tick here.
-        GL11.glDisable(GL11.GL_LIGHTING);
+        GlStateManager.disableLighting();
         GL11.glDisable(GL11.GL_FOG);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.disableDepth();
+        GlStateManager.disableCull();
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 
         drawContents(width, height, progress);
 

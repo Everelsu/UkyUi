@@ -7,6 +7,7 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.gui.GuiGameOver;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.resources.I18n;
@@ -385,9 +386,9 @@ public class GuiDeathScreen extends GuiGameOver {
         float split = (2.4F * (1.0F - in) + 0.5F + this.pulse * 0.8F + exit * 14.0F)
                 * theme.jitter * Math.max(0.35F, intensity);
 
-        GL11.glPushMatrix();
-        GL11.glTranslatef(centerX + this.sampledShake, centerY, 0.0F);
-        GL11.glScalef(scale, scale, 1.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(centerX + this.sampledShake, centerY, 0.0F);
+        GlStateManager.scale(scale, scale, 1.0F);
         int half = this.fontRenderer.getStringWidth(title) / 2;
 
         // The channel copies are faint: they are a fringe on the white, not two more
@@ -397,7 +398,7 @@ public class GuiDeathScreen extends GuiGameOver {
         this.fontRenderer.drawString(shown, (int) (-half + split), 0,
                 Draw.withAlpha(theme.chromaCyan, 0.45F * in));
         this.fontRenderer.drawString(shown, -half, 0, Draw.withAlpha(Theme.text, in));
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
 
         // The rule under it opens outwards from the centre, the same gesture every
         // heading in this interface uses.

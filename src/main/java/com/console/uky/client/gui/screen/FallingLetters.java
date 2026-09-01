@@ -2,6 +2,7 @@ package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.gui.FontRenderer;
 import org.lwjgl.opengl.GL11;
 
@@ -167,16 +168,16 @@ final class FallingLetters {
             String glyph = String.valueOf(letter.glyph);
             int width = font.getCharWidth(letter.glyph);
 
-            GL11.glPushMatrix();
-            GL11.glTranslatef(letter.x, letter.y, 0.0F);
-            GL11.glRotatef(letter.spin, 0.0F, 0.0F, 1.0F);
-            GL11.glScalef(letter.scale, letter.scale, 1.0F);
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(letter.x, letter.y, 0.0F);
+            GlStateManager.rotate(letter.spin, 0.0F, 0.0F, 1.0F);
+            GlStateManager.scale(letter.scale, letter.scale, 1.0F);
             // Drawn about its own centre, so it spins on the spot instead of orbiting
             // its top-left corner.
             font.drawString(glyph, -width / 2, -4,
                     Draw.withAlpha(Theme.text, alpha), false);
-            GL11.glPopMatrix();
+            GlStateManager.popMatrix();
         }
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 }

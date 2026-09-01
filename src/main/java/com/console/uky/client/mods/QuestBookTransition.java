@@ -6,6 +6,7 @@ import com.console.uky.client.render.Theme;
 import com.console.uky.config.UiConfig;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
@@ -154,28 +155,28 @@ public final class QuestBookTransition {
         int height = resolution.getScaledHeight();
 
         GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPushMatrix();
+        GlStateManager.pushMatrix();
         GL11.glLoadIdentity();
         GL11.glOrtho(0.0D, width, height, 0.0D, 1000.0D, 3000.0D);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glPushMatrix();
+        GlStateManager.pushMatrix();
         GL11.glLoadIdentity();
-        GL11.glTranslatef(0.0F, 0.0F, -2000.0F);
+        GlStateManager.translate(0.0F, 0.0F, -2000.0F);
 
         boolean depth = GL11.glGetBoolean(GL11.GL_DEPTH_TEST);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(false);
+        GlStateManager.disableDepth();
+        GlStateManager.depthMask(false);
 
         Draw.rect(0, 0, width, height, Draw.withAlpha(Theme.background, alpha));
 
-        GL11.glDepthMask(true);
+        GlStateManager.depthMask(true);
         if (depth) {
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GlStateManager.enableDepth();
         }
         GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
     }
 
     /**

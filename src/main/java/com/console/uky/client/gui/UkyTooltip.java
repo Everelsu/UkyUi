@@ -3,6 +3,7 @@ package com.console.uky.client.gui;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.UiConfig;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.renderer.RenderHelper;
@@ -158,24 +159,24 @@ public final class UkyTooltip {
 
         // The state vanilla's own tooltip sets up, because this is drawn in its place
         // and whatever called it expects to get it back the way vanilla left it.
-        GL11.glDisable(GL12.GL_RESCALE_NORMAL);
+        GlStateManager.disableRescaleNormal();
         RenderHelper.disableStandardItemLighting();
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
+        GlStateManager.disableLighting();
+        GlStateManager.disableDepth();
 
-        GL11.glPushMatrix();
-        GL11.glTranslatef(boxX, boxY, 0.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(boxX, boxY, 0.0F);
         if (scale != 1.0F) {
-            GL11.glScalef(scale, scale, 1.0F);
+            GlStateManager.scale(scale, scale, 1.0F);
         }
         try {
             drawBox(font, text, width, height);
         } finally {
-            GL11.glPopMatrix();
-            GL11.glEnable(GL11.GL_LIGHTING);
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GlStateManager.popMatrix();
+            GlStateManager.enableLighting();
+            GlStateManager.enableDepth();
             RenderHelper.enableStandardItemLighting();
-            GL11.glEnable(GL12.GL_RESCALE_NORMAL);
+            GlStateManager.enableRescaleNormal();
         }
         return true;
     }
@@ -232,8 +233,8 @@ public final class UkyTooltip {
 
         drawPanel(0.0F, 0.0F, x2, height);
 
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
         int lineY = PAD_Y;
         for (int i = 0; i < text.size(); i++) {

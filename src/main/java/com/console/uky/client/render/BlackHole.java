@@ -3,6 +3,7 @@ package com.console.uky.client.render;
 import com.console.uky.UkyUI;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.BufferUtils;
@@ -295,18 +296,18 @@ public final class BlackHole {
         if (intensity <= 0.01F || starX == null) {
             return;
         }
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
-        GL11.glShadeModel(GL11.GL_SMOOTH);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
+        GlStateManager.disableTexture2D();
 
         drawStars(cx, cy, 0.0F, 0.0F, intensity);
 
-        GL11.glShadeModel(GL11.GL_FLAT);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.shadeModel(GL11.GL_FLAT);
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableBlend();
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     /** @param mirrored kept for callers that want the image flipped outright */
@@ -339,11 +340,11 @@ public final class BlackHole {
         }
         float shadow = radius * SHADOW_SCALE * warp;
 
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
-        GL11.glShadeModel(GL11.GL_SMOOTH);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
 
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GlStateManager.disableTexture2D();
         drawStars(cx, cy, shadow, shadow * 1.30F * warp, starIntensity);
 
         // Nothing at all until the resting pose lands, then the whole thing fades
@@ -367,14 +368,14 @@ public final class BlackHole {
             }
         }
 
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GlStateManager.disableTexture2D();
         drawInfall(cx, cy, shadow, intensity);
 
-        GL11.glShadeModel(GL11.GL_FLAT);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.shadeModel(GL11.GL_FLAT);
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableBlend();
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     // ---- shader path ---------------------------------------------------------
@@ -667,20 +668,20 @@ public final class BlackHole {
             // Inside the buffer the quad is the whole surface, so the projection is a
             // plain unit box rather than the GUI's ortho.
             GL11.glMatrixMode(GL11.GL_PROJECTION);
-            GL11.glPushMatrix();
+            GlStateManager.pushMatrix();
             GL11.glLoadIdentity();
             GL11.glOrtho(0.0D, 1.0D, 1.0D, 0.0D, -1.0D, 1.0D);
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glPushMatrix();
+            GlStateManager.pushMatrix();
             GL11.glLoadIdentity();
 
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
             // Intensity is applied on the way out, so the buffer's contents stay valid
             // whatever the screen is fading through — which is also what lets a trace
             // be reused across frames that only differ in brightness or position.
             bindShaderUniforms(1.0F);
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
             GL11.glBegin(GL11.GL_QUADS);
             GL11.glTexCoord2f(0.0F, 0.0F);
             GL11.glVertex2f(0.0F, 0.0F);
@@ -694,9 +695,9 @@ public final class BlackHole {
             ShaderProgram.unbind();
 
             GL11.glMatrixMode(GL11.GL_PROJECTION);
-            GL11.glPopMatrix();
+            GlStateManager.popMatrix();
             GL11.glMatrixMode(GL11.GL_MODELVIEW);
-            GL11.glPopMatrix();
+            GlStateManager.popMatrix();
             offscreen.end();
         } else if (!offscreen.matches(targetW, targetH)) {
             // The window changed under us; take the trace next frame rather than
@@ -714,8 +715,8 @@ public final class BlackHole {
         // something the eye can pick out.
         blend = blendProgress();
 
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableTexture2D();
+        GlStateManager.blendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
 
         ShaderProgram dissolve = dissolveProgram();
         boolean fading = blend < 0.999F && previous.hasContent()
@@ -738,7 +739,7 @@ public final class BlackHole {
             dissolve.set("uRingLift", ringLift(mc.displayWidth));
 
             GL13.glActiveTexture(GL13.GL_TEXTURE1);
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GlStateManager.enableTexture2D();
             offscreen.bindTexture();
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
             (fading ? previous : offscreen).bindTexture();
@@ -747,7 +748,7 @@ public final class BlackHole {
 
             GL13.glActiveTexture(GL13.GL_TEXTURE1);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GlStateManager.disableTexture2D();
             GL13.glActiveTexture(GL13.GL_TEXTURE0);
             ShaderProgram.unbind();
         } else {
@@ -755,7 +756,7 @@ public final class BlackHole {
             blitQuad(cx, cy, halfW, halfH, intensity);
         }
 
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
         return true;
     }
 
@@ -775,7 +776,7 @@ public final class BlackHole {
 
     /** Premultiplied quad covering the hole's rect. */
     private static void blitQuad(float cx, float cy, float halfW, float halfH, float alpha) {
-        GL11.glColor4f(alpha, alpha, alpha, alpha);
+        GlStateManager.color(alpha, alpha, alpha, alpha);
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2f(0.0F, 1.0F);
         GL11.glVertex2f(cx - halfW, cy - halfH);
@@ -811,9 +812,9 @@ public final class BlackHole {
 
         // Premultiplied: the shader returns emission already scaled by coverage, so
         // the shadow blocks the stars behind it while the disk adds light.
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.enableTexture2D();
+        GlStateManager.blendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
 
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glTexCoord2f(0.0F, 0.0F);
@@ -827,7 +828,7 @@ public final class BlackHole {
         GL11.glEnd();
 
         ShaderProgram.unbind();
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
     }
 
     private static void setColour(String name, int rgb) {
@@ -896,22 +897,22 @@ public final class BlackHole {
         float halfW = pose.getWidth() * 0.5F * scale;
         float halfH = pose.getHeight() * 0.5F * scale;
 
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GlStateManager.enableTexture2D();
 
         // Occlusion first, over the stars: this is what makes the shadow a hole
         // rather than a dark smudge painted on top of the sky.
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         pose.bindOcclusion();
-        GL11.glColor4f(0.0F, 0.0F, 0.0F, intensity);
+        GlStateManager.color(0.0F, 0.0F, 0.0F, intensity);
         blit(cx, cy, halfW, halfH, mirrored);
 
         // Emission on top, additive. Intensity is applied here rather than baked
         // into the texels: only one band is re-shaded per frame, so folding a
         // changing intensity into the pixels left the bands at different
         // brightnesses and the disk visibly striped and flickered while fading.
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
         pose.bindEmission();
-        GL11.glColor4f(intensity, intensity, intensity, 1.0F);
+        GlStateManager.color(intensity, intensity, intensity, 1.0F);
         blit(cx, cy, halfW, halfH, mirrored);
     }
 
@@ -1031,7 +1032,7 @@ public final class BlackHole {
         float nx = ux * size;
         float ny = uy * size;
 
-        GL11.glColor4f(0.72F + hue * 0.28F, 0.78F + hue * 0.20F, 1.0F, brightness);
+        GlStateManager.color(0.72F + hue * 0.28F, 0.78F + hue * 0.20F, 1.0F, brightness);
         GL11.glVertex2f(x - tx - nx, y - ty - ny);
         GL11.glVertex2f(x + tx - nx, y + ty - ny);
         GL11.glVertex2f(x + tx + nx, y + ty + ny);
@@ -1084,7 +1085,7 @@ public final class BlackHole {
 
             // Same blue-white as the sky; only the last stretch warms up.
             int rgb = Draw.mix(0xFFDCEBFF, Theme.accent, clamp01((3.0F - r) / 2.0F) * 0.7F);
-            GL11.glColor4f((rgb >> 16 & 0xFF) / 255.0F, (rgb >> 8 & 0xFF) / 255.0F,
+            GlStateManager.color((rgb >> 16 & 0xFF) / 255.0F, (rgb >> 8 & 0xFF) / 255.0F,
                     (rgb & 0xFF) / 255.0F, Math.min(1.0F, lum));
             GL11.glVertex2f(x - tx - nx, y - ty - ny);
             GL11.glVertex2f(x + tx - nx, y + ty - ny);

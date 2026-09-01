@@ -6,7 +6,6 @@ import net.minecraft.util.text.event.ClickEvent;
 import net.minecraft.util.text.event.HoverEvent;
 import net.minecraft.advancements.Advancement;
 import net.minecraft.advancements.DisplayInfo;
-import net.minecraft.advancements.FrameType;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextComponentTranslation;
@@ -41,10 +40,12 @@ public final class AchievementLinks {
      * Three of them, because 1.12 announces a task, a goal and a challenge with three
      * different messages — the same sentence with a different word for what was made.
      */
+    private static final String CHALLENGE = "chat.type.advancement.challenge";
+
     private static final String[] ANNOUNCEMENTS = {
         "chat.type.advancement.task",
         "chat.type.advancement.goal",
-        "chat.type.advancement.challenge",
+        CHALLENGE,
     };
 
     /**
@@ -79,18 +80,20 @@ public final class AchievementLinks {
             return null;
         }
 
-        Advancement advancement = announced(args[1]);
-        if (advancement == null) {
-            // A pack can announce something that is not in the advancement list —
-            // some quest mods borrow this message. Leave those exactly as they are
-            // rather than shortening a line we cannot link anywhere.
+        // The name is read straight off the announcement rather than looked up.
+        //
+        // It used to resolve the advancement first and give up when it could not,
+        // which is why some lines were rewritten and the one above them was not: the
+        // message carries no id on 1.12, so the lookup was a title match against the
+        // client's advancement list and it missed whenever that list was not the whole
+        // story. What the line needs is the name, and the announcement already is the
+        // name. Whether it was a challenge is in the key, which is exact.
+        String name = strip(plain(args[1]));
+        if (name.isEmpty()) {
             return null;
         }
-
         String earner = plain(args[0]);
-        String name = titleOf(advancement);
-        String statId = String.valueOf(advancement.getId());
-        boolean special = isChallenge(advancement);
+        boolean special = CHALLENGE.equals(translation.getKey());
 
         StringBuilder text = new StringBuilder();
         text.append("§6").append(MARK).append(' ');
@@ -111,8 +114,11 @@ public final class AchievementLinks {
         if (hover != null) {
             line.getStyle().setHoverEvent(hover);
         }
+        // By title rather than by id, for the same reason the name is: the id is not in
+        // the message. The command tries an id first all the same, so a link written by
+        // some other version of this mod still opens.
         line.getStyle().setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,
-                "/" + AchievementCommand.NAME + " " + statId));
+                "/" + AchievementCommand.NAME + " " + name));
         return line;
     }
 
@@ -145,18 +151,27 @@ public final class AchievementLinks {
      *         to read a stat file off, in which case the click does nothing at all
      *         rather than opening an empty list
      */
-    public static boolean open(String statId) {
+    public static boolean open(String wanted) {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.player == null) {
-            return false;
-        }
-        Advancement advancement = byId(statId);
-        if (advancement == null) {
+        if (mc.player == null || wanted == null || wanted.isEmpty()) {
             return false;
         }
         GuiProgressScreen screen = new GuiProgressScreen(null,
                 mc.player.getStatFileWriter(), GuiProgressScreen.advancementsTab());
-        screen.focusOn(advancement);
+
+        // Three attempts, and the last one cannot fail. An id is what a link written
+        // by the 1.7.10 side of this mod carries; a title is what one written here
+        // carries; and a screen opened on a search for the words is still the screen
+        // the player asked for, which is better than a click that does nothing.
+        Advancement advancement = byId(wanted);
+        if (advancement == null) {
+            advancement = byTitle(wanted);
+        }
+        if (advancement != null) {
+            screen.focusOn(advancement);
+        } else {
+            screen.searchFor(wanted);
+        }
         mc.displayGuiScreen(screen);
         return true;
     }
@@ -173,27 +188,15 @@ public final class AchievementLinks {
     }
 
     /**
-     * The advancement an announcement is about.
+     * The advancement whose title reads like this, or null.
      *
-     * <p>Matched by its title, which is the only thing the message carries. 1.7.10 named
-     * the achievement in a hover event and reading that was exact; 1.12 builds its line
-     * out of {@code Advancement.getDisplayText}, which is the title in brackets with a
-     * hover holding the title and the description again. There is no id in it anywhere.
-     *
-     * <p>So the title is matched against the advancement list the client already has —
-     * the same list the advancements screen is drawn from. Two advancements with the
-     * same title are indistinguishable here and the first is taken; that is a link
-     * landing on the wrong one of two identically named entries, which is the whole of
-     * what this can get wrong.
+     * Only ever a fallback for a click, never for drawing the line. Two advancements
+     * with the same title are indistinguishable here and the first is taken; that is a
+     * link landing on the wrong one of two identically named entries, which is the
+     * whole of what this can get wrong — and the screen it opens is searched for that
+     * title either way, so the other one is on screen next to it.
      */
-    private static Advancement announced(Object arg) {
-        if (!(arg instanceof ITextComponent)) {
-            return null;
-        }
-        String title = strip(((ITextComponent) arg).getUnformattedText());
-        if (title.isEmpty()) {
-            return null;
-        }
+    private static Advancement byTitle(String title) {
         Iterable<Advancement> all = known();
         if (all == null) {
             return null;
@@ -297,16 +300,6 @@ public final class AchievementLinks {
             return display.getTitle().getUnformattedText();
         } catch (Throwable t) {
             return String.valueOf(advancement.getId());
-        }
-    }
-
-    /** Challenges are the hard ones, and are marked the way a special one used to be. */
-    private static boolean isChallenge(Advancement advancement) {
-        try {
-            DisplayInfo display = advancement.getDisplay();
-            return display != null && display.getFrame() == FrameType.CHALLENGE;
-        } catch (Throwable t) {
-            return false;
         }
     }
 

@@ -291,14 +291,106 @@ public class GuiModConfigScreen extends MenuScreen {
         }
 
         if (element.isList()) {
-            // Lists stay in the config file. An editor for them was written and taken
-            // out again: a row of text fields is a poor place to type a registry name
-            // or a URL, the file is where these are actually maintained, and every
-            // list this pack ships is documented there.
+            editList(element);
             return;
         }
 
         beginEditing(index, element);
+    }
+
+    /**
+     * Opens a config list in the shared editor.
+     *
+     * <p>Ours and every other mod's alike: this screen is drawn from
+     * {@link IConfigElement}, and a list is one of the kinds an element can be. It is
+     * the one place in the interface where lists are edited — the settings tabs are for
+     * what a player changes while playing, and a list is a decision made once.
+     *
+     * <p>Every value goes to the editor as text and comes back as text, and is then
+     * parsed into whatever the element said it was. That is exactly what Forge's own
+     * list screen does, and for the same reason: a list of doubles and a list of
+     * strings are the same rows on screen, and only the mod knows which it wanted.
+     *
+     * <p>A value that will not parse is dropped rather than guessed at — writing
+     * {@code 0} into somebody's config because "seven" was typed into a number list is
+     * worse than the row not being there. The length is left to the element too: a mod
+     * that fixed it gets an editor with no Add and no bin.
+     */
+    @SuppressWarnings("unchecked")
+    private void editList(final IConfigElement element) {
+        final ConfigGuiType type = element.getType();
+        switchTo(new GuiListEditScreen(this, label(element), new GuiListEditScreen.Source() {
+            @Override
+            public String[] load() {
+                return asStrings(element.getList());
+            }
+
+            @Override
+            public String[] defaults() {
+                return asStrings(element.getDefaults());
+            }
+
+            @Override
+            public boolean resizable() {
+                return !element.isListLengthFixed();
+            }
+
+            @Override
+            public void save(String[] values) {
+                List<Object> parsed = new ArrayList<Object>(values.length);
+                for (int i = 0; i < values.length; i++) {
+                    Object value = parse(type, values[i]);
+                    if (value != null) {
+                        parsed.add(value);
+                    }
+                }
+                // The array overload, spelled out. IConfigElement has both set(Object)
+                // and set(Object[]), and an argument typed as Object binds to the
+                // first — which stores the whole array as one scalar value.
+                Object[] array = parsed.toArray();
+                element.set(array);
+                GuiModConfigScreen.this.edited = true;
+                GuiModConfigScreen.this.requiresMcRestart |= element.requiresMcRestart();
+            }
+        }));
+    }
+
+    /** A list of anything, as the lines a text editor can show. */
+    private static String[] asStrings(Object source) {
+        if (source == null) {
+            return new String[0];
+        }
+        List<String> out = new ArrayList<String>();
+        if (source instanceof Object[]) {
+            Object[] values = (Object[]) source;
+            for (int i = 0; i < values.length; i++) {
+                out.add(String.valueOf(values[i]));
+            }
+        } else if (source instanceof List) {
+            List<?> values = (List<?>) source;
+            for (int i = 0; i < values.size(); i++) {
+                out.add(String.valueOf(values.get(i)));
+            }
+        }
+        return out.toArray(new String[out.size()]);
+    }
+
+    /** One line back into the type the owning mod asked for, or null if it will not go. */
+    private static Object parse(ConfigGuiType type, String text) {
+        try {
+            if (type == ConfigGuiType.INTEGER) {
+                return Integer.valueOf(Integer.parseInt(text.trim()));
+            }
+            if (type == ConfigGuiType.DOUBLE) {
+                return Double.valueOf(Double.parseDouble(text.trim()));
+            }
+            if (type == ConfigGuiType.BOOLEAN) {
+                return Boolean.valueOf(Boolean.parseBoolean(text.trim()));
+            }
+            return text;
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
     }
 
     private void beginEditing(int index, IConfigElement element) {

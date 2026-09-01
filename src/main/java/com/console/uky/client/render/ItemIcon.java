@@ -1,5 +1,6 @@
 package com.console.uky.client.render;
 
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.renderer.RenderItem;
@@ -67,7 +68,7 @@ public final class ItemIcon {
         }
         Minecraft mc = Minecraft.getMinecraft();
 
-        GL11.glPushMatrix();
+        GlStateManager.pushMatrix();
 
         // The state a cube needs, in the order RenderItem expects to find it — and the
         // lighting before the transform below rather than after it.
@@ -76,22 +77,22 @@ public final class ItemIcon {
         // setting it up inside the entrance would turn the two lights with the item
         // and light it from somewhere new on every frame of the spin. Vanilla calls
         // this at the top of a screen's draw for the same reason.
-        GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(true);
+        GlStateManager.enableCull();
+        GlStateManager.enableDepth();
+        GlStateManager.depthMask(true);
         RenderHelper.enableGUIStandardItemLighting();
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glEnable(GL12.GL_RESCALE_NORMAL);
-        GL11.glEnable(GL11.GL_COLOR_MATERIAL);
-        GL11.glEnable(GL11.GL_LIGHTING);
-        GL11.glColor4f(brightness, brightness, brightness, 1.0F);
+        GlStateManager.disableLighting();
+        GlStateManager.enableRescaleNormal();
+        GlStateManager.enableColorMaterial();
+        GlStateManager.enableLighting();
+        GlStateManager.color(brightness, brightness, brightness, 1.0F);
 
-        GL11.glTranslatef(centerX, centerY, 0.0F);
+        GlStateManager.translate(centerX, centerY, 0.0F);
         if (spin != 0.0F) {
-            GL11.glRotatef(spin, 0.0F, 0.0F, 1.0F);
+            GlStateManager.rotate(spin, 0.0F, 0.0F, 1.0F);
         }
         // Every axis, including the one pointing into the screen: see the note above.
-        GL11.glScalef(scale, scale, scale);
+        GlStateManager.scale(scale, scale, scale);
 
         try {
             renderer.renderItemAndEffectIntoGUI(stack, -SIZE / 2, -SIZE / 2);
@@ -99,14 +100,14 @@ public final class ItemIcon {
             // A modded item can carry a renderer that throws. One bad icon must not
             // take the screen — or the frame — with it.
         } finally {
-            GL11.glDisable(GL11.GL_LIGHTING);
+            GlStateManager.disableLighting();
             RenderHelper.disableStandardItemLighting();
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GlStateManager.disableDepth();
             // Culling goes back off, because everything else drawn here is 2D and
             // half of it is wound the way culling would throw away.
-            GL11.glDisable(GL11.GL_CULL_FACE);
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-            GL11.glPopMatrix();
+            GlStateManager.disableCull();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.popMatrix();
         }
     }
 }

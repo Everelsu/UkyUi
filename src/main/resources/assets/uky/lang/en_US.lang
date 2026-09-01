@@ -70,6 +70,11 @@ uky.modSettings.none=No mod in this pack has a settings screen.
 uky.modSettings.noMatch=No mod matches that.
 uky.modSettings.defaults=Reset section
 uky.modSettings.list=list
+# ---- the list editor, opened from a list row in the mod settings ----
+uky.list.add=Add
+uky.list.reset=Restore defaults
+uky.list.empty=Nothing here yet.
+uky.list.blank=(empty)
 uky.settings.videoTakeover=Open the renderer's own screen...
 uky.settings.renderer=Renderer
 uky.settings.optifine.quality=Quality

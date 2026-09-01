@@ -5,6 +5,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.UiConfig;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ChatLine;
 import net.minecraft.client.gui.FontRenderer;
@@ -110,9 +111,9 @@ public final class ChatOverlay {
         int scroll = readScroll(chat);
         int counter = mc.ingameGUI.getUpdateCounter();
 
-        GL11.glPushMatrix();
-        GL11.glTranslatef(2.0F, 20.0F, 0.0F);
-        GL11.glScalef(scale, scale, 1.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(2.0F, 20.0F, 0.0F);
+        GlStateManager.scale(scale, scale, 1.0F);
 
         int rows = Math.min(visibleLines, lines.size() - scroll);
         // Under everything, and only while the chat is being read: open, this is a
@@ -152,7 +153,7 @@ public final class ChatOverlay {
                         Draw.withAlpha(Theme.background, 0.0F));
             }
         }
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
         return true;
     }
 
@@ -218,8 +219,8 @@ public final class ChatOverlay {
         float top = baseline - LINE;
         float bottom = baseline;
 
-        GL11.glPushMatrix();
-        GL11.glTranslatef(slide, 0.0F, 0.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(slide, 0.0F, 0.0F);
 
         boolean ours = isLink(line);
 
@@ -275,8 +276,8 @@ public final class ChatOverlay {
             // a long message would be worse than no stamp at all, and the lines it
             // would land on are exactly the ones being read.
             if (font.getStringWidth(text) < width - stampWidth - 6) {
-                GL11.glEnable(GL11.GL_BLEND);
-                GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                GlStateManager.enableBlend();
+                GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
                 font.drawString(stamp, (int) (width + 2 - stampWidth), (int) (baseline - 8),
                         Draw.withAlpha(Theme.textDim, (hovered ? 0.55F : 0.30F) * alpha));
             }
@@ -289,11 +290,11 @@ public final class ChatOverlay {
         // thing to draw before this was a panel, which turns blending off again on its
         // way out. Vanilla's own chat has the same line in it, added by Forge as the
         // fix for MC-36812, for exactly this reason.
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         int colour = 0xFFFFFF | ((int) (shown * 255.0F) << 24);
         font.drawString(text, 0, baseline - 8, colour);
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
     }
 
     /**

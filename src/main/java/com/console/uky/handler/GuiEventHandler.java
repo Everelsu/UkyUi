@@ -22,6 +22,7 @@ import com.console.uky.client.sound.UkyMusicTicker;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.GuiIngameMenu;
@@ -93,13 +94,13 @@ public class GuiEventHandler {
         if (!UiConfig.redesignChat) {
             return;
         }
-        GL11.glPushMatrix();
-        GL11.glTranslatef(event.getPosX(), event.getPosY(), 0.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(event.getPosX(), event.getPosY(), 0.0F);
         boolean drawn;
         try {
             drawn = ChatOverlay.draw(Minecraft.getMinecraft(), event.getPosY());
         } finally {
-            GL11.glPopMatrix();
+            GlStateManager.popMatrix();
         }
         if (drawn) {
             event.setCanceled(true);

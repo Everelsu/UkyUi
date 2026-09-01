@@ -14,6 +14,7 @@ import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraftforge.common.ForgeVersion;
 import net.minecraftforge.fml.client.GuiModList;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiConfirmOpenLink;
 import net.minecraft.client.gui.GuiMultiplayer;
@@ -669,13 +670,13 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
                     Draw.withAlpha(Theme.accent, 0.16F * this.contentAlpha),
                     Draw.withAlpha(Theme.accent, 0.0F));
 
-            GL11.glPushMatrix();
-            GL11.glTranslatef(centerX, cy, 0.0F);
-            GL11.glScalef(breathe, breathe, 1.0F);
-            GL11.glTranslatef(-centerX, -cy, 0.0F);
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(centerX, cy, 0.0F);
+            GlStateManager.scale(breathe, breathe, 1.0F);
+            GlStateManager.translate(-centerX, -cy, 0.0F);
             Draw.texture(LOGO, lx, ly, this.logoSize, this.logoSize,
                     Draw.withAlpha(0xFFFFFF, this.contentAlpha));
-            GL11.glPopMatrix();
+            GlStateManager.popMatrix();
         }
 
         int textY = (int) (this.captionY - rise);
@@ -730,8 +731,8 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
                     Draw.withAlpha(Theme.accent, 0.0F));
         }
 
-        GL11.glPushMatrix();
-        GL11.glScalef(scale, scale, 1.0F);
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(scale, scale, 1.0F);
 
         float cursor = centerX / scale - totalWidth / 2.0F;
         float baseY = y / scale;
@@ -761,7 +762,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             }
             cursor += width + tracking;
         }
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
 
         loose.update(this.delta, this.holeCenterX, this.holeCenterY, this.holeRadius);
         loose.draw(this.fontRenderer, this.contentAlpha);

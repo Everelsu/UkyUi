@@ -9,6 +9,7 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
@@ -126,6 +127,22 @@ public class GuiProgressScreen extends MenuScreen {
     }
 
     /**
+     * Opens searched for these words, with nothing selected.
+     *
+     * For a link whose advancement could not be resolved — a title that no longer
+     * matches anything, most often because the pack removed it. The words are still
+     * the best thing to show, and an empty result reads as "not here any more", which
+     * is the truth.
+     */
+    public void searchFor(String query) {
+        this.pendingSearch = query;
+        activeTab = TAB_ADVANCEMENTS;
+    }
+
+    /** Set by {@link #searchFor}, applied by {@link #revealFocus}. */
+    private String pendingSearch;
+
+    /**
      * Puts the layout on the focused row, once there is a layout.
      *
      * The title goes into the search box and the filter is re-run, which leaves the
@@ -133,7 +150,15 @@ public class GuiProgressScreen extends MenuScreen {
      * list. Selecting the row as well is what says which one of those it was.
      */
     private void revealFocus() {
-        if (this.focus == null || this.search == null || this.list == null) {
+        if (this.search == null || this.list == null) {
+            return;
+        }
+        if (this.focus == null) {
+            if (this.pendingSearch != null) {
+                this.search.setText(this.pendingSearch);
+                this.pendingSearch = null;
+                applyFilter();
+            }
             return;
         }
         this.search.setText(com.console.uky.client.gui.AchievementLinks.titleOf(this.focus));
@@ -644,15 +669,15 @@ public class GuiProgressScreen extends MenuScreen {
             return;
         }
         try {
-            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GlStateManager.enableDepth();
             RenderHelper.enableGUIStandardItemLighting();
-            GL11.glColor4f(brightness, brightness, brightness, 1.0F);
+            GlStateManager.color(brightness, brightness, brightness, 1.0F);
             this.itemRender.renderItemAndEffectIntoGUI(icon, x, y);
             RenderHelper.disableStandardItemLighting();
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.disableDepth();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         } catch (Throwable t) {
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         }
     }
 

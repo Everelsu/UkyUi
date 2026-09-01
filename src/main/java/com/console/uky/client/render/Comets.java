@@ -1,5 +1,7 @@
 package com.console.uky.client.render;
 
+import net.minecraft.client.renderer.GlStateManager;
+
 import com.console.uky.config.UiConfig;
 import org.lwjgl.opengl.GL11;
 
@@ -69,6 +71,16 @@ public final class Comets {
     private float wishHover;
     /** Counts down after a click, for the flash. */
     private float wishFlash;
+    /**
+     * Whether the star was actually drawn on the last frame.
+     *
+     * A screen that keeps the world — the pause menu, the shader screen over a world —
+     * draws no sky and no star, and a click on the empty middle of it was still landing
+     * on one: the click test knew where the star would be, not whether anybody could
+     * see it. Cleared every update and set again by {@link #renderWish}, so it answers
+     * "was it on screen a frame ago", which is exactly the question a click asks.
+     */
+    private boolean wishDrawn;
     private float pointerX = Float.NaN;
     private float pointerY;
 
@@ -94,6 +106,7 @@ public final class Comets {
      * strange thing to have written.
      */
     public void update(float deltaSeconds) {
+        this.wishDrawn = false;
         this.wishTime += deltaSeconds;
         placeWish();
         boolean near = isPointerOnWish();
@@ -217,7 +230,8 @@ public final class Comets {
      * @return true when the click was taken
      */
     public boolean clickWish(float px, float py) {
-        if (this.width <= 0 || Float.isNaN(this.wishX) || !within(px, py)) {
+        if (!this.wishDrawn || this.width <= 0 || Float.isNaN(this.wishX)
+                || !within(px, py)) {
             return false;
         }
         launchFrom(this.wishX, this.wishY);
@@ -254,6 +268,7 @@ public final class Comets {
         if (bright <= 0.02F) {
             return;
         }
+        this.wishDrawn = true;
         float size = 1.6F + this.wishHover * 1.4F + (this.wishFlash > 0.0F
                 ? this.wishFlash * 3.0F : 0.0F);
         float spike = size * (3.2F + this.wishHover * 1.6F);
@@ -376,10 +391,10 @@ public final class Comets {
     private void streak(float hx, float hy, float tx, float ty, float px, float py,
                         float halfHead, float halfTail,
                         float r, float g, float b, float a) {
-        GL11.glColor4f(r, g, b, a);
+        GlStateManager.color(r, g, b, a);
         GL11.glVertex2f(hx + px * halfHead, hy + py * halfHead);
         GL11.glVertex2f(hx - px * halfHead, hy - py * halfHead);
-        GL11.glColor4f(r, g, b, 0.0F);
+        GlStateManager.color(r, g, b, 0.0F);
         GL11.glVertex2f(tx - px * halfTail, ty - py * halfTail);
         GL11.glVertex2f(tx + px * halfTail, ty + py * halfTail);
     }
@@ -387,7 +402,7 @@ public final class Comets {
     /** An axis-aligned blob, brightest in the middle by virtue of being piled up. */
     private void quad(float cx, float cy, float halfW, float halfH,
                       float r, float g, float b, float a) {
-        GL11.glColor4f(r, g, b, a);
+        GlStateManager.color(r, g, b, a);
         GL11.glVertex2f(cx - halfW, cy - halfH);
         GL11.glVertex2f(cx - halfW, cy + halfH);
         GL11.glVertex2f(cx + halfW, cy + halfH);
@@ -397,33 +412,33 @@ public final class Comets {
     /** A spike of the star: bright at the centre, gone at both ends. */
     private void spike(float cx, float cy, float halfW, float halfH,
                        float r, float g, float b, float a) {
-        GL11.glColor4f(r, g, b, 0.0F);
+        GlStateManager.color(r, g, b, 0.0F);
         GL11.glVertex2f(cx - halfW, cy - halfH);
         GL11.glVertex2f(cx - halfW, cy + halfH);
-        GL11.glColor4f(r, g, b, a);
+        GlStateManager.color(r, g, b, a);
         GL11.glVertex2f(cx, cy + halfH);
         GL11.glVertex2f(cx, cy - halfH);
 
-        GL11.glColor4f(r, g, b, a);
+        GlStateManager.color(r, g, b, a);
         GL11.glVertex2f(cx, cy - halfH);
         GL11.glVertex2f(cx, cy + halfH);
-        GL11.glColor4f(r, g, b, 0.0F);
+        GlStateManager.color(r, g, b, 0.0F);
         GL11.glVertex2f(cx + halfW, cy + halfH);
         GL11.glVertex2f(cx + halfW, cy - halfH);
     }
 
     private void begin() {
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
-        GL11.glShadeModel(GL11.GL_SMOOTH);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+        GlStateManager.shadeModel(GL11.GL_SMOOTH);
+        GlStateManager.disableTexture2D();
     }
 
     private void end() {
-        GL11.glShadeModel(GL11.GL_FLAT);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.shadeModel(GL11.GL_FLAT);
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableBlend();
+        GlStateManager.enableTexture2D();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 }

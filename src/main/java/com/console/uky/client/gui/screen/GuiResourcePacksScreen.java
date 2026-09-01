@@ -8,6 +8,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.ResourcePackRepository;
@@ -369,11 +370,11 @@ public class GuiResourcePacksScreen extends MenuScreen {
      */
     private void drawIcon(ResourcePackRepository.Entry entry, int x, int y, float alpha) {
         try {
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, alpha);
+            GlStateManager.enableTexture2D();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, alpha);
             entry.bindTexturePackIcon(this.mc.getTextureManager());
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             // The icon is a 64x64 texture drawn into a 20px box.
             GL11.glBegin(GL11.GL_QUADS);
             GL11.glTexCoord2f(0.0F, 0.0F);
@@ -385,10 +386,10 @@ public class GuiResourcePacksScreen extends MenuScreen {
             GL11.glTexCoord2f(1.0F, 0.0F);
             GL11.glVertex2f(x + 20, y);
             GL11.glEnd();
-            GL11.glDisable(GL11.GL_BLEND);
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.disableBlend();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         } catch (Throwable t) {
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         }
     }
 

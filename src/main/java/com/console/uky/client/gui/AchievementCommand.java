@@ -47,7 +47,7 @@ public final class AchievementCommand extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/" + NAME + " <advancement id|" + PREVIEW + ">";
+        return "/" + NAME + " <advancement name or id|" + PREVIEW + ">";
     }
 
     /**
@@ -81,10 +81,16 @@ public final class AchievementCommand extends CommandBase {
             AchievementToast.show(anyAdvancement());
             return;
         }
-        // Silent when the id is unknown. It can only be unknown if a pack removed the
-        // advancement between the line being written and it being clicked, and a chat
-        // error about an internal id would explain nothing to whoever clicked it.
-        AchievementLinks.open(args[0]);
+        // Everything after the command, joined: a link written here carries the
+        // advancement's title, and a title has spaces in it. One argument was enough
+        // when this took an id.
+        StringBuilder wanted = new StringBuilder(args[0]);
+        for (int i = 1; i < args.length; i++) {
+            wanted.append(' ').append(args[i]);
+        }
+        // Silent when nothing matches, which the screen now handles by opening on a
+        // search for those words rather than by refusing the click.
+        AchievementLinks.open(wanted.toString());
     }
 
     /**

@@ -6,6 +6,7 @@ import com.console.uky.client.render.ItemIcon;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.ScaledResolution;
@@ -284,7 +285,11 @@ public final class AchievementToast {
         }
         Minecraft mc = Minecraft.getMinecraft();
         if (current == null) {
-            return true;
+            // Nothing of ours on screen. False, not true: on 1.12 this cancels
+            // GuiToast.drawToast, and the same queue carries the recipe unlock, the
+            // tutorial hints and the "world backed up" notice. Answering true here
+            // took every one of those out of the game.
+            return false;
         }
         // Leaving a world with a panel still up would otherwise carry it onto the
         // title screen, where it belongs to nothing.
@@ -332,16 +337,16 @@ public final class AchievementToast {
         ScaledResolution res = new ScaledResolution(mc);
         GL11.glViewport(0, 0, mc.displayWidth, mc.displayHeight);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPushMatrix();
+        GlStateManager.pushMatrix();
         GL11.glLoadIdentity();
         GL11.glOrtho(0.0D, res.getScaledWidth(), res.getScaledHeight(), 0.0D, 1000.0D, 3000.0D);
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glPushMatrix();
+        GlStateManager.pushMatrix();
         GL11.glLoadIdentity();
-        GL11.glTranslatef(0.0F, 0.0F, -2000.0F);
+        GlStateManager.translate(0.0F, 0.0F, -2000.0F);
         GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(false);
+        GlStateManager.disableDepth();
+        GlStateManager.depthMask(false);
 
         // Lighting off, and this is not optional.
         //
@@ -355,7 +360,7 @@ public final class AchievementToast {
         // lighting off first. Vanilla's own popup has the same line for the same
         // reason, one call earlier than this one.
         RenderHelper.disableStandardItemLighting();
-        GL11.glDisable(GL11.GL_LIGHTING);
+        GlStateManager.disableLighting();
         // Off by the time the world is done with it, in vanilla. A renderer
         // replacement is under no obligation to leave it that way, and fog over a
         // panel two thousand units from the camera is total.
@@ -363,13 +368,13 @@ public final class AchievementToast {
     }
 
     private static void endOverlay() {
-        GL11.glDepthMask(true);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        GlStateManager.depthMask(true);
+        GlStateManager.enableDepth();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
         GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glPopMatrix();
+        GlStateManager.popMatrix();
     }
 
     private static void drawToast(Minecraft mc, Toast toast, float elapsed, float dwell) {
@@ -623,8 +628,8 @@ public final class AchievementToast {
      * the words stayed at full strength on top of nothing.
      */
     private static void beginText() {
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
     }
 
     /**
