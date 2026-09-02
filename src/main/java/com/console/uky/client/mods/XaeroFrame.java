@@ -55,10 +55,12 @@ import org.lwjgl.opengl.GL11;
  * map's edge; off, theirs stays and ours goes around the outside of it — this mod's mark
  * on the map without taking anything away from somebody who likes the frame Xaero ships.
  *
- * <p>Ours is its own option either way, so their frame switch still means what it says:
- * "off" in their menu turns their frame off, not this one. A map set to round is left
- * alone entirely — that one is an ellipse drawn somewhere else, no quad arrives, and a
- * ring of ours over a ring of theirs is worse than either.
+ * <p>Either way this is their frame drawn differently, not a frame of ours that happens to
+ * be near their map, so it appears exactly when theirs would have. Whichever of their
+ * styles is picked, ours is what is seen; set their frame to "off" and there are no pieces
+ * to take and nothing is drawn at all, theirs or ours. A map set to round is left alone
+ * entirely — that one is an ellipse drawn somewhere else, no quad arrives, and a ring of
+ * ours over a ring of theirs is worse than either.
  *
  * <p>What this cannot be is a fifth entry in Xaero's own frame menu. That setting is a
  * numeric range in their profiled config, and a value invented from outside would be
@@ -185,6 +187,14 @@ public final class XaeroFrame {
         }
         readSpace(here);
 
+        // This is their frame, drawn differently — not a frame of our own that happens to
+        // be near their map. So it appears when theirs would have, and their switch is
+        // still the switch: set the minimap's frame to "off" and there are no pieces, and
+        // ours is off with it.
+        if (!haveTheirs) {
+            return;
+        }
+
         if (UiConfig.xaeroFrameReplace) {
             if (haveMap) {
                 // On the map's own edge, one pixel out: the air a frame wants around it.
@@ -195,13 +205,8 @@ public final class XaeroFrame {
 
         // Theirs was left to draw, so ours goes around the outside of it, clear by a
         // pixel — the two read as one thing with a mark on it rather than as two frames
-        // that happen to be nested. With their frame off there is nothing to go around,
-        // and the map's own edge is the next best place for it.
-        if (haveTheirs) {
-            draw(theirSpace, theirLeft, theirTop, theirRight, theirBottom, 1.0F);
-        } else if (haveMap) {
-            draw(mapSpace, mapLeft, mapTop, mapRight, mapBottom, 2.0F);
-        }
+        // that happen to be nested.
+        draw(theirSpace, theirLeft, theirTop, theirRight, theirBottom, 1.0F);
     }
 
     /**

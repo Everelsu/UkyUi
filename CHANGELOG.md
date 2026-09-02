@@ -43,9 +43,10 @@ new since 0.5.3 and what is particular to this version.
   the map into their frame buffer is skipped, and the scale it is all drawn under is read
   off the matrix and carried across, so this holds at any minimap and GUI scale.
 - It replaces their frame rather than being drawn over it: their own eight frame pieces
-  are taken as they are about to be drawn, so their frame is removed exactly. Ours is its
-  own option — their switch still means what it says, and "Off" in their menu turns off
-  their frame, not this one. Nothing is written to their config.
+  are taken as they are about to be drawn, so their frame is removed exactly. It is their
+  frame drawn differently rather than one of ours added next to it: whichever style is
+  picked, ours is what appears, and "Off" draws nothing at all. Nothing is written to
+  their config.
 - `mods.xaeroFrameReplace` chooses between the two: ours in place of theirs, or both —
   theirs against the map as it always was and ours around the outside, for somebody who
   wants the mark without giving up the frame the map came with.
