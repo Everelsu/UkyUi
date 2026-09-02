@@ -72,17 +72,43 @@ The workflow builds, checks the tag against the version, uploads to both stores 
 creates the GitHub release with the jar attached. A store whose token is not configured
 is skipped rather than failing the run.
 
+### Choosing what to build
+
+Running the workflow by hand from the Actions tab starts with **What to build**:
+
+| Choice        | What it builds                                   |
+| ------------- | ------------------------------------------------ |
+| `this branch` | whichever branch the run was started from        |
+| `1.12.2`      | the `1.12.2` branch                              |
+| `1.7.10`      | the `1-7-10` branch                              |
+| `both`        | both, one after the other                        |
+
+Each is checked out and built on its own, and asks that branch for its own version and
+its own Minecraft version — nothing about either is written down in the workflow, so a
+branch that changes one of them needs nothing changed there.
+
+`both` builds them one at a time rather than side by side, so that two runs cannot
+create the same GitHub release at the same moment. When the two branches are on the same
+version they share one release, with a jar each in it.
+
+A tag push builds the commit the tag is on and nothing else, which is the branch the tag
+was made on.
+
 ### Publishing to one place at a time
 
-Running the workflow by hand from the Actions tab gives a tick box per destination —
-Modrinth, CurseForge, GitHub — and publishes only to the ones ticked. With none ticked
-it builds and leaves the jar as a workflow artifact, which is the way to rehearse.
+The same form has a tick box per destination — Modrinth, CurseForge, GitHub — and
+publishes only to the ones ticked. With none ticked it builds and leaves the jar as a
+workflow artifact, which is the way to rehearse.
 
 That split is there for the case that actually happens: one destination accepts the
 version and another rejects it. **An upload cannot be taken back** — a version that
 reached Modrinth is on Modrinth, and sending it again makes a duplicate rather than a
 correction. So finish a half-done release by re-running with only the destination that
 failed ticked; the tick boxes are the whole mechanism for not publishing twice.
+
+The GitHub release is the exception that is safe to repeat: it is created only if it is
+not there and the jar is uploaded into it, so a second run adds the missing file rather
+than failing.
 
 ## Publishing from this machine instead
 
@@ -93,6 +119,8 @@ MODRINTH_TOKEN=... CURSEFORGE_TOKEN=... ./gradlew publishRelease
 ```
 
 Individually: `./gradlew modrinth`, `./gradlew curseforge`, `./gradlew modrinthSyncBody`.
+From here there is nothing to choose: the checked-out branch is what gets built. The
+choice on the Actions tab exists because a runner can check out the other one.
 Each checks its project id and its token before anything is built, so a missing one
 fails in a second rather than at the end of a decompile.
 
@@ -100,11 +128,11 @@ fails in a second rather than at the end of a decompile.
 
 | Thing              | Comes from                                                          |
 | ------------------ | ------------------------------------------------------------------- |
-| The file           | `build/libs/ukyui-1.7.10-<version>.jar` — the reobfuscated jar, never the `-dev` one |
-| Version number     | `version` in `build.gradle.kts`                                     |
+| The file           | `build/libs/ukyui-<mc>-<version>.jar` — the reobfuscated jar, never the `-dev` one |
+| Version number     | `version` in `build.gradle.kts`. Modrinth gets it with the Minecraft version on the end — `0.5.4+1.12.2` — because both branches release the same mod version and Modrinth will not take that number twice |
 | Changelog          | this version's section of `CHANGELOG.md`                            |
-| Game version       | `1.7.10`, Forge, Java 8, and on CurseForge the environment tag `Client` — without it the site rejects the upload with error 1021 |
-| Dependency         | UniMixins, required (Modrinth `ghjoiQAl`, CurseForge `unimixins`)   |
+| Game version       | the branch's own — `1.7.10` or `1.12.2` — Forge, Java 8, and on CurseForge the environment tag `Client`, without which the site rejects the upload with error 1021 |
+| Dependency         | UniMixins on 1.7.10 (Modrinth `ghjoiQAl`, CurseForge `unimixins`), MixinBooter on 1.12.2 |
 | Modrinth page body | `store/modrinth-description.md`, pushed by `modrinthSyncBody`       |
 
 ## Notes

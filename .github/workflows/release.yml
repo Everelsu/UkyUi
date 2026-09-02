@@ -2,15 +2,26 @@
 ###
 ### Two ways in, and only one of them publishes by default:
 ###
-###   * pushing a tag "v0.5.2" — builds, checks that the tag agrees with the version
-###     in build.gradle.kts, and publishes to all three
-###   * running it by hand from the Actions tab — builds, and publishes only to the
-###     destinations ticked; with none ticked it just leaves the jar as an artifact
+###   * pushing a tag "v0.5.2" — builds the commit the tag is on, checks that the tag
+###     agrees with the version in build.gradle.kts, and publishes to all three
+###   * running it by hand from the Actions tab — you pick what to build and where it
+###     goes; with no destination ticked it just leaves the jar as an artifact
 ###
-### The three destinations are separate on purpose. An upload cannot be taken back: a
-### version that reached Modrinth is on Modrinth, so a release that fails halfway —
-### CurseForge rejecting a file the other two already accepted, say — has to be
-### finishable without sending the same version anywhere twice.
+### **What to build.** This mod is one repository with a branch per Minecraft version,
+### so "what to build" is which branches: this one, 1.12.2, 1.7.10, or both. Each is
+### checked out and built on its own, and nothing about a version is written down here
+### — the Minecraft version and the mod version are asked of the branch's own build, so
+### a branch that changes either of them needs nothing changed in this file.
+###
+### Both at once builds them one after the other rather than side by side. They can
+### share a GitHub release when the two branches are on the same version, and two runs
+### creating the same release at the same moment is a race with a mangled release at
+### the end of it.
+###
+### **Where it goes.** The three destinations are separate on purpose. An upload cannot
+### be taken back: a version that reached Modrinth is on Modrinth, so a release that
+### fails halfway — CurseForge rejecting a file the other two already accepted, say —
+### has to be finishable without sending the same version anywhere twice.
 ###
 ### A store is also skipped when its token is not configured, rather than failing the
 ### run: a repository with only one of the two set up should still release to it. See
@@ -23,6 +34,15 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
+      build:
+        description: "What to build"
+        type: choice
+        options:
+          - this branch
+          - "1.12.2"
+          - "1.7.10"
+          - both
+        default: this branch
       modrinth:
         description: "Upload to Modrinth"
         type: boolean
@@ -40,8 +60,43 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  # Which refs this run is about, as a list the build job can be a matrix over. A tag
+  # is one target — the tag itself; a manual run is whatever was picked.
+  plan:
     runs-on: ubuntu-latest
+    outputs:
+      refs: ${{ steps.pick.outputs.refs }}
+    steps:
+      - id: pick
+        env:
+          # The branch names are here and nowhere else. 1.7.10's branch is spelled with
+          # dashes because a tag and a branch cannot both be called 1.7.10.
+          CHOICE: ${{ inputs.build }}
+          HERE: ${{ github.ref_name }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            refs="[\"$HERE\"]"
+          else
+            case "$CHOICE" in
+              "1.12.2") refs='["1.12.2"]' ;;
+              "1.7.10") refs='["1-7-10"]' ;;
+              both)     refs='["1.12.2","1-7-10"]' ;;
+              *)        refs="[\"$HERE\"]" ;;
+            esac
+          fi
+          echo "refs=$refs" >> "$GITHUB_OUTPUT"
+          echo "Building: $refs"
+
+  release:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      # One at a time, and one failing does not cancel the other: half a release is
+      # worth having when the other half is what broke.
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        ref: ${{ fromJson(needs.plan.outputs.refs) }}
     env:
       # One flag per destination, decided once here rather than in three `if:` lines.
       # A tag publishes everywhere; a manual run publishes where it was told to. The
@@ -52,10 +107,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
 
-      # Two of them: Gradle 9 itself needs 17 or newer, and Minecraft 1.7.10 has to be
-      # compiled by Java 8. The second one is found through the toolchain path written
-      # below rather than by being JAVA_HOME.
+      # Two of them: Gradle 9 itself needs 17 or newer, and both Minecraft versions
+      # this repository builds for have to be compiled by Java 8. The second one is
+      # found through the toolchain path written below rather than by being JAVA_HOME.
       - name: Set up JDKs
         uses: actions/setup-java@v4
         with:
@@ -81,9 +138,18 @@ jobs:
       - name: Build
         run: ./gradlew build
 
+      # Asked of the branch rather than assumed: which Minecraft this one is for is the
+      # whole difference between the two, and it is in the name of the file every step
+      # below reaches for.
       - name: Read the version
         id: version
-        run: echo "value=$(./gradlew -q printVersion)" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(./gradlew -q printVersion)
+          mc=$(./gradlew -q printMcVersion)
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "mc=$mc" >> "$GITHUB_OUTPUT"
+          echo "jar=build/libs/ukyui-$mc-$version.jar" >> "$GITHUB_OUTPUT"
+          echo "Built $mc $version"
 
       # A tag that says one thing and a jar that says another is the one mistake this
       # pipeline can make that nobody notices until it is on both stores.
@@ -115,21 +181,29 @@ jobs:
       # also works on a manual run — gh creates the tag at this commit if it is not
       # there yet. On a tag push the two are the same thing, which the step above has
       # already checked.
+      #
+      # Created only if it is not there, then the jar is uploaded into it: building
+      # both branches on one version puts two jars in one release, and re-running a
+      # half-finished release must not fail on the release it made the first time.
       - name: Publish to GitHub
         if: env.PUBLISH_GITHUB == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.value }}
+          JAR: ${{ steps.version.outputs.jar }}
         run: |
-          gh release create "v${{ steps.version.outputs.value }}" \
-            --title "UKY UI ${{ steps.version.outputs.value }}" \
-            --notes-file release-notes.md \
-            "build/libs/ukyui-1.7.10-${{ steps.version.outputs.value }}.jar"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "UKY UI ${{ steps.version.outputs.value }}" \
+              --notes-file release-notes.md
+          fi
+          gh release upload "$TAG" "$JAR" --clobber
 
       # Always, including on a tag: the run's own copy of what it built is what makes a
       # failed publish something you can retry by hand rather than rebuild.
       - name: Keep the jar
         uses: actions/upload-artifact@v4
         with:
-          name: ukyui-${{ steps.version.outputs.value }}
-          path: build/libs/ukyui-1.7.10-${{ steps.version.outputs.value }}.jar
+          name: ukyui-${{ steps.version.outputs.mc }}-${{ steps.version.outputs.value }}
+          path: ${{ steps.version.outputs.jar }}
           if-no-files-found: error
