@@ -173,6 +173,20 @@ public final class UiConfig {
      */
     public static boolean wailaHideListed = true;
     /**
+     * Draw Xaero's minimap frame in this mod's style.
+     *
+     * The minimap is on screen the whole time somebody plays, and its own frame is a
+     * beige bevel that has nothing to do with the rest of the HUD. This replaces the
+     * box and only the box: the map, the entities, the waypoints and the coordinates
+     * under it are Xaero's and stay untouched.
+     *
+     * <p>Xaero's own frame is switched off through its own setting rather than by
+     * cutting its drawing out, and the value it had is put back the moment this is
+     * turned off. See {@code XaeroFrame}.
+     */
+    public static boolean restyleXaeroFrame = true;
+
+    /**
      * Hand BetterQuesting a theme built from the palette below — once.
      *
      * The theme is registered whether or not this is on; it shows up in the quest
@@ -626,6 +640,17 @@ public final class UiConfig {
                         + "by in commands and recipes, which NEI shows under an item "
                         + "once item ids are turned on in its options.\n"
                         + "Emptying the list has the same effect as wailaHideListed=false.");
+        restyleXaeroFrame = bool(CAT_MODS, "restyleXaeroFrame", restyleXaeroFrame,
+                "Draw the frame around Xaero's minimap in this mod's style: a hairline "
+                        + "border with the gold rail down its left edge, or a ring when "
+                        + "the map is set to round.\n"
+                        + "Only the frame. What the map draws inside it — terrain, "
+                        + "entities, waypoints, the coordinates under it — is Xaero's "
+                        + "and is not touched.\n"
+                        + "Xaero's own frame is turned off through its own setting "
+                        + "(Minimap settings, 'Frame'), so it is visible there rather "
+                        + "than being a mystery, and the value it had is put back the "
+                        + "moment this is switched off.");
         restyleQuestBook = bool(CAT_MODS, "restyleQuestBook", restyleQuestBook,
                 "Hand BetterQuesting's quest book the UKY theme, once. The theme is "
                         + "built from the palette in [theme] below, so it follows the "

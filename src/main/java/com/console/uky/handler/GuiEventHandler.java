@@ -16,6 +16,7 @@ import com.console.uky.client.gui.screen.GuiPauseScreen;
 import com.console.uky.client.gui.screen.GuiWorldLoadingScreen;
 import com.console.uky.client.gui.screen.GuiWorldsScreen;
 import com.console.uky.client.mods.QuestBookTheme;
+import com.console.uky.client.mods.XaeroFrame;
 import com.console.uky.client.mods.QuestBookTransition;
 import com.console.uky.client.sound.UkyMusicTicker;
 import com.console.uky.client.sound.UkySounds;
@@ -54,6 +55,23 @@ public class GuiEventHandler {
 
     /** Cached parent-screen field per screen class; see {@link #parentOf}. */
     private static final Map<Class<?>, Field> PARENT_FIELDS = new HashMap<Class<?>, Field>();
+
+    /**
+     * Draws our frame around Xaero's minimap, after the HUD is finished with.
+     *
+     * The last element of the overlay pass, so it lands on top of the map rather than
+     * under it, and in the plain scaled interface space every other overlay here uses.
+     * Nothing is cancelled: the map is Xaero's and stays theirs — see {@link XaeroFrame},
+     * which also explains why their own frame is taken off through their setting rather
+     * than by cutting their drawing out.
+     */
+    @SubscribeEvent
+    public void onRenderOverlayPost(RenderGameOverlayEvent.Post event) {
+        if (event.type != RenderGameOverlayEvent.ElementType.ALL) {
+            return;
+        }
+        XaeroFrame.draw(Minecraft.getMinecraft(), event.resolution);
+    }
 
     /**
      * Replaces the Tab player list with ours.

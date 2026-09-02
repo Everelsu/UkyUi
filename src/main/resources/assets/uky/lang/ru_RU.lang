@@ -48,6 +48,11 @@ uky.modSettings.none=Ни у одного мода в сборке нет нас
 uky.modSettings.noMatch=Ничего не найдено.
 uky.modSettings.defaults=Сбросить раздел
 uky.modSettings.list=список
+# ---- редактор списков, открывается со строки-списка в настройках мода ----
+uky.list.add=Добавить
+uky.list.reset=Вернуть стандартные
+uky.list.empty=Пока пусто.
+uky.list.blank=(пусто)
 uky.settings.videoTakeover=Открыть экран рендера...
 uky.settings.renderer=Рендер
 uky.settings.shaderPacks=Шейдерные пакеты
