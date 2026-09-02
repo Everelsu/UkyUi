@@ -9,7 +9,7 @@
   "updateUrl": "",
   "authorList": ["Relsev, REDEMAX"],
   "credits": "Forge and MixinBooter. Renderer settings are read from OptiFine's own option model.",
-  "logoFile": "",
+  "logoFile": "logo.png",
   "screenshots": [],
   "parent": "",
   "useDependencyInformation": true,

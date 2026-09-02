@@ -80,6 +80,20 @@ tasks.processResources.configure {
     filesMatching("mcmod.info") {
         expand(mapOf("modVersion" to projVersion))
     }
+
+    // The mod's own artwork, put at the root of the jar under the two names anything
+    // that shows an icon for a mod knows to look for.
+    //
+    // "logo.png" is what mcmod.info's logoFile points at: FML's own mod list draws it,
+    // and so do the launchers — the one in the screenshot already read the mod's *name*
+    // out of mcmod.info, so it parses the file and was only ever missing the field.
+    // "pack.png" is the resource pack icon: FML makes every mod a resource pack, so
+    // this is the mod's face in the resource pack list, ours included.
+    //
+    // Copied from art/ rather than kept in the resources tree so the picture exists
+    // once in the repository and the jar is where it gets duplicated.
+    from("art/title.png") { rename { "logo.png" } }
+    from("art/title.png") { rename { "pack.png" } }
 }
 
 repositories {
