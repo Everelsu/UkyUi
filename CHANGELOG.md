@@ -5,6 +5,87 @@ build sends to Modrinth, to CurseForge and to the GitHub release for it — see
 [RELEASING.md](RELEASING.md) — so it is written to be read by a player rather than by
 whoever wrote the commit.
 
+## 0.5.4
+
+**Shader packs** (needs Angelica)
+
+- Choosing a shader pack has a screen of its own here now. Iris ships one and it did not
+  survive the trip into this pack: opened over a world it left the world showing through
+  where the list should have been, opened from the title screen it left a dark rectangle
+  there, and in both cases the packs themselves were not on it. The switches around the
+  hole were drawn; the list, which is the entire point of the screen, was not.
+- The pack's own settings are drawn as ordinary rows of this interface — the toggles, the
+  cycles, the pages a pack groups its options into, and the profile picker. All of it is
+  the pack author's: their order, their names, their descriptions, read out of
+  `shaders.properties` and their language files rather than invented here.
+- Descriptions are wrapped rather than cut. A pack's description is where it says what an
+  option costs, and a sentence with its end missing is worse than no sentence.
+- Nothing is applied until Apply. A reload rebuilds the whole pipeline, so clicking
+  through five packs to read their names is not five recompiles — what is waiting is said
+  in the corner of the screen, and Cancel drops it.
+- Drag a pack onto the window to add it. Angelica is what opens that channel, so this is
+  the same drag-and-drop its own screen offers.
+- The backdrop is the sky without the black hole. A pack is judged by how light behaves,
+  and the brightest thing on screen should not be something the pack has no say over.
+  Opened in a world, the world stays visible behind the panel.
+
+**Waila**
+
+- A list of blocks Waila says nothing about at all. The tooltip earns its place over a
+  machine and earns nothing over the ground: crossing a hillside spends the whole
+  crossing with a box in the corner naming the stone underfoot, and it is never once
+  read. Vanilla terrain out of the box, a switch on the Other tab, and the list itself in
+  `uky.cfg` under `mods.wailaHiddenBlocks` — one registry name a line, with an optional
+  metadata value to name a single variant.
+
+**Xaero's Minimap**
+
+- The frame around the map is drawn in this mod's language: the gold rail down its left
+  edge, the corners picked out as brackets, and one tick cut with the same lean the
+  achievement panel is. A ring for a map set to round. Only the frame — the map, the
+  entities, the waypoints and the coordinates under it are Xaero's and are untouched.
+- Xaero's own frame is switched off through its own setting rather than by cutting its
+  drawing out, so it is visible in their settings screen rather than being a mystery, and
+  the value it had is put back the moment `mods.restyleXaeroFrame` is turned off.
+
+**Mod settings**
+
+- Config lists can be edited in the game. A list used to be a row that said "list" and
+  did nothing when clicked — here and in every other mod's settings drawn through this
+  screen — so the answer to "stop naming stone" or "add another link under the menu" was
+  to leave the game, find a file and come back. Click a row to edit it, the arrows to
+  move it, the bin to take it out, Add for a new one, and Restore defaults to start over.
+
+**Quest book** (needs BetterQuesting)
+
+- A completed quest announced itself as `betterquesting.notice.complete` — the lang key
+  rather than the sentence — whenever the quest book's own translation could not be
+  reached. It now falls back to the game's own table, and then to this mod's wording, so
+  a raw key can no longer reach the screen.
+
+**Menus**
+
+- Switching a settings tab, unfolding one of the renderer's sections, or changing a tab
+  or filter on the achievements list no longer replays every row's arrival. The header
+  stayed put while everything under it faded out and slid back in one row at a time,
+  which reads as the text flickering rather than as the panel animating. The entrance
+  belongs to a screen arriving, and only to that.
+
+**The backdrop**
+
+- A comet crosses it every forty seconds or so: a head with a halo and a tail a third of
+  the screen long, four to six seconds to cross. The backdrop is otherwise a still image
+  that moves — the stars drift, the disk turns, and nothing in it ever happens.
+- One star, high on the left, twinkles on its own. Put the pointer on it and it flares
+  and grows a ring; click it and a comet leaves from exactly that point. Both are off
+  together in `uky.cfg` under `effects.comets`.
+
+**The mod's own icon**
+
+- The artwork is in the jar now, so the mod list and the launchers show it instead of a
+  generic cube. Forge's own list reads a mod's `pack.png` and the launchers read the path
+  in `mcmod.info`; neither had a file to read, which is why there was nothing to see.
+
 ## 0.5.3
 
 **Quest book** (needs BetterQuesting)
