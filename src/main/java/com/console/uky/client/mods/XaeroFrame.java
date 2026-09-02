@@ -52,19 +52,26 @@ public final class XaeroFrame {
     private static boolean collecting;
 
     /**
-     * How thick their frame's band is, taken from the pieces themselves.
+     * The pieces themselves, kept until the end of the frame.
      *
-     * The eight rectangles are four corners and four edges: a corner is as wide as the
-     * band and as tall, and an edge is as thick as the band on its short side. So the
-     * smallest side anything arrives with <em>is</em> the thickness, whichever of their
-     * styles is drawing, and no number on this side has to be kept in step with theirs.
+     * <p>Because the box they add up to is not the box we want. Their frame is a nine
+     * slice laid around the map — four corners, four edges, and the map in the hole in
+     * the middle — so the union of the pieces is its <em>outer</em> edge, and the map is
+     * the hole. Drawing on the union put ours a few pixels off the map; guessing the
+     * hole from the thinnest piece put it inside the map, because their corners are
+     * deeper than their edges and the thinnest piece is not the depth of either side.
      *
-     * <p>It is what turns their box into the map's: their frame sits in the margin
-     * around the map, so the map's edge is their outer box brought in by one band.
-     * Without it ours was drawn on their outer edge and stood a few pixels off the map,
-     * which is exactly how it looked.
+     * <p>Kept, the pieces answer it exactly: the hole is bounded by whichever piece
+     * covers the middle of each side, and that is a comparison rather than an
+     * assumption. It costs four small arrays and works for any of their styles at any
+     * size.
      */
-    private static float band;
+    private static final int MAX_PIECES = 32;
+    private static final float[] pieceX = new float[MAX_PIECES];
+    private static final float[] pieceY = new float[MAX_PIECES];
+    private static final float[] pieceW = new float[MAX_PIECES];
+    private static final float[] pieceH = new float[MAX_PIECES];
+    private static int pieces;
 
     private XaeroFrame() {
     }
@@ -82,20 +89,25 @@ public final class XaeroFrame {
 
         float right = x + width;
         float bottom = y + height;
-        float thickness = Math.min(width, height);
         if (!collecting) {
             collecting = true;
+            pieces = 0;
             x1 = x;
             y1 = y;
             x2 = right;
             y2 = bottom;
-            band = thickness;
         } else {
             x1 = Math.min(x1, x);
             y1 = Math.min(y1, y);
             x2 = Math.max(x2, right);
             y2 = Math.max(y2, bottom);
-            band = Math.min(band, thickness);
+        }
+        if (pieces < MAX_PIECES) {
+            pieceX[pieces] = x;
+            pieceY[pieces] = y;
+            pieceW[pieces] = width;
+            pieceH[pieces] = height;
+            pieces++;
         }
         // Cancelled only when ours is meant to stand in for theirs. Left alone, their
         // frame still draws and ours goes around the outside of it — which is what the
@@ -118,18 +130,54 @@ public final class XaeroFrame {
         if (x2 - x1 < 4.0F || y2 - y1 < 4.0F) {
             return;
         }
-        if (UiConfig.xaeroFrameReplace) {
-            // Their frame is gone, so ours takes the place it occupied: their outer box
-            // brought in by one band is the map's own edge, and one pixel of air off
-            // that is where a frame belongs.
-            float inset = Math.max(0.0F, band - 1.0F);
-            drawFrame(x1 + inset, y1 + inset, x2 - inset, y2 - inset);
+        if (!UiConfig.xaeroFrameReplace) {
+            // Theirs is still there. Ours goes around the outside of it, clear by a
+            // pixel, so the two read as one thing with a mark on it rather than as two
+            // frames that happen to be nested.
+            drawFrame(x1 - 1.0F, y1 - 1.0F, x2 + 1.0F, y2 + 1.0F);
             return;
         }
-        // Theirs is still there. Ours goes around the outside of it, clear of it by the
-        // same pixel, so the two read as one thing with a mark on it rather than as two
-        // frames that happen to be nested.
-        drawFrame(x1 - 1.0F, y1 - 1.0F, x2 + 1.0F, y2 + 1.0F);
+        // Their frame is gone, so ours takes the map's own edge: the hole their nine
+        // slice was laid around, plus the pixel of air a frame wants.
+        float left = x1;
+        float top = y1;
+        float right = x2;
+        float bottom = y2;
+        float midX = (x1 + x2) * 0.5F;
+        float midY = (y1 + y2) * 0.5F;
+        for (int i = 0; i < pieces; i++) {
+            float px = pieceX[i];
+            float py = pieceY[i];
+            float pr = px + pieceW[i];
+            float pb = py + pieceH[i];
+            // A piece that crosses the middle of the box on one axis is one of the four
+            // edges, and its inner side is where the map starts on that side. The
+            // corners cross neither and say nothing, which is what stops their extra
+            // depth from being mistaken for the frame's.
+            if (px <= midX && pr >= midX) {
+                if (pb <= midY) {
+                    top = Math.max(top, pb);
+                } else if (py >= midY) {
+                    bottom = Math.min(bottom, py);
+                }
+            }
+            if (py <= midY && pb >= midY) {
+                if (pr <= midX) {
+                    left = Math.max(left, pr);
+                } else if (px >= midX) {
+                    right = Math.min(right, px);
+                }
+            }
+        }
+        if (right - left < 4.0F || bottom - top < 4.0F) {
+            // Nothing crossed the middle — a style built some other way. The outer box
+            // is still a frame's worth of the right place, and it is better than none.
+            left = x1;
+            top = y1;
+            right = x2;
+            bottom = y2;
+        }
+        drawFrame(left - 1.0F, top - 1.0F, right + 1.0F, bottom + 1.0F);
     }
 
     /**
