@@ -77,6 +77,25 @@ tasks.processResources.configure {
     filesMatching("mcmod.info") {
         expand(mapOf("modVersion" to projVersion))
     }
+
+    // The mod's own artwork, at the root of the jar under the two names anything that
+    // shows an icon for a mod knows to look for. Two names because the two readers of
+    // it do not agree:
+    //
+    // "pack.png" is what FML's own mod list draws. It asks the mod's resource pack for
+    // its image first and only falls back to logoFile for a mod that has no pack —
+    // which a jar mod always has, so the fallback never runs and the field alone was
+    // never going to show anything.
+    //
+    // "uky_logo.png" is that logoFile, and it is what the launchers read: they parse
+    // mcmod.info (which is where the name in the launcher's list comes from already)
+    // and pull that path straight out of the zip. Without a file at it they fall back
+    // to a generic cube.
+    //
+    // Copied from art/ rather than kept in the resources tree so the picture exists
+    // once in the repository and the jar is where it gets duplicated.
+    from("art/title.png") { rename { "pack.png" } }
+    from("art/title.png") { rename { "uky_logo.png" } }
 }
 
 repositories {
