@@ -5,6 +5,93 @@ build sends to Modrinth, to CurseForge and to the GitHub release for it — see
 [RELEASING.md](RELEASING.md) — so it is written to be read by a player rather than by
 whoever wrote the commit.
 
+## 0.5.4
+
+The first build of this mod for **Minecraft 1.12.2**. Everything the 1.7.10 version does
+is here, drawn the same way and configured by the same file — what follows is what is
+new since 0.5.3 and what is particular to this version.
+
+**Shader packs** (needs Angelica)
+
+- Choosing a shader pack has a screen of its own here now, in this interface rather than
+  Iris's: the packs in a list, the switch above them, the folder they live in, and the
+  loaded pack's own settings.
+- The pack's settings are the pack author's — their rows, their order, their pages, their
+  descriptions, read out of `shaders.properties` and their language files. Descriptions
+  are wrapped rather than cut off mid-sentence, which is where a pack says what an option
+  costs.
+- Nothing is applied until Apply: a reload rebuilds the whole pipeline, so reading five
+  pack names is not five recompiles. What is waiting is said in the corner of the panel.
+- Drag a pack onto the window to add it.
+- The backdrop is the sky with the black hole left out — a pack is judged by how light
+  behaves, and the brightest thing on screen should not be something the pack has no say
+  over. Over a world, the world stays visible behind the panel.
+
+**Waila**
+
+- A list of blocks Waila says nothing about at all, in `uky.cfg` under
+  `mods.wailaHiddenBlocks`, with a switch on the Other tab. Vanilla terrain out of the
+  box: the tooltip earns its place over a machine and earns nothing over the ground.
+
+**Xaero's Minimap**
+
+- The frame around the map is drawn in this mod's language: the gold rail down its left
+  edge and the corners picked out as brackets. Only the frame — the map, the entities,
+  the waypoints and the coordinates under it are Xaero's and are untouched.
+- **Turn Xaero's own frame off yourself** (its Minimap settings, "Frame", set to Off). On
+  1.12 that setting lives in Xaero's profiled config, in a separate library, and a mod
+  that writes into another mod's config profile is how config files get corrupted.
+
+**Mod settings**
+
+- Config lists can be edited in the game — ours and any other mod's. A list used to be a
+  row that said "list" and did nothing when clicked. Click a row to edit it, the arrows
+  to move it, the bin to take it out, Add for a new one, Restore defaults to start over.
+
+**Advancements**
+
+- The chat line for an earned advancement is shortened and made clickable, and it now
+  says the right thing. It used to be rewritten for some advancements and left alone for
+  others, because it looked the advancement up by its title and the lookup could miss.
+  The name is read from the announcement itself now, and the link carries that name, so
+  every one of them is rewritten and every one of them opens the list.
+- The panel plays this mod's own sound again. The file it names was declared without its
+  namespace, so the game looked for it under `minecraft:` and found nothing.
+- Vanilla's own toasts — a recipe unlocked, the tutorial, "world backed up" — are no
+  longer swallowed. This mod's panel cancels the toast pass while it is on screen, and it
+  was cancelling it when there was nothing of ours to show.
+
+**Menus**
+
+- Switching a settings tab, unfolding one of the renderer's sections, or changing a tab
+  or filter on the advancements list no longer replays every row's arrival, which read as
+  the text flickering rather than as the panel animating.
+- Tooltips, the toasts and the chat are drawn through the game's own state manager. 1.7.10
+  had none and this mod's drawing matched what vanilla did; 1.12 caches every GL state and
+  a raw call leaves that cache asserting the opposite of the truth — after which something
+  unrelated renders wrong several frames later. That is what took the item tooltips out,
+  and what drew the settings tabs as fragments of the black hole's own texture.
+- The font is the game's own again. This mod corrected a glyph-width bug of 1.7.10's that
+  1.12 does not have, using a table read once and a list of characters copied from the
+  older version — so a few characters were measured by one rule and drawn by another.
+- Chat hovers and clicks land on the line under the pointer. With this mod drawing the
+  chat, the game's own hit test was answering for a layout it was not drawing, and a
+  tooltip could belong to a line one or two above the one it appeared for.
+- Tab completion moves on to the next argument. It asked the server to complete the word
+  already typed, because the word boundary it used skips whitespace and walked back over
+  the space after a command.
+
+**The backdrop**
+
+- A comet crosses it every forty seconds or so, and one star, high on the left, twinkles
+  on its own: put the pointer on it and it flares, click it and a comet leaves from that
+  point. Both are off together under `effects.comets`.
+
+**The mod's own icon**
+
+- The artwork is in the jar now, so the mod list and the launchers show it instead of a
+  generic cube.
+
 ## 0.5.3
 
 **Quest book** (needs BetterQuesting)
