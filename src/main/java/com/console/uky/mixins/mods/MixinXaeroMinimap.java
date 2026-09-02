@@ -8,25 +8,30 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Draws our frame where theirs would have been, once the map is finished.
+ * Brackets the minimap's render, which is what tells the frame when to look and when to
+ * draw.
  *
- * <p>The pieces are collected as they are cancelled — see {@link MixinXaeroFrame} — and
- * this is where the box they add up to is drawn around. The end of the same method is
- * the only honest place for it: the rectangles are in whatever space Xaero has set up,
- * and the one push/pop of the matrix inside this method happens after the frame and is
+ * <p>The start is what makes the map's quad identifiable: it is the first one of the
+ * render, and without a mark for where a render begins there is no such thing as first.
+ * The end is the one honest place to draw ours — the coordinates were read in whatever
+ * space Xaero set up, the single push and pop of the matrix inside this method is
  * balanced before it returns, so the space here is the space they were measured in.
  *
- * <p>It cannot be done at the cancelled call itself, tempting as that is. Those run in
- * the middle of a buffer Xaero has open and is still filling; drawing our own geometry
- * into the same buffer, in immediate mode, would corrupt the draw they are part-way
- * through.
+ * <p>It cannot be drawn at the cancelled frame pieces themselves, tempting as that is.
+ * Those run in the middle of a buffer Xaero has open and is still filling, and putting
+ * our own geometry into it in immediate mode would corrupt the draw they are part of.
  */
 @Pseudo
 @Mixin(targets = "xaero.common.minimap.render.MinimapRenderer", remap = false)
 public abstract class MixinXaeroMinimap {
 
+    @Inject(method = "renderMinimap", at = @At("HEAD"), remap = false, require = 0)
+    private void uky$beginMinimap(CallbackInfo ci) {
+        XaeroFrame.begin();
+    }
+
     @Inject(method = "renderMinimap", at = @At("RETURN"), remap = false, require = 0)
     private void uky$drawOurFrame(CallbackInfo ci) {
-        XaeroFrame.drawCollected();
+        XaeroFrame.end();
     }
 }

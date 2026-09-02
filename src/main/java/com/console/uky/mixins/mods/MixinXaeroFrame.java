@@ -9,34 +9,38 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Takes over the eight rectangles Xaero's minimap frame is made of.
+ * Reads the minimap off the two draw calls that make it: the map, and its frame.
  *
- * <p>This is what makes ours <em>a frame style of theirs</em> rather than a second
- * frame drawn on top of one. The map's own renderer builds its frame out of eight
- * textured rectangles — four corners and four edges — and every one of them goes
- * through this one helper method, which nothing else in the mod calls. Cancelling them
- * removes their frame exactly where their frame is drawn, and the rectangles say where
- * that is, to the pixel, in whatever coordinate space they happen to be drawing in.
+ * <p>Both go through this one helper class, which is Xaero's own and which nothing else
+ * calls, so this is the whole of what the frame needs to know.
  *
- * <p>That is worth more than it sounds. The first version of this drew our frame from
- * the overlay pass, working the map's box out from the sizes Xaero exposes, and it was
- * wrong twice — the box included a margin the map does not, and the corner belonged to
- * the interface rather than to the map. Reading the frame's own rectangles cannot be
- * wrong about where the frame goes: it is the same eight numbers their own frame was
- * about to be drawn with.
+ * <p>{@code drawMyTexturedModalRect} draws the square map itself, once, before anything
+ * else in a render — and its arguments are the map's x, y, width and height. That is
+ * where our frame goes, taken rather than calculated. Three earlier versions of this
+ * calculated it, from their settings and then from their frame's own pieces, and each
+ * one was off by a different amount at a different map size.
  *
- * <p>Whichever of their three frame styles is picked, ours replaces it; "off" draws
- * nothing at all, ours included, because then there are no rectangles to take. A map
- * set to round is left alone — that frame is an ellipse and comes from somewhere else.
+ * <p>{@code addTexturedRectToExistingBuffer} draws their frame, eight rectangles of it —
+ * four corners and four edges. Cancelling those removes their frame precisely, which is
+ * what makes ours a replacement for it rather than a second frame drawn over one.
  *
- * <p>{@code remap = false} and the method named without its descriptor: Xaero is not on
- * the compile classpath and its names are its own, so nothing here needs remapping —
- * and this project has no refmap, which a descriptor naming a vanilla type would need
- * (see {@code MixinGuiScreenTooltip}). The name is unique in the class.
+ * <p>{@code remap = false} throughout: Xaero is not on the compile classpath and its
+ * names are its own. The map quad is named with its descriptor because the class has two
+ * methods by that name and it is all primitives, so it is safe to write; the frame piece
+ * is named without one, because its descriptor names a vanilla type and this project has
+ * no refmap to translate it (see {@code MixinGuiScreenTooltip}) — and that name is unique
+ * in the class anyway.
  */
 @Pseudo
 @Mixin(targets = "xaero.common.minimap.render.MinimapRendererHelper", remap = false)
 public abstract class MixinXaeroFrame {
+
+    @Inject(method = "drawMyTexturedModalRect(FFIIFFF)V", at = @At("HEAD"),
+            remap = false, require = 0)
+    private void uky$takeMapQuad(float x, float y, int u, int v, float width, float height,
+                                 float textureSize, CallbackInfo ci) {
+        XaeroFrame.takeMapQuad(x, y, width, height);
+    }
 
     @Inject(method = "addTexturedRectToExistingBuffer", at = @At("HEAD"),
             cancellable = true, remap = false, require = 0)
