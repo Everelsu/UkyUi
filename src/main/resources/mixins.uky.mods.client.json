@@ -9,7 +9,9 @@
     "MixinBqNotice",
     "MixinBqTooltip",
     "MixinCclTooltip",
-    "MixinWailaOverlay"
+    "MixinWailaOverlay",
+    "MixinXaeroFrame",
+    "MixinXaeroMinimap"
   ],
   "server": []
 }

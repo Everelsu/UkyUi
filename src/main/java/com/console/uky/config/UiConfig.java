@@ -180,8 +180,8 @@ public final class UiConfig {
      * box and only the box: the map, the entities, the waypoints and the coordinates
      * under it are Xaero's and stay untouched.
      *
-     * <p>Xaero's own frame has to be switched off in their settings by hand on this
-     * version — see {@code XaeroFrame}, which explains why it is not done from here.
+     * <p>It replaces their frame where their frame is drawn rather than being laid over
+     * it, so nothing has to be switched off by hand — see {@code XaeroFrame}.
      */
     public static boolean restyleXaeroFrame = true;
 
@@ -643,16 +643,17 @@ public final class UiConfig {
                 "Draw the frame around Xaero's minimap in this mod's style: a hairline "
                         + "border with the gold rail down its left edge and the corners "
                         + "picked out as brackets.\n"
+                        + "It replaces their frame rather than being drawn on top of it, "
+                        + "and it is drawn exactly where theirs would have been, so their "
+                        + "own setting still means what it says: whichever of their three "
+                        + "frame styles is picked, ours is what appears, and setting their "
+                        + "frame to Off draws nothing at all.\n"
                         + "Only the frame. What the map draws inside it — terrain, "
                         + "entities, waypoints, the coordinates under it — is Xaero's "
                         + "and is not touched.\n"
-                        + "Turn Xaero's own frame off yourself: its Minimap settings, "
-                        + "'Frame', set to Off. On this version that setting lives in "
-                        + "their profiled config, which this mod deliberately does not "
-                        + "write into — a mod editing another mod's config profile is "
-                        + "how config files get corrupted.\n"
-                        + "A round minimap keeps their frame: the shape is in the same "
-                        + "config and is not guessed at here.");
+                        + "A minimap set to round keeps Xaero's own frame: that one is an "
+                        + "ellipse drawn elsewhere, and a ring over a ring is worse than "
+                        + "either.");
         restyleQuestBook = bool(CAT_MODS, "restyleQuestBook", restyleQuestBook,
                 "Hand BetterQuesting's quest book the UKY theme, once. The theme is "
                         + "built from the palette in [theme] below, so it follows the "

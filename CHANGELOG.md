@@ -38,9 +38,11 @@ new since 0.5.3 and what is particular to this version.
 - The frame around the map is drawn in this mod's language: the gold rail down its left
   edge and the corners picked out as brackets. Only the frame — the map, the entities,
   the waypoints and the coordinates under it are Xaero's and are untouched.
-- **Turn Xaero's own frame off yourself** (its Minimap settings, "Frame", set to Off). On
-  1.12 that setting lives in Xaero's profiled config, in a separate library, and a mod
-  that writes into another mod's config profile is how config files get corrupted.
+- It replaces their frame rather than being drawn over it: their own eight frame pieces
+  are taken as they are about to be drawn, which is what says where the frame goes to the
+  pixel. Their setting still means what it says — whichever style is picked, ours is what
+  appears, and "Off" draws nothing at all. Nothing is written to their config.
+- A minimap set to round keeps Xaero's own frame: that one is an ellipse drawn elsewhere.
 
 **Mod settings**
 
