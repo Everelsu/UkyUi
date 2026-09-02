@@ -12,6 +12,7 @@
     "MixinWailaOverlay",
     "MixinXaeroFbo",
     "MixinXaeroFrame",
+    "MixinXaeroFrameStyle",
     "MixinXaeroMinimap"
   ],
   "server": []

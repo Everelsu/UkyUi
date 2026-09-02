@@ -198,3 +198,5 @@ uky.graphics.minimal.hint=The hole is traced small and slowly. For weak or old c
 uky.graphics.balanced.hint=Full resolution, no supersampling. Hard to tell from maximum in motion.
 uky.graphics.maximum.hint=No ceiling. Everything is drawn as configured.
 
+# The name of this mod's frame style in Xaero's minimap menu.
+uky.xaero.frameStyle=UKY

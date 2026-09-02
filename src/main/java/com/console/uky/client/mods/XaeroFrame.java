@@ -1,73 +1,82 @@
 package com.console.uky.client.mods;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.FloatBuffer;
 
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.UiConfig;
 
+import net.minecraft.util.text.ITextComponent;
+import net.minecraft.util.text.TextComponentTranslation;
+
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 
 /**
- * Xaero's minimap, framed in this mod's language rather than its own.
+ * A frame style for Xaero's minimap, added to the ones Xaero ships.
  *
- * <p>The minimap is the one piece of interface that is on screen the whole time somebody
- * is playing, and its own frame is a beige bevel that has nothing to do with the rest of
- * the HUD. This replaces the box and only the box: the map, the entities, the waypoints
- * and the coordinates under it are Xaero's and are untouched.
+ * <p>The minimap is on screen the whole time somebody is playing, and its own frame is a
+ * beige bevel that has nothing to do with the rest of the HUD. This is another entry in
+ * their <em>Frame Style</em> setting, picked in their menu next to Default, Colored and
+ * Colored Thin: choose it and the map is framed in this mod's language, choose one of
+ * theirs and this mod does not touch the map at all.
  *
- * <h2>Where the map is</h2>
+ * <p>Only the frame either way. The map, the entities, the waypoints and the coordinates
+ * under it are Xaero's and are untouched.
  *
- * <p>Taken from the map, not worked out from anything around it. Their renderer draws the
- * square map as a single textured quad, and that call carries its x, y, width and height —
- * so the frame is drawn on the same four numbers the map is.
+ * <h2>Getting into their menu</h2>
  *
- * <p>Everything tried before this was a guess about that rectangle, and each guess was
- * wrong in its own way: the sizes their settings expose include margins the map does not
- * have; the union of their frame's eight pieces is its outer edge, a band away from the
- * map; the hole in the middle of those pieces is closer, but their corners are deeper than
- * their edges, so it landed inside the map on large ones and off it on small ones. The
- * quad is not a guess.
+ * <p>Their frame styles are an array of names, and everything about the setting is read
+ * off it: how far the button can be clicked comes from its length, the label comes from
+ * the name at the chosen index, and "off" is defined as the last entry rather than as a
+ * number. So the whole of adding a style is putting a name in that array, one place from
+ * the end — the button gains a stop, ours is the name on it, and off stays off.
  *
- * <h2>Which quad, and in whose coordinates</h2>
+ * <p>It goes in as their static holder finishes loading, which is before anything reads
+ * the array — the setting is built from its length, so it has to be there by then. If
+ * anything about that fails the array is left exactly as it was and this mod simply has
+ * no style in their menu.
  *
- * <p>Two things stand between that quad and the screen, and both are handled here rather
- * than assumed away.
+ * <p>The one price is for somebody who had the frame set to off already: off moved along
+ * by one, so it reads as ours until it is set to off again.
  *
- * <p>The first is that it is not the only quad of a render. With the frame buffer in use
- * the map is drawn once into the buffer, at the buffer's own origin, before it is drawn
- * where the player can see it; that pass is bracketed and ignored, so the quad taken is
- * always the one on the screen. Waypoint and entity icons come afterwards, and the first
- * quad that is not the buffer's is the map.
+ * <h2>Drawing it</h2>
  *
- * <p>The second is that the quad is drawn under a scale of Xaero's own, so its numbers are
- * not screen pixels, and by the time the frame can safely be drawn that scale is gone.
- * The modelview matrix is read at both ends and the rectangle is carried across, which
- * makes this right at any minimap scale and any GUI scale without knowing what either of
- * them is.
+ * <p>Their renderer knows nothing about our style, so it draws its own frame for it —
+ * eight textured rectangles through a single helper. Those are intercepted and cancelled
+ * when ours is the style picked, which is what leaves the map bare for ours and what
+ * leaves their three styles alone when one of them is picked instead.
  *
- * <h2>Standing in for their frame, or standing around it</h2>
+ * <p>Where the map is comes from the map. Their renderer draws the square map as one
+ * textured quad carrying its x, y, width and height, so the frame is drawn on the same
+ * four numbers the map is. Everything tried before that was a guess about that rectangle
+ * and each guess was wrong in its own way: the sizes their settings expose include margins
+ * the map does not have, the union of their frame pieces is the frame's outer edge, and
+ * the hole those pieces are laid around is bounded by corners deeper than the edges.
  *
- * <p>Their frame is built from eight rectangles that all go through one helper, so it can
- * be removed exactly: cancel those eight and it was never drawn. {@code
- * mods.xaeroFrameReplace} decides whether to. On, theirs goes and ours is drawn on the
- * map's edge; off, theirs stays and ours goes around the outside of it — this mod's mark
- * on the map without taking anything away from somebody who likes the frame Xaero ships.
+ * <p>Two things stand between that quad and the screen and both are handled rather than
+ * assumed. With the frame buffer in use the map is drawn into the buffer first, at the
+ * buffer's own origin; that pass is bracketed and ignored. And the quad is drawn under a
+ * scale of Xaero's own, while the frame can only be drawn once that scale is gone, so the
+ * modelview matrix is read at both ends and the rectangle is carried across — which makes
+ * this right at any minimap scale and any GUI scale without knowing what either of them is.
  *
- * <p>Either way this is their frame drawn differently, not a frame of ours that happens to
- * be near their map, so it appears exactly when theirs would have. Whichever of their
- * styles is picked, ours is what is seen; set their frame to "off" and there are no pieces
- * to take and nothing is drawn at all, theirs or ours. A map set to round is left alone
- * entirely — that one is an ellipse drawn somewhere else, no quad arrives, and a ring of
- * ours over a ring of theirs is worse than either.
- *
- * <p>What this cannot be is a fifth entry in Xaero's own frame menu. That setting is a
- * numeric range in their profiled config, and a value invented from outside would be
- * written into a file their own code does not know it in — and would still be sitting
- * there, meaning nothing, if this mod were removed.
+ * <p>A map set to round is left alone: that one is an ellipse drawn somewhere else, no
+ * quad arrives, and their pieces are not cancelled, so it keeps the frame it had.
  */
 public final class XaeroFrame {
+
+    /** The name our style goes into Xaero's list under. */
+    private static final String STYLE_NAME = "uky.xaero.frameStyle";
+
+    /** Our place in their list of frame styles, or -1 if we never got into it. */
+    private static int styleIndex = -1;
+
+    /** The style picked this render, as their own setting has it. */
+    private static int style = -1;
 
     /** Whether their minimap render is currently between its first and last instruction. */
     private static boolean rendering;
@@ -83,27 +92,72 @@ public final class XaeroFrame {
     private static float mapBottom;
     private static final float[] mapSpace = new float[4];
 
-    /** Their frame's outer box, for when ours is drawn around it instead of over it. */
-    private static boolean haveTheirs;
-    private static float theirLeft;
-    private static float theirTop;
-    private static float theirRight;
-    private static float theirBottom;
-    private static final float[] theirSpace = new float[4];
-
     /** Scratch for reading the modelview matrix, and the four numbers taken from it. */
     private static final FloatBuffer MATRIX = BufferUtils.createFloatBuffer(16);
     private static final float[] here = new float[4];
 
+    /** The way to their current setting, found once and kept. */
+    private static Method configs;
+    private static Method clientManager;
+    private static Method effective;
+    private static Object frameOption;
+    private static boolean looked;
+
     private XaeroFrame() {
     }
 
-    /** Starts a render: nothing is known about the map until it draws itself. */
+    /**
+     * Puts our style into Xaero's list, one place from the end.
+     *
+     * <p>One place, not at the end, because their renderer treats the last entry as "off":
+     * appending would have made their off draw a frame and ours draw none. Ours takes the
+     * place their off had and their off moves along, which leaves every one of their own
+     * styles meaning exactly what it did.
+     *
+     * <p>Called from their own static initialiser as it finishes. Reflection rather than a
+     * shadowed field so that a version where any of this is different costs the style and
+     * nothing else.
+     */
+    public static void addFrameStyle() {
+        if (styleIndex >= 0 || !UiConfig.restyleXaeroFrame) {
+            return;
+        }
+        try {
+            Class<?> constants = Class.forName(
+                    "xaero.hud.minimap.common.config.MinimapConfigConstants");
+            Field names = constants.getDeclaredField("FRAME_NAMES");
+            names.setAccessible(true);
+            Field modifiers = Field.class.getDeclaredField("modifiers");
+            modifiers.setAccessible(true);
+            modifiers.setInt(names, names.getModifiers() & ~Modifier.FINAL);
+
+            ITextComponent[] theirs = (ITextComponent[]) names.get(null);
+            if (theirs == null || theirs.length < 2) {
+                return;
+            }
+            int last = theirs.length - 1;
+            ITextComponent[] with = new ITextComponent[theirs.length + 1];
+            System.arraycopy(theirs, 0, with, 0, last);
+            with[last] = new TextComponentTranslation(STYLE_NAME);
+            with[last + 1] = theirs[last];
+            names.set(null, with);
+            styleIndex = last;
+        } catch (Throwable ignored) {
+            // Their menu keeps the styles it shipped with, and nothing else changes.
+        }
+    }
+
+    /** Starts a render: reads which style is picked, and forgets the last one's map. */
     public static void begin() {
         rendering = true;
         offScreen = false;
         haveMap = false;
-        haveTheirs = false;
+        style = styleIndex < 0 ? -1 : currentStyle();
+    }
+
+    /** Whether the style picked in Xaero's own menu is ours. */
+    private static boolean ours() {
+        return styleIndex >= 0 && style == styleIndex && UiConfig.restyleXaeroFrame;
     }
 
     /**
@@ -128,7 +182,7 @@ public final class XaeroFrame {
      * the same helper, and the map is drawn before any of them.
      */
     public static void takeMapQuad(float x, float y, float width, float height) {
-        if (!rendering || offScreen || haveMap || !UiConfig.restyleXaeroFrame) {
+        if (!rendering || offScreen || haveMap || !ours()) {
             return;
         }
         if (width < 8.0F || height < 8.0F) {
@@ -143,36 +197,13 @@ public final class XaeroFrame {
     }
 
     /**
-     * Takes one piece of their frame, on its way to being drawn.
+     * Takes one piece of the frame their renderer is drawing.
      *
-     * @return whether the caller should skip drawing it, which is what makes ours a
-     *         replacement rather than an addition
+     * @return whether the caller should skip drawing it, which is true only when the
+     *         style picked is ours — their own three are drawn by them, untouched
      */
     public static boolean takeFramePiece(float x, float y, int width, int height) {
-        if (!rendering || !UiConfig.restyleXaeroFrame) {
-            return false;
-        }
-
-        float right = x + width;
-        float bottom = y + height;
-        if (!haveTheirs) {
-            haveTheirs = true;
-            theirLeft = x;
-            theirTop = y;
-            theirRight = right;
-            theirBottom = bottom;
-            readSpace(theirSpace);
-        } else {
-            theirLeft = Math.min(theirLeft, x);
-            theirTop = Math.min(theirTop, y);
-            theirRight = Math.max(theirRight, right);
-            theirBottom = Math.max(theirBottom, bottom);
-        }
-
-        // Their frame is only removed when ours is going to stand where it stood. On a
-        // round map no quad arrived, there is nowhere to draw ours, and taking theirs
-        // away would leave the map with no frame at all.
-        return UiConfig.xaeroFrameReplace && haveMap;
+        return rendering && ours() && haveMap;
     }
 
     /** Ends the render by drawing our frame around whatever the map turned out to be. */
@@ -182,31 +213,49 @@ public final class XaeroFrame {
         }
         rendering = false;
         offScreen = false;
-        if (!UiConfig.restyleXaeroFrame) {
+        if (!ours() || !haveMap) {
             return;
         }
         readSpace(here);
+        // On the map's own edge, one pixel out: the air a frame wants around it.
+        draw(mapSpace, mapLeft, mapTop, mapRight, mapBottom, 1.0F);
+    }
 
-        // This is their frame, drawn differently — not a frame of our own that happens to
-        // be near their map. So it appears when theirs would have, and their switch is
-        // still the switch: set the minimap's frame to "off" and there are no pieces, and
-        // ours is off with it.
-        if (!haveTheirs) {
-            return;
-        }
-
-        if (UiConfig.xaeroFrameReplace) {
-            if (haveMap) {
-                // On the map's own edge, one pixel out: the air a frame wants around it.
-                draw(mapSpace, mapLeft, mapTop, mapRight, mapBottom, 1.0F);
+    /**
+     * Their frame setting, as it stands right now.
+     *
+     * <p>Asked of their own config rather than remembered, because it is theirs: it is
+     * changed in their menu, it belongs to whichever of their profiles is loaded, and it
+     * can change between two frames. The way to it is found once; if it cannot be found
+     * this returns nothing picked, and no style of ours is ever the one in use.
+     */
+    private static int currentStyle() {
+        try {
+            if (!looked) {
+                looked = true;
+                Class<?> hudMod = Class.forName("xaero.common.HudMod");
+                configs = hudMod.getMethod("getHudConfigs");
+                clientManager = configs.getReturnType().getMethod("getClientConfigManager");
+                Class<?> options = Class.forName(
+                        "xaero.hud.minimap.common.config.option.MinimapProfiledConfigOptions");
+                frameOption = options.getField("FRAME").get(null);
+                Class<?> option = Class.forName("xaero.lib.common.config.option.ConfigOption");
+                effective = clientManager.getReturnType().getMethod("getEffective", option);
             }
-            return;
+            if (effective == null) {
+                return -1;
+            }
+            Object instance = Class.forName("xaero.common.HudMod").getField("INSTANCE").get(null);
+            if (instance == null) {
+                return -1;
+            }
+            Object manager = clientManager.invoke(configs.invoke(instance));
+            Object value = effective.invoke(manager, frameOption);
+            return value instanceof Integer ? (Integer) value : -1;
+        } catch (Throwable ignored) {
+            effective = null;
+            return -1;
         }
-
-        // Theirs was left to draw, so ours goes around the outside of it, clear by a
-        // pixel — the two read as one thing with a mark on it rather than as two frames
-        // that happen to be nested.
-        draw(theirSpace, theirLeft, theirTop, theirRight, theirBottom, 1.0F);
     }
 
     /**

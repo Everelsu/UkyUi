@@ -177,3 +177,5 @@ uky.graphics.minimal.hint=Дыра считается мелко и редко. 
 uky.graphics.balanced.hint=Полное разрешение без суперсэмплинга. В движении почти неотличимо от максимума.
 uky.graphics.maximum.hint=Без ограничений. Всё рисуется как настроено.
 
+# The name of this mod's frame style in Xaero's minimap menu.
+uky.xaero.frameStyle=UKY

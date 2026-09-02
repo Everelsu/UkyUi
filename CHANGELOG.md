@@ -35,21 +35,18 @@ new since 0.5.3 and what is particular to this version.
 
 **Xaero's Minimap**
 
-- The frame around the map is drawn in this mod's language: the gold rail down its left
-  edge and the corners picked out as brackets. Only the frame — the map, the entities,
-  the waypoints and the coordinates under it are Xaero's and are untouched.
+- A frame style of this mod's own, added to the ones Xaero ships: the gold rail down the
+  map's left edge and the corners picked out as brackets. It is picked in their own menu,
+  in Frame Style, next to Default, Colored and Colored Thin — their styles are not
+  replaced and not touched, and picking one of theirs draws nothing of ours.
+- Only the frame. The map, the entities, the waypoints and the coordinates under it are
+  Xaero's and are untouched, and nothing is written to their config.
 - It sits on the map's own edge, taken from the map: their renderer draws the square map
   as a single quad, and the frame is drawn on the same four numbers. The pass that draws
   the map into their frame buffer is skipped, and the scale it is all drawn under is read
   off the matrix and carried across, so this holds at any minimap and GUI scale.
-- It replaces their frame rather than being drawn over it: their own eight frame pieces
-  are taken as they are about to be drawn, so their frame is removed exactly. It is their
-  frame drawn differently rather than one of ours added next to it: whichever style is
-  picked, ours is what appears, and "Off" draws nothing at all. Nothing is written to
-  their config.
-- `mods.xaeroFrameReplace` chooses between the two: ours in place of theirs, or both —
-  theirs against the map as it always was and ours around the outside, for somebody who
-  wants the mark without giving up the frame the map came with.
+- `mods.restyleXaeroFrame` off takes the entry out of their menu again. Somebody who had
+  the frame set to Off will find Off one place along, because that is where ours went in.
 - A minimap set to round keeps Xaero's own frame: that one is an ellipse drawn elsewhere.
 
 **Mod settings**

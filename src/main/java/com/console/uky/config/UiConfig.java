@@ -180,19 +180,11 @@ public final class UiConfig {
      * box and only the box: the map, the entities, the waypoints and the coordinates
      * under it are Xaero's and stay untouched.
      *
-     * <p>It replaces their frame where their frame is drawn rather than being laid over
-     * it, so nothing has to be switched off by hand — see {@code XaeroFrame}.
+     * <p>It is an entry in Xaero's own Frame Style setting rather than something drawn
+     * over whatever they draw: picked in their menu next to Default, Colored and Colored
+     * Thin. Off here takes it out of that menu — see {@code XaeroFrame}.
      */
     public static boolean restyleXaeroFrame = true;
-    /**
-     * Whether ours stands in for Xaero's frame or stands around it.
-     *
-     * On, their frame is not drawn and ours takes the place of it. Off, both are drawn —
-     * theirs against the map as it always was, ours around the outside — which is the
-     * option for somebody who wants the mark without giving up the frame the map came
-     * with. Either way nothing is written to Xaero's own settings.
-     */
-    public static boolean xaeroFrameReplace = true;
 
     /**
      * Hand BetterQuesting a theme built from the palette below — once.
@@ -648,30 +640,24 @@ public final class UiConfig {
                         + "by in commands and recipes, which NEI shows under an item "
                         + "once item ids are turned on in its options.\n"
                         + "Emptying the list has the same effect as wailaHideListed=false.");
-        restyleXaeroFrame = bool(CAT_MODS, "restyleXaeroFrame", restyleXaeroFrame,
-                "Draw the frame around Xaero's minimap in this mod's style: a hairline "
+        restyleXaeroFrame = bool(CAT_MODS, "restyleXaeroFrame",
+                restyleXaeroFrame,
+                "Add a frame style to Xaero's minimap in this mod's language: a hairline "
                         + "border with the gold rail down its left edge and the corners "
                         + "picked out as brackets.\n"
-                        + "It replaces their frame rather than being drawn on top of it, "
-                        + "and it is drawn exactly where theirs would have been, so their "
-                        + "own setting still means what it says: whichever of their three "
-                        + "frame styles is picked, ours is what appears, and setting their "
-                        + "frame to Off draws nothing at all.\n"
-                        + "Only the frame. What the map draws inside it — terrain, "
-                        + "entities, waypoints, the coordinates under it — is Xaero's "
-                        + "and is not touched.\n"
+                        + "It is one more entry in their own Frame Style setting, picked "
+                        + "in their menu next to Default, Colored and Colored Thin. Their "
+                        + "styles are not replaced and not touched: pick one of theirs "
+                        + "and this mod draws nothing on the map.\n"
+                        + "Only the frame. What the map draws inside it - terrain, "
+                        + "entities, waypoints, the coordinates under it - is Xaero's and "
+                        + "is not touched.\n"
+                        + "Off takes the entry out of their menu, which needs the game "
+                        + "restarted to take effect. Nothing is ever written to Xaero's "
+                        + "own config.\n"
                         + "A minimap set to round keeps Xaero's own frame: that one is an "
                         + "ellipse drawn elsewhere, and a ring over a ring is worse than "
                         + "either.");
-        xaeroFrameReplace = bool(CAT_MODS, "xaeroFrameReplace", xaeroFrameReplace,
-                "Whether ours stands in for Xaero's frame or stands around it.\n"
-                        + "On, their frame is not drawn and ours takes the place of it, "
-                        + "against the map's own edge.\n"
-                        + "Off, both are drawn: theirs where it always was, ours around "
-                        + "the outside of it. For somebody who wants this mod's mark on "
-                        + "the map without giving up the frame the map came with.\n"
-                        + "Needs restyleXaeroFrame on. Neither setting writes anything "
-                        + "to Xaero's own config.");
         restyleQuestBook = bool(CAT_MODS, "restyleQuestBook", restyleQuestBook,
                 "Hand BetterQuesting's quest book the UKY theme, once. The theme is "
                         + "built from the palette in [theme] below, so it follows the "

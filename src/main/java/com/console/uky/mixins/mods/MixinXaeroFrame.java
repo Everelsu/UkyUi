@@ -21,8 +21,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * one was off by a different amount at a different map size.
  *
  * <p>{@code addTexturedRectToExistingBuffer} draws their frame, eight rectangles of it —
- * four corners and four edges. Cancelling those removes their frame precisely, which is
- * what makes ours a replacement for it rather than a second frame drawn over one.
+ * four corners and four edges. Their renderer knows nothing about the style this mod adds
+ * to their menu, so it draws its own frame for it; those eight are cancelled when ours is
+ * the style picked, and left alone when any of theirs is.
  *
  * <p>{@code remap = false} throughout: Xaero is not on the compile classpath and its
  * names are its own. The map quad is named with its descriptor because the class has two
