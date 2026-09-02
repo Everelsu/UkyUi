@@ -29,6 +29,18 @@ import com.console.uky.config.UiConfig;
  *
  * <p>A map set to round keeps Xaero's frame: that one is an ellipse drawn somewhere
  * else entirely, and a ring of ours over a ring of theirs is worse than either.
+ *
+ * <h2>Standing in for theirs, or standing around it</h2>
+ *
+ * <p>{@code mods.xaeroFrameReplace} decides which. On, the pieces are cancelled and ours
+ * is drawn where the map's own edge is. Off, theirs is left to draw and ours goes around
+ * the outside of it — this mod's mark on the map without taking anything away from
+ * somebody who likes the frame Xaero ships.
+ *
+ * <p>What this cannot be is a fifth entry in Xaero's own frame menu. That setting is a
+ * numeric range in their profiled config, and a value invented from outside would be
+ * written into a file their own code does not know it in — and would still be sitting
+ * there, meaning nothing, if this mod were removed.
  */
 public final class XaeroFrame {
 
@@ -38,6 +50,21 @@ public final class XaeroFrame {
     private static float x2;
     private static float y2;
     private static boolean collecting;
+
+    /**
+     * How thick their frame's band is, taken from the pieces themselves.
+     *
+     * The eight rectangles are four corners and four edges: a corner is as wide as the
+     * band and as tall, and an edge is as thick as the band on its short side. So the
+     * smallest side anything arrives with <em>is</em> the thickness, whichever of their
+     * styles is drawing, and no number on this side has to be kept in step with theirs.
+     *
+     * <p>It is what turns their box into the map's: their frame sits in the margin
+     * around the map, so the map's edge is their outer box brought in by one band.
+     * Without it ours was drawn on their outer edge and stood a few pixels off the map,
+     * which is exactly how it looked.
+     */
+    private static float band;
 
     private XaeroFrame() {
     }
@@ -52,21 +79,28 @@ public final class XaeroFrame {
         if (!UiConfig.restyleXaeroFrame) {
             return false;
         }
+
         float right = x + width;
         float bottom = y + height;
+        float thickness = Math.min(width, height);
         if (!collecting) {
             collecting = true;
             x1 = x;
             y1 = y;
             x2 = right;
             y2 = bottom;
-            return true;
+            band = thickness;
+        } else {
+            x1 = Math.min(x1, x);
+            y1 = Math.min(y1, y);
+            x2 = Math.max(x2, right);
+            y2 = Math.max(y2, bottom);
+            band = Math.min(band, thickness);
         }
-        x1 = Math.min(x1, x);
-        y1 = Math.min(y1, y);
-        x2 = Math.max(x2, right);
-        y2 = Math.max(y2, bottom);
-        return true;
+        // Cancelled only when ours is meant to stand in for theirs. Left alone, their
+        // frame still draws and ours goes around the outside of it — which is what the
+        // second switch is for.
+        return UiConfig.xaeroFrameReplace;
     }
 
     /**
@@ -84,7 +118,18 @@ public final class XaeroFrame {
         if (x2 - x1 < 4.0F || y2 - y1 < 4.0F) {
             return;
         }
-        drawFrame(x1, y1, x2, y2);
+        if (UiConfig.xaeroFrameReplace) {
+            // Their frame is gone, so ours takes the place it occupied: their outer box
+            // brought in by one band is the map's own edge, and one pixel of air off
+            // that is where a frame belongs.
+            float inset = Math.max(0.0F, band - 1.0F);
+            drawFrame(x1 + inset, y1 + inset, x2 - inset, y2 - inset);
+            return;
+        }
+        // Theirs is still there. Ours goes around the outside of it, clear of it by the
+        // same pixel, so the two read as one thing with a mark on it rather than as two
+        // frames that happen to be nested.
+        drawFrame(x1 - 1.0F, y1 - 1.0F, x2 + 1.0F, y2 + 1.0F);
     }
 
     /**

@@ -42,6 +42,9 @@ new since 0.5.3 and what is particular to this version.
   are taken as they are about to be drawn, which is what says where the frame goes to the
   pixel. Their setting still means what it says — whichever style is picked, ours is what
   appears, and "Off" draws nothing at all. Nothing is written to their config.
+- `mods.xaeroFrameReplace` chooses between the two: ours in place of theirs, or both —
+  theirs against the map as it always was and ours around the outside, for somebody who
+  wants the mark without giving up the frame the map came with.
 - A minimap set to round keeps Xaero's own frame: that one is an ellipse drawn elsewhere.
 
 **Mod settings**

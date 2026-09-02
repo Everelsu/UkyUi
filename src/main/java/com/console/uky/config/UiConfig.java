@@ -184,6 +184,15 @@ public final class UiConfig {
      * it, so nothing has to be switched off by hand — see {@code XaeroFrame}.
      */
     public static boolean restyleXaeroFrame = true;
+    /**
+     * Whether ours stands in for Xaero's frame or stands around it.
+     *
+     * On, their frame is not drawn and ours takes the place of it. Off, both are drawn —
+     * theirs against the map as it always was, ours around the outside — which is the
+     * option for somebody who wants the mark without giving up the frame the map came
+     * with. Either way nothing is written to Xaero's own settings.
+     */
+    public static boolean xaeroFrameReplace = true;
 
     /**
      * Hand BetterQuesting a theme built from the palette below — once.
@@ -654,6 +663,15 @@ public final class UiConfig {
                         + "A minimap set to round keeps Xaero's own frame: that one is an "
                         + "ellipse drawn elsewhere, and a ring over a ring is worse than "
                         + "either.");
+        xaeroFrameReplace = bool(CAT_MODS, "xaeroFrameReplace", xaeroFrameReplace,
+                "Whether ours stands in for Xaero's frame or stands around it.\n"
+                        + "On, their frame is not drawn and ours takes the place of it, "
+                        + "against the map's own edge.\n"
+                        + "Off, both are drawn: theirs where it always was, ours around "
+                        + "the outside of it. For somebody who wants this mod's mark on "
+                        + "the map without giving up the frame the map came with.\n"
+                        + "Needs restyleXaeroFrame on. Neither setting writes anything "
+                        + "to Xaero's own config.");
         restyleQuestBook = bool(CAT_MODS, "restyleQuestBook", restyleQuestBook,
                 "Hand BetterQuesting's quest book the UKY theme, once. The theme is "
                         + "built from the palette in [theme] below, so it follows the "
