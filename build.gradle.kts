@@ -320,7 +320,12 @@ releaseJar.configure {
 modrinth {
     token.set(modrinthToken)
     projectId.set(modrinthProjectId)
-    versionNumber.set(project.version.toString())
+    // "0.5.4+1.7.10" rather than "0.5.4". Both branches of this repository release the
+    // same mod version, and Modrinth wants a version number no other version of the
+    // project already has — the second of the two would be rejected. The build metadata
+    // suffix is what everybody else's multi-version releases use, and it says the same
+    // thing the file name does.
+    versionNumber.set(minecraft.mcVersion.map { mc -> "${project.version}+$mc" })
     // No versionName, for the same reason there is no displayName on the CurseForge
     // side: left unset it falls back to the version number, and the file underneath it
     // says the rest. A sentence there is a heading nobody asked for.
@@ -391,16 +396,29 @@ tasks.register("publishRelease") {
 }
 
 /**
- * The version and the notes, for whatever is driving a release from outside Gradle.
+ * The version, the Minecraft version and the notes, for whatever is driving a release
+ * from outside Gradle.
  *
- * The release workflow reads both from here rather than parsing this file or the
+ * The release workflow reads all three from here rather than parsing this file or the
  * changelog itself, so the rules for what a version is and where its notes come from
  * live in exactly one place.
+ *
+ * The Minecraft version matters to it because that workflow builds either branch of
+ * this repository on request, and which Minecraft a branch is for is the whole
+ * difference between them — as well as being in the name of the file it uploads.
+ * Asked rather than written down there, so a branch answers for itself.
  */
 tasks.register("printVersion") {
     group = "help"
     description = "Prints the project version"
     val value = project.version.toString()
+    doLast { println(value) }
+}
+
+tasks.register("printMcVersion") {
+    group = "help"
+    description = "Prints the Minecraft version this branch builds for"
+    val value = minecraft.mcVersion.get()
     doLast { println(value) }
 }
 
