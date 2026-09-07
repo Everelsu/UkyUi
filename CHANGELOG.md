@@ -55,6 +55,17 @@ new since 0.5.3 and what is particular to this version.
   row that said "list" and did nothing when clicked. Click a row to edit it, the arrows
   to move it, the bin to take it out, Add for a new one, Restore defaults to start over.
 
+**The loading screen**
+
+- It keeps itself out of a crash loop. The screen is a second GL context drawn from a
+  second thread — FML's own splash works the same way — and on a loader running 1.12.2 on
+  LWJGL 3 that second context is in the hands of a compatibility layer, which on some AMD
+  drivers is a crash inside the driver with nothing in the log about it. The screen now
+  notes in a file that it is up and takes the note away when loading finishes: a start-up
+  that finds the note left over turns the screen off and keeps it off. One crash at most,
+  on the machine it happens on, and nowhere else loses the screen.
+- Off is `config/uky/loading-screen-off-after-crash`. Delete it to try again.
+
 **Advancements**
 
 - The chat line for an earned advancement is shortened and made clickable, and it now
