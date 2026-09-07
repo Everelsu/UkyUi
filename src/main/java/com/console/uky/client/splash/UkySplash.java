@@ -14,7 +14,6 @@ import org.lwjgl.opengl.SharedDrawable;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -92,7 +91,10 @@ public final class UkySplash {
             if (!UiConfig.customSplash) {
                 return false;
             }
-            if (!claimRun(Minecraft.getMinecraft().gameDir)) {
+            if (onLwjgl3() && !UiConfig.splashOnLwjgl3) {
+                log("this game runs on LWJGL 3 and this screen is a second GL context "
+                        + "from LWJGL 2, so the loader's own splash is left to run. Set "
+                        + "splash.splashOnLwjgl3 to have it anyway", null);
                 return false;
             }
             displayMutex = findDisplayMutex();
@@ -103,7 +105,6 @@ public final class UkySplash {
         } catch (Throwable t) {
             log("could not acquire a GL context for the loading screen", t);
             releaseToMainThread();
-            finishRun();
             return false;
         }
 
@@ -132,7 +133,6 @@ public final class UkySplash {
         running = false;
         done = true;
         finishedAt = System.nanoTime();
-        finishRun();
         try {
             thread.join(5000L);
             GL11.glFlush();
@@ -195,94 +195,37 @@ public final class UkySplash {
     }
 
     /**
-     * The two files this screen leaves next to the config it reads.
+     * Whether the game is running on LWJGL 3 rather than the 2 this screen is written to.
      *
-     * <p>{@code RUNNING} exists only while the screen is up. {@code DISABLED} is what it
-     * becomes if the game never got far enough to take it away.
+     * <p>This screen is a second GL context, shared with the main one, drawn from a
+     * second thread — which is how FML's own splash works and the only way to draw
+     * anything while the main thread is loading mods. The API for it is LWJGL 2's
+     * {@code SharedDrawable}, and LWJGL 3 has no equivalent: a context there belongs to
+     * a window, not to a drawable.
+     *
+     * <p>Loaders that run 1.12.2 on LWJGL 3 put the 2 classes back as a compatibility
+     * layer, so all of this links and starts and appears to work — and then what that
+     * layer has done with a second context is between it and the driver. On one AMD
+     * driver it is an access violation inside the driver two minutes later, in another
+     * mod's draw call, with nothing at either end to connect them: turning this screen
+     * off is what stopped it, and nothing else did.
+     *
+     * <p>So it is off there unless {@code splash.splashOnLwjgl3} says otherwise, and on
+     * everywhere else. Most machines are fine with it, which is why this is a switch and
+     * not a verdict.
+     *
+     * <p>{@code org.lwjgl.system} is LWJGL 3's own package and does not exist in 2, so
+     * asking whether it is there is the version — no string to parse, and no compile-time
+     * dependency on either.
      */
-    private static final String RUNNING = "config/uky/.loading-screen-running";
-    private static final String DISABLED = "config/uky/loading-screen-off-after-crash";
-
-    private static File runningMarker;
-
-    /**
-     * Says whether this screen may run, and leaves a note that it did.
-     *
-     * <p>What this guards against is a start-up that does not come back. The screen is a
-     * second GL context, shared with the main one, drawn from a second thread — which is
-     * how FML's own splash works and the only way to draw anything while the main thread
-     * is loading mods. The API for it is LWJGL 2's {@code SharedDrawable}, and LWJGL 3
-     * has no equivalent, so a loader running 1.12.2 on LWJGL 3 puts the 2 API back as a
-     * compatibility layer and a second context on a second thread is then in the hands of
-     * whatever that layer does with it. On some drivers — AMD, so far — that is a crash
-     * inside the driver: not an exception, impossible to catch, and with nothing in the
-     * log to say what it was.
-     *
-     * <p>Refusing to run on LWJGL 3 at all was the first answer to that and it was too
-     * broad. It costs the screen on every machine where the layer is perfectly happy,
-     * which is most of them, and this screen is half of what the mod is for.
-     *
-     * <p>So it runs, and it says so in a file while it is up. Finding that file on the
-     * next start-up means the last one did not finish with the screen drawing — and it is
-     * then turned off and stays off, rather than crashing a second time to prove it. At
-     * most one crash, on the one machine it happens on, and every other machine keeps the
-     * screen.
-     *
-     * <p>Off is a file called {@code loading-screen-off-after-crash} in the config folder:
-     * delete it to try again. A load that dies of something else entirely trips this too
-     * — the screen is only collateral there, and a pack that cannot load is better off
-     * crashing under the loader's own splash anyway.
-     */
-    private static boolean claimRun(File gameDir) {
+    private static boolean onLwjgl3() {
         try {
-            File off = new File(gameDir, DISABLED);
-            if (off.isFile()) {
-                log("the loading screen is off because a start-up did not finish with it "
-                        + "on screen. Delete " + off.getPath() + " to try it again", null);
-                return false;
-            }
-
-            File marker = new File(gameDir, RUNNING);
-            if (marker.isFile()) {
-                marker.delete();
-                write(off);
-                log("the last start-up did not finish while the loading screen was up, so "
-                        + "it is off from now on. Delete " + off.getPath()
-                        + " to try it again", null);
-                return false;
-            }
-
-            write(marker);
-            runningMarker = marker;
+            Class.forName("org.lwjgl.system.MemoryUtil", false,
+                    UkySplash.class.getClassLoader());
             return true;
-        } catch (Throwable t) {
-            // Nowhere to write is not a reason to refuse the screen. It only means this
-            // machine goes without the safety net.
-            log("could not write the loading screen's marker file", t);
-            runningMarker = null;
-            return true;
+        } catch (Throwable absent) {
+            return false;
         }
-    }
-
-    /** Takes the marker away, which is what says this start-up got through. */
-    private static void finishRun() {
-        try {
-            if (runningMarker != null) {
-                runningMarker.delete();
-                runningMarker = null;
-            }
-        } catch (Throwable ignored) {
-            // A marker left behind costs this screen one start-up and nothing else.
-        }
-    }
-
-    /** An empty file, and the folder to put it in if it is not there yet. */
-    private static void write(File file) throws IOException {
-        File dir = file.getParentFile();
-        if (dir != null && !dir.isDirectory()) {
-            dir.mkdirs();
-        }
-        new FileOutputStream(file).close();
     }
 
     private static void log(String message, Throwable t) {

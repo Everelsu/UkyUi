@@ -57,14 +57,15 @@ new since 0.5.3 and what is particular to this version.
 
 **The loading screen**
 
-- It keeps itself out of a crash loop. The screen is a second GL context drawn from a
-  second thread — FML's own splash works the same way — and on a loader running 1.12.2 on
-  LWJGL 3 that second context is in the hands of a compatibility layer, which on some AMD
-  drivers is a crash inside the driver with nothing in the log about it. The screen now
-  notes in a file that it is up and takes the note away when loading finishes: a start-up
-  that finds the note left over turns the screen off and keeps it off. One crash at most,
-  on the machine it happens on, and nowhere else loses the screen.
-- Off is `config/uky/loading-screen-off-after-crash`. Delete it to try again.
+- It is left to the loader on a game running on LWJGL 3 — Cleanroom and the like. The
+  screen is a second GL context drawn from a second thread, which is LWJGL 2's shared
+  drawable; on LWJGL 3 that is a compatibility layer, and on one AMD driver a second
+  context taken through it ended in an access violation inside the driver two minutes
+  later, in another mod's drawing, with nothing at either end to connect them. Turning
+  this screen off is what stopped it.
+- `splash.splashOnLwjgl3` turns it on there anyway. It works on most machines, which is
+  why this is a switch and not a verdict — and on LWJGL 2 the setting means nothing, the
+  screen is drawn as it always was.
 
 **Creating a world**
 
