@@ -318,21 +318,6 @@ public final class UiConfig {
     };
 
     public static boolean customSplash = true;
-    /**
-     * Whether to draw the loading screen on a loader running this game on LWJGL 3.
-     *
-     * Off, because of what the screen is: a second GL context, shared with the main
-     * one, drawn from a second thread. The API for that is LWJGL 2's shared drawable,
-     * LWJGL 3 has no equivalent, and a loader running 1.12.2 on 3 puts the 2 API back
-     * as a compatibility layer — so the code links and runs, and what the layer does
-     * with a second context is between it and the driver. On at least one AMD driver
-     * that ends in an access violation inside the driver minutes later, in an
-     * unrelated mod's draw call, with nothing anywhere to connect the two.
-     *
-     * <p>On is the answer for a machine where it demonstrably works, which is most of
-     * them. It is a switch rather than a verdict because the screen is worth having.
-     */
-    public static boolean splashOnLwjgl3;
     public static boolean showPercent = true;
     public static boolean showTips = false;
     public static String[] splashTips = DEFAULT_TIPS;
@@ -891,19 +876,6 @@ public final class UiConfig {
                         + "on your GPU; the game falls back to Forge's own splash. Ignored when "
                         + "Angelica is installed, which manages GL state in a way this screen "
                         + "cannot be made to share.");
-        splashOnLwjgl3 = bool(CAT_SPLASH, "splashOnLwjgl3", splashOnLwjgl3,
-                "Draw the loading screen on a loader that runs this game on LWJGL 3 - "
-                        + "Cleanroom and the like. Off by default there, and only there: "
-                        + "the screen is a second GL context drawn from a second thread, "
-                        + "which is LWJGL 2's shared drawable, and on 3 that is a "
-                        + "compatibility layer rather than the real thing.\n"
-                        + "It works on most machines and has been seen to end in a crash "
-                        + "inside an AMD driver on at least one - minutes later, in "
-                        + "another mod's drawing, with nothing to connect it back. Turn "
-                        + "this on to have the screen there anyway; turn it off again if "
-                        + "the game starts crashing in the world for no reason.\n"
-                        + "On LWJGL 2 this setting means nothing: the screen is drawn "
-                        + "either way, and customSplash above is the switch for it.");
         showPercent = bool(CAT_SPLASH, "showPercent", showPercent,
                 "Show a percentage beside each bar on the mod-loading screen. Bars "
                         + "that report no total have no percentage to show and are "

@@ -57,15 +57,18 @@ new since 0.5.3 and what is particular to this version.
 
 **The loading screen**
 
-- It is left to the loader on a game running on LWJGL 3 — Cleanroom and the like. The
-  screen is a second GL context drawn from a second thread, which is LWJGL 2's shared
-  drawable; on LWJGL 3 that is a compatibility layer, and on one AMD driver a second
-  context taken through it ended in an access violation inside the driver two minutes
-  later, in another mod's drawing, with nothing at either end to connect them. Turning
-  this screen off is what stopped it.
-- `splash.splashOnLwjgl3` turns it on there anyway. It works on most machines, which is
-  why this is a switch and not a verdict — and on LWJGL 2 the setting means nothing, the
-  screen is drawn as it always was.
+- It is drawn on a loader running this game on LWJGL 3 — Cleanroom and the like — where
+  before it either crashed the driver or was skipped. Not by asking for a second GL
+  context there: LWJGL 3 has none to give, the compatibility layer that puts LWJGL 2's
+  back is between the mod and the driver, and on one AMD driver a context taken through
+  it ended in an access violation two minutes later, inside another mod's drawing.
+- So there it is drawn from the loading thread itself, in the context that thread
+  already holds, between the things it is loading — a frame at every step a mod reports,
+  capped at the same twenty a second the threaded version runs at. Nothing is taken and
+  nothing has to be handed back.
+- The cost is honest: a mod that spends ten seconds in its own initialiser without
+  reporting anything is ten seconds of a still picture, where a thread would have kept
+  animating. On LWJGL 2 nothing changes — the screen keeps its own thread, as before.
 
 **Creating a world**
 

@@ -8,6 +8,8 @@
   "client": [
     "MixinGuiToast",
     "MixinGuiScreenTooltip",
+    "MixinProgressBar",
+    "MixinProgressManager",
     "MixinSplashProgress"
   ],
   "server": []

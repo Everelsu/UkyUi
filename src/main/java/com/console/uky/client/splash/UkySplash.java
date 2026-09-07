@@ -63,6 +63,21 @@ public final class UkySplash {
 
     private static Drawable drawable;
     private static Thread thread;
+
+    /**
+     * Whether the screen is being drawn from the loading thread rather than its own.
+     *
+     * True on a loader running this game on LWJGL 3, where a second context is not
+     * something this screen can safely have. See {@link #startInline()}.
+     */
+    private static boolean inline;
+    private static Renderer renderer;
+    private static long lastFrame;
+    private static boolean drawing;
+
+    /** The shortest gap between two inline frames, from the same cap the thread uses. */
+    private static final long FRAME_NANOS = 1_000_000_000L / FPS;
+
     private static volatile boolean done;
     private static volatile Throwable threadError;
     private static boolean running;
@@ -91,13 +106,12 @@ public final class UkySplash {
             if (!UiConfig.customSplash) {
                 return false;
             }
-            if (onLwjgl3() && !UiConfig.splashOnLwjgl3) {
-                log("this game runs on LWJGL 3 and this screen is a second GL context "
-                        + "from LWJGL 2, so the loader's own splash is left to run. Set "
-                        + "splash.splashOnLwjgl3 to have it anyway", null);
-                return false;
-            }
             displayMutex = findDisplayMutex();
+            if (onLwjgl3()) {
+                // No second context to be had here. Drawn from the loading thread
+                // itself instead — see startInline.
+                return startInline();
+            }
 
             drawable = new SharedDrawable(Display.getDrawable());
             Display.getDrawable().releaseContext();
@@ -125,6 +139,81 @@ public final class UkySplash {
         return true;
     }
 
+    /**
+     * The loading screen drawn from the thread that is doing the loading.
+     *
+     * <p>No second context and no second thread: the frames are drawn on the loading
+     * thread, in the context it already holds, in the gaps between the things it is
+     * loading. {@link #pump()} is what those gaps are — every step a mod reports to
+     * FML's progress manager, which is what the bars on this screen are drawn from in
+     * the first place.
+     *
+     * <p>It is not as smooth as having a thread. A mod that spends ten seconds in its
+     * own initialiser without reporting anything is ten seconds this screen is a still
+     * picture, where the threaded version would have gone on animating. That is the
+     * whole of the difference, and it buys the screen on loaders where the threaded
+     * version cannot safely exist: LWJGL 3 has no shared drawable, the compatibility
+     * layer that puts LWJGL 2's back is between us and the driver, and on one AMD
+     * driver that ended in an access violation minutes later in an unrelated mod's
+     * drawing.
+     *
+     * <p>Nothing is taken and nothing has to be given back, so there is no state here
+     * that a crash could strand: the context was the loading thread's before this and
+     * still is.
+     */
+    private static boolean startInline() {
+        try {
+            renderer = new Renderer();
+            renderer.beginInline();
+            inline = true;
+            running = true;
+            done = false;
+            lastFrame = 0L;
+            pump();
+            return true;
+        } catch (Throwable t) {
+            log("could not start the loading screen on the loading thread", t);
+            renderer = null;
+            inline = false;
+            return false;
+        }
+    }
+
+    /**
+     * Draws a frame if one is due.
+     *
+     * <p>Called from FML's progress manager, which is to say from every mod that says
+     * it has got somewhere — hundreds of times a second in places and not at all in
+     * others. The frame cap is what makes the first case free; the second case is what
+     * this mode costs.
+     *
+     * <p>Failure here turns the screen off and lets loading carry on without it. A
+     * loading screen that throws every time a mod reports a step would otherwise take
+     * the whole start-up down with it, one exception per step.
+     */
+    public static void pump() {
+        if (!inline || renderer == null || drawing) {
+            return;
+        }
+        long now = System.nanoTime();
+        if (now - lastFrame < FRAME_NANOS) {
+            return;
+        }
+        lastFrame = now;
+        drawing = true;
+        try {
+            renderer.frame();
+        } catch (Throwable t) {
+            log("the loading screen failed while drawing; leaving the rest of the load "
+                    + "to get on without it", t);
+            inline = false;
+            running = false;
+            renderer = null;
+        } finally {
+            drawing = false;
+        }
+    }
+
     /** Stops the render thread and hands the GL context back to the main thread. */
     public static void finish() {
         if (!running) {
@@ -133,6 +222,16 @@ public final class UkySplash {
         running = false;
         done = true;
         finishedAt = System.nanoTime();
+        if (inline) {
+            inline = false;
+            try {
+                renderer.endInline();
+            } catch (Throwable t) {
+                log("error shutting the loading screen down", t);
+            }
+            renderer = null;
+            return;
+        }
         try {
             thread.join(5000L);
             GL11.glFlush();
@@ -208,11 +307,11 @@ public final class UkySplash {
      * layer has done with a second context is between it and the driver. On one AMD
      * driver it is an access violation inside the driver two minutes later, in another
      * mod's draw call, with nothing at either end to connect them: turning this screen
-     * off is what stopped it, and nothing else did.
+     * off is what stopped it, and nothing else did. So it does not ask for one there.
      *
-     * <p>So it is off there unless {@code splash.splashOnLwjgl3} says otherwise, and on
-     * everywhere else. Most machines are fine with it, which is why this is a switch and
-     * not a verdict.
+     * <p>So the screen is drawn from the loading thread there instead — see
+     * {@link #startInline()} — and keeps its own thread everywhere else. Nothing is
+     * turned off either way; this only picks which of the two it is.
      *
      * <p>{@code org.lwjgl.system} is LWJGL 3's own package and does not exist in 2, so
      * asking whether it is there is the version — no string to parse, and no compile-time
@@ -319,33 +418,91 @@ public final class UkySplash {
         public void run() {
             acquireContext();
             try {
-                // The loading screen is black by design. A backdrop only appears if
-                // a pack explicitly drops one into config/uky-splash/.
-                background = load(null, "background.png", true);
-                logo = load(LOGO_RESOURCE, "logo.png", true);
-                loadFont();
-
-                startNanos = System.nanoTime();
+                begin();
                 while (!done) {
-                    elapsed = (System.nanoTime() - startNanos) / 1_000_000_000.0F;
-
-                    long beforeDraw = System.nanoTime();
-                    drawFrame();
-                    long beforePresent = System.nanoTime();
-                    present();
-                    long afterPresent = System.nanoTime();
-
-                    frames++;
-                    drawNanos += beforePresent - beforeDraw;
-                    presentNanos += afterPresent - beforePresent;
-
+                    frame();
                     Display.sync(FPS);
                 }
             } finally {
-                reportCost();
-                deleteTextures();
+                end();
                 releaseContext();
             }
+        }
+
+        /**
+         * The inline mode's version of taking the context: everything but taking it.
+         *
+         * The loading thread already holds it and keeps holding it, so there is no
+         * lock, no handover and nothing that a failure could strand. What is left is
+         * the state the frames are drawn under, and the swap pacing — vsync would
+         * block the loading thread itself here, which is the one thread this screen
+         * must not cost anything.
+         */
+        private void beginInline() {
+            setSwapInterval(0);
+            int bg = UiConfig.colorBackground;
+            GL11.glClearColor((bg >> 16 & 0xFF) / 255.0F, (bg >> 8 & 0xFF) / 255.0F,
+                    (bg & 0xFF) / 255.0F, 1.0F);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            begin();
+        }
+
+        /** And its version of handing the context back: the state, not the context. */
+        private void endInline() {
+            end();
+            Minecraft mc = Minecraft.getMinecraft();
+            setSwapInterval(mc.gameSettings != null && mc.gameSettings.enableVsync ? 1 : 0);
+            // The window can be resized while this screen is up, and it is our own
+            // Display.update that consumed the event, so the game is told the size the
+            // same way the threaded mode tells it.
+            mc.displayWidth = Display.getWidth();
+            mc.displayHeight = Display.getHeight();
+            mc.resize(mc.displayWidth, mc.displayHeight);
+            GL11.glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthFunc(GL11.GL_LEQUAL);
+            GL11.glEnable(GL11.GL_ALPHA_TEST);
+            GL11.glAlphaFunc(GL11.GL_GREATER, 0.1F);
+        }
+
+        /**
+         * Everything the screen needs before its first frame.
+         *
+         * Split out of {@link #run()} so that the same renderer can be driven a frame
+         * at a time from the loading thread itself — see {@link UkySplash#pump()} —
+         * rather than only by a loop of its own on a thread of its own.
+         */
+        private void begin() {
+            // The loading screen is black by design. A backdrop only appears if
+            // a pack explicitly drops one into config/uky-splash/.
+            background = load(null, "background.png", true);
+            logo = load(LOGO_RESOURCE, "logo.png", true);
+            loadFont();
+            startNanos = System.nanoTime();
+        }
+
+        /** One frame, drawn and presented, wherever it is being called from. */
+        private void frame() {
+            elapsed = (System.nanoTime() - startNanos) / 1_000_000_000.0F;
+
+            long beforeDraw = System.nanoTime();
+            drawFrame();
+            long beforePresent = System.nanoTime();
+            present();
+            long afterPresent = System.nanoTime();
+
+            frames++;
+            drawNanos += beforePresent - beforeDraw;
+            presentNanos += afterPresent - beforePresent;
+        }
+
+        /** The last of it: what it cost, and the textures back. */
+        private void end() {
+            reportCost();
+            deleteTextures();
         }
 
         /**
