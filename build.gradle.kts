@@ -94,8 +94,22 @@ tasks.processResources.configure {
     //
     // Copied from art/ rather than kept in the resources tree so the picture exists
     // once in the repository and the jar is where it gets duplicated.
-    from("art/title.png") { rename { "pack.png" } }
-    from("art/title.png") { rename { "uky_logo.png" } }
+    val icon = layout.projectDirectory.file("art/title.png").asFile
+    from(icon) { rename { "pack.png" } }
+    from(icon) { rename { "uky_logo.png" } }
+
+    // Checked rather than assumed. A `from` pointing at a file that is not there
+    // copies nothing and says nothing, so the whole of the failure is a jar whose
+    // icon is missing — which is exactly what the release workflow shipped while this
+    // picture was still excluded from the repository and only existed on one machine.
+    doFirst {
+        if (!icon.isFile) {
+            throw GradleException("art/title.png is missing, and the jar's icon comes "
+                    + "from it. Restore the file rather than building without it: a jar "
+                    + "with no icon is what a mod list and every launcher show a grey "
+                    + "cube for.")
+        }
+    }
 }
 
 repositories {

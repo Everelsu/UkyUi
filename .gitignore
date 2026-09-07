@@ -73,7 +73,14 @@ Thumbs.db
 /run/
 /.gradle/
 
-# Icon generator trace cache (art/generate_icon.py rebuilds it)
-/art/.hole-cache.npz
-/art
+# Working artwork: the generator scripts, their trace cache and every size they
+# render are the author's own and are not what the build reads.
+#
+# The exception is the one picture the jar is built from. It has to be in the
+# repository or a build that is not this machine — the release workflow, anybody who
+# clones this — produces a jar with no icon in it, silently: the copy below finds no
+# file and there is nothing to fail on. The directory's *contents* are excluded rather
+# than the directory itself, because a file cannot be brought back once its parent is.
+/art/*
+!/art/title.png
 /store
