@@ -66,6 +66,21 @@ new since 0.5.3 and what is particular to this version.
   on the machine it happens on, and nowhere else loses the screen.
 - Off is `config/uky/loading-screen-off-after-crash`. Delete it to try again.
 
+**Creating a world**
+
+- Every world type a pack registers is reachable. The grid takes a second row of types
+  before it starts paging — the game-mode tiles give up a few pixels for it, which they
+  had going spare — so a pack with five or seven types shows them all at once instead of
+  four and a page arrow.
+- The page control, for a pack with more types than that, is two buttons rather than two
+  bare triangles beside a number. At the size a heading line allows, a triangle drawn on
+  the backdrop reads as punctuation rather than as something to click, and a world type
+  nobody can work out how to select may as well not be registered.
+- The screen no longer overlaps itself on a short window. The gap between sections is
+  where the next section's heading goes, so it is now at least as tall as one; and a
+  game-mode description that has no room left in its tile is not drawn at all rather than
+  printed through the bottom of it.
+
 **Advancements**
 
 - The chat line for an earned advancement is shortened and made clickable, and it now

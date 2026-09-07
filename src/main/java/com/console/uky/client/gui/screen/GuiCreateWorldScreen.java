@@ -84,6 +84,21 @@ public class GuiCreateWorldScreen extends MenuScreen {
     private int typePerPage = 1;
     private int typePageCount = 1;
 
+    /**
+     * Room a section heading needs above its own tiles, and the smallest gap between
+     * two sections because of it.
+     *
+     * The headings are drawn twelve above the block they name, so a gap smaller than
+     * this prints one section's heading over the previous section's tiles.
+     */
+    private static final int HEADING_ROOM = 16;
+
+    /** The page control's plate, and where it was last laid out. */
+    private static final int PAGER_BUTTON = 12;
+    private int pagerPrevX;
+    private int pagerNextX;
+    private int pagerY;
+
     private boolean generateStructures = true;
     private boolean bonusChest;
     private boolean allowCheats;
@@ -219,13 +234,34 @@ public class GuiCreateWorldScreen extends MenuScreen {
         int fields = 44;
         int available = Math.max(80, bottomLimit - headerBottom - fields - actionHeight - 24);
 
-        this.modeHeight = clamp(available * 5 / 12, 34, 62);
-        this.typeRowHeight = clamp(available * 4 / 12, 24, 40);
-        this.toggleHeight = clamp(available * 3 / 12, 18, 26);
+        this.modeHeight = clamp(available * 5 / 12, 30, 62);
+        this.typeRowHeight = clamp(available * 4 / 12, 22, 40);
+        this.toggleHeight = clamp(available * 3 / 12, 16, 26);
         layoutTypeGrid(available);
 
+        // A pack with two or three worldgen mods has more types than one row holds, and
+        // a second row of them is worth more than the last few pixels of a game-mode
+        // tile — those rows are at their most generous here, not at their smallest. So
+        // the generosity is spent, a little at a time, until either the types all fit on
+        // one page or there is nothing left to give. Paging still exists for a pack with
+        // a dozen of them; it is no longer what happens at five.
+        while (this.typePageCount > 1
+                && (this.modeHeight > 46 || this.toggleHeight > 20)) {
+            if (this.modeHeight > 46) {
+                this.modeHeight -= 2;
+            }
+            if (this.toggleHeight > 20) {
+                this.toggleHeight -= 1;
+            }
+            layoutTypeGrid(available);
+        }
+
+        // The gap is not air, it is where the next section's heading is drawn — at
+        // twelve above its own top, plus the line's own height. Anything less and the
+        // heading is printed over the tiles above it, which is what a short window used
+        // to do: "TYPE OF WORLD" through the middle of the game-mode row.
         int tiles = this.modeHeight + this.typeHeight + this.toggleHeight;
-        int gap = clamp((available - tiles) / 2, 10, 30);
+        int gap = clamp((available - tiles) / 2, HEADING_ROOM, 30);
 
         // The rows are capped, so on a tall screen they do not use everything they
         // are offered. The block is centred in what is left rather than pinned to
@@ -239,6 +275,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
         this.typeY = this.modeY + this.modeHeight + gap;
         this.toggleY = this.typeY + this.typeHeight + gap;
         this.actionY = this.toggleY + this.toggleHeight + 24;
+        layoutPager();
 
         int fieldWidth = (this.contentWidth - 12) / 2;
         String name = this.nameField != null
@@ -293,7 +330,7 @@ public class GuiCreateWorldScreen extends MenuScreen {
         // What is left for the type block once the other two rows and the minimum air
         // between them are taken out. Rows are added only while they actually fit —
         // a second row squeezed into a first row's space is worse than a page arrow.
-        int spare = available - this.modeHeight - this.toggleHeight - 20;
+        int spare = available - this.modeHeight - this.toggleHeight - HEADING_ROOM * 2;
         int fits = Math.max(1, (spare + TILE_GAP) / (this.typeRowHeight + TILE_GAP));
         int wanted = (count + this.typeColumns - 1) / this.typeColumns;
         this.typeRows = Math.max(1, Math.min(Math.min(fits, wanted), 3));
@@ -529,15 +566,23 @@ public class GuiCreateWorldScreen extends MenuScreen {
         int colour = Draw.withAlpha(Theme.textDim, 0.75F * this.fadeAlpha);
         int maxWidth = tileWidth - 20;
 
+        // Only as many lines as the tile can hold — and on a short window that is none
+        // of them. This used to force one line in whatever room was left, including
+        // none, so the description was printed through the bottom of its own tile and
+        // into the heading of the section below it.
+        int room = (int) ((this.modeY + this.modeHeight - 4 - y) / 10);
+        if (room < 1) {
+            return;
+        }
+
         String text = line1;
         if (line2 != null && !line2.isEmpty()) {
             text = text + " " + line2;
         }
         List<String> lines = this.fontRenderer.listFormattedStringToWidth(text, maxWidth);
 
-        // Only as many lines as the tile can hold; the last visible one takes an
-        // ellipsis so a cut-off sentence does not look like a rendering fault.
-        int room = Math.max(1, (int) ((this.modeY + this.modeHeight - 6 - y) / 10));
+        // The last visible line takes an ellipsis so a cut-off sentence does not look
+        // like a rendering fault.
         for (int i = 0; i < lines.size() && i < room; i++) {
             String line = lines.get(i);
             if (i == room - 1 && lines.size() > room) {
@@ -611,61 +656,84 @@ public class GuiCreateWorldScreen extends MenuScreen {
     }
 
     /**
-     * "&lt; 2/3 &gt;" beside the section heading, when there is more than one page.
+     * The page control beside the section heading, when the types do not all fit.
      *
-     * Drawn on the heading's own line rather than under the grid: that is where the
-     * eye already is when it is reading what this row of tiles is, and it puts the
-     * count — the part that says there is more to see — next to the words rather than
-     * at the bottom of a block the player has already decided is all of it.
+     * <p>Two buttons and the page they are on, on the heading's own line: that is where
+     * the eye already is when it is reading what this row of tiles is, and it puts the
+     * count — the part that says there is more to see — next to the words rather than at
+     * the bottom of a block the player has already decided is all of it.
+     *
+     * <p>Buttons, not two bare triangles with a number between them, which is what this
+     * was. At the size a heading line allows, a triangle drawn on the backdrop reads as
+     * punctuation next to the text rather than as something to click — and a world type
+     * you cannot find a way to select is a world type the pack might as well not have.
+     * They are plates now, with a border and a hover, the same as every other control on
+     * this screen, and they are as big as the line lets them be.
      */
     private void drawTypePager() {
         if (this.typePageCount <= 1) {
             return;
         }
-        int y = this.typeY - 12;
-        boolean overPrev = isOverPrevPage();
-        boolean overNext = isOverNextPage();
-        this.prevPageHover = Ease.approach(this.prevPageHover, overPrev ? 1.0F : 0.0F,
-                0.05F, this.delta);
-        this.nextPageHover = Ease.approach(this.nextPageHover, overNext ? 1.0F : 0.0F,
-                0.05F, this.delta);
+        this.prevPageHover = Ease.approach(this.prevPageHover,
+                isOverPrevPage() ? 1.0F : 0.0F, 0.05F, this.delta);
+        this.nextPageHover = Ease.approach(this.nextPageHover,
+                isOverNextPage() ? 1.0F : 0.0F, 0.05F, this.delta);
 
         String counter = (this.typePage + 1) + "/" + this.typePageCount;
-        int counterWidth = this.fontRenderer.getStringWidth(counter);
-        int right = this.contentX + this.contentWidth;
+        this.fontRenderer.drawString(counter, this.pagerPrevX + PAGER_BUTTON + 5,
+                this.pagerY + 2, Draw.withAlpha(Theme.text, 0.9F * this.fadeAlpha));
 
-        this.fontRenderer.drawString(counter, right - PAGER_ARROW_ROOM - counterWidth, y,
-                Draw.withAlpha(Theme.textDim, 0.9F * this.fadeAlpha));
-        Icons.back(right - PAGER_ARROW_ROOM - counterWidth - 10, y + 4, 8,
-                Draw.withAlpha(Draw.mix(Theme.textDim, Theme.accent, this.prevPageHover),
-                        this.fadeAlpha));
-        Icons.forward(right - 5, y + 4, 8,
-                Draw.withAlpha(Draw.mix(Theme.textDim, Theme.accent, this.nextPageHover),
-                        this.fadeAlpha));
+        drawPagerButton(this.pagerPrevX, this.prevPageHover, false);
+        drawPagerButton(this.pagerNextX, this.nextPageHover, true);
     }
 
-    /** Space kept clear to the right of the page counter for the forward arrow. */
-    private static final int PAGER_ARROW_ROOM = 14;
+    private void drawPagerButton(int x, float hover, boolean forward) {
+        float y1 = this.pagerY;
+        float y2 = y1 + PAGER_BUTTON;
+        Draw.rect(x, y1, x + PAGER_BUTTON, y2,
+                Draw.withAlpha(0x000000, (0.5F + hover * 0.25F) * this.fadeAlpha));
+        Draw.border(x, y1, x + PAGER_BUTTON, y2, 1.0F,
+                Draw.withAlpha(Draw.mix(Theme.text, Theme.accent, hover),
+                        (0.25F + hover * 0.65F) * this.fadeAlpha));
+
+        int tint = Draw.withAlpha(Draw.mix(Theme.textDim, Theme.accent, hover),
+                this.fadeAlpha);
+        float cx = x + PAGER_BUTTON * 0.5F;
+        float cy = y1 + PAGER_BUTTON * 0.5F;
+        if (forward) {
+            Icons.forward(cx, cy, 7, tint);
+        } else {
+            Icons.back(cx, cy, 7, tint);
+        }
+    }
+
+    /**
+     * Where the two buttons sit, worked out once with the rest of the layout.
+     *
+     * Both the drawing and the hit test read these, so a control that has moved cannot
+     * still be clickable where it used to be — which is the sort of thing that survives
+     * a screenshot and never survives a resize.
+     */
+    private void layoutPager() {
+        String widest = this.typePageCount + "/" + this.typePageCount;
+        int counterWidth = this.fontRenderer.getStringWidth(widest);
+        int right = this.contentX + this.contentWidth;
+        this.pagerY = this.typeY - 14;
+        this.pagerNextX = right - PAGER_BUTTON;
+        this.pagerPrevX = this.pagerNextX - 10 - counterWidth - PAGER_BUTTON;
+    }
+
+    private boolean overPagerButton(int x) {
+        return this.mouseX >= x && this.mouseX <= x + PAGER_BUTTON
+                && this.mouseY >= this.pagerY && this.mouseY <= this.pagerY + PAGER_BUTTON;
+    }
 
     private boolean isOverPrevPage() {
-        if (this.typePageCount <= 1) {
-            return false;
-        }
-        String counter = (this.typePage + 1) + "/" + this.typePageCount;
-        int right = this.contentX + this.contentWidth
-                - PAGER_ARROW_ROOM - this.fontRenderer.getStringWidth(counter);
-        // Generous: the arrow itself is eight units across, which is not a target.
-        return this.mouseX >= right - 18 && this.mouseX <= right - 2
-                && this.mouseY >= this.typeY - 16 && this.mouseY <= this.typeY - 2;
+        return this.typePageCount > 1 && overPagerButton(this.pagerPrevX);
     }
 
     private boolean isOverNextPage() {
-        if (this.typePageCount <= 1) {
-            return false;
-        }
-        int right = this.contentX + this.contentWidth;
-        return this.mouseX >= right - 14 && this.mouseX <= right
-                && this.mouseY >= this.typeY - 16 && this.mouseY <= this.typeY - 2;
+        return this.typePageCount > 1 && overPagerButton(this.pagerNextX);
     }
 
     /** Moves the grid {@code step} pages along, wrapping at either end. */
