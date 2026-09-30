@@ -59,11 +59,22 @@ public final class UkySplash {
      */
     private static final int FPS = 20;
 
+    /**
+     * The collapse played when loading ends, and the rate it is drawn at.
+     *
+     * By then every mod has loaded and the main thread is only waiting for us, so the
+     * twenty-frame budget above no longer applies — a motion this fast at twenty
+     * frames would stutter.
+     */
+    private static final float OUTRO_SECONDS = 0.8F;
+    private static final int OUTRO_FPS = 60;
+
     private static final Lock lock = new ReentrantLock(true);
 
     private static Drawable drawable;
     private static Thread thread;
-    private static volatile boolean done;
+    /** When {@link #finish()} asked for the outro, or 0 while still loading. */
+    private static volatile long closingAt;
     private static volatile Throwable threadError;
     private static boolean running;
 
@@ -91,6 +102,7 @@ public final class UkySplash {
             if (!UiConfig.customSplash) {
                 return false;
             }
+            enterFullscreenEarly();
             displayMutex = findDisplayMutex();
 
             drawable = new SharedDrawable(Display.getDrawable());
@@ -102,7 +114,7 @@ public final class UkySplash {
             return false;
         }
 
-        done = false;
+        closingAt = 0L;
         threadError = null;
         thread = new Thread(new Renderer(), "UKY Splash");
         thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
@@ -125,9 +137,9 @@ public final class UkySplash {
             return;
         }
         running = false;
-        done = true;
-        finishedAt = System.nanoTime();
+        closingAt = System.nanoTime();
         try {
+            // Waits out the collapse; the title screen picks the story up from there.
             thread.join(5000L);
             GL11.glFlush();
             drawable.releaseContext();
@@ -136,6 +148,7 @@ public final class UkySplash {
             log("error shutting the loading screen down", t);
             releaseToMainThread();
         }
+        finishedAt = System.nanoTime();
     }
 
     public static boolean isRunning() {
@@ -172,6 +185,23 @@ public final class UkySplash {
             }
         } catch (LWJGLException ignored) {
             // Nothing left to try; FML's splash or the game itself will report it.
+        }
+    }
+
+    /**
+     * Applies the fullscreen option now instead of where vanilla does.
+     *
+     * Vanilla only switches at the very end of {@code startGame}, after this screen
+     * has finished — and a display-mode switch blanks the window for seconds, so it
+     * landed exactly in the hand-off to the title screen and ate the intro. Doing it
+     * before the loading screen moves that blink to where nothing is playing yet;
+     * vanilla's own check then finds the window already fullscreen and does nothing.
+     */
+    private static void enterFullscreenEarly() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.gameSettings != null && mc.gameSettings.fullScreen && !mc.isFullScreen()) {
+            // Logs and swallows its own failures; the game just stays windowed.
+            mc.toggleFullscreen();
         }
     }
 
@@ -286,11 +316,18 @@ public final class UkySplash {
                 loadFont();
 
                 startNanos = System.nanoTime();
-                while (!done) {
-                    elapsed = (System.nanoTime() - startNanos) / 1_000_000_000.0F;
+                while (true) {
+                    long now = System.nanoTime();
+                    elapsed = (now - startNanos) / 1_000_000_000.0F;
+                    long closing = closingAt;
+                    float outro = closing == 0L ? -1.0F
+                            : (now - closing) / 1_000_000_000.0F / OUTRO_SECONDS;
+                    if (outro >= 1.0F) {
+                        break;
+                    }
 
                     long beforeDraw = System.nanoTime();
-                    drawFrame();
+                    drawFrame(outro);
                     long beforePresent = System.nanoTime();
                     present();
                     long afterPresent = System.nanoTime();
@@ -299,7 +336,7 @@ public final class UkySplash {
                     drawNanos += beforePresent - beforeDraw;
                     presentNanos += afterPresent - beforePresent;
 
-                    Display.sync(FPS);
+                    Display.sync(outro >= 0.0F ? OUTRO_FPS : FPS);
                 }
             } finally {
                 reportCost();
@@ -363,7 +400,8 @@ public final class UkySplash {
 
         // ------------------------------------------------------------ frame --
 
-        private void drawFrame() {
+        /** @param outro progress through the closing collapse, or negative while loading */
+        private void drawFrame(float outro) {
             int pixelWidth = Display.getWidth();
             int pixelHeight = Display.getHeight();
             int scale = guiScale(pixelWidth, pixelHeight);
@@ -382,9 +420,97 @@ public final class UkySplash {
             float alpha = clamp01(elapsed / 0.5F);
 
             drawBackground(w, h, alpha);
-            drawLogo(w, h, alpha);
-            drawProgress(w, h, alpha);
-            drawFooter(w, h, alpha);
+            if (outro < 0.0F) {
+                drawLogo(w, h, alpha);
+                drawProgress(w, h, alpha);
+                drawFooter(w, h, alpha);
+                return;
+            }
+            drawCollapse(w, h, alpha, outro);
+        }
+
+        /**
+         * Gravity taking hold: everything on the screen is pulled into the middle —
+         * flattened first, so it reads as being stretched into the point rather than
+         * shrunk — and burns up as a white-hot core that gutters out to nothing. The
+         * title screen reignites that ember in the same place and makes a black hole
+         * of it.
+         */
+        private void drawCollapse(float w, float h, float alpha, float outro) {
+            float cx = w / 2.0F;
+            float cy = h / 2.0F;
+            float pull = clamp01(outro / 0.72F);
+            float k = pull * pull * pull;
+
+            float sx = 1.0F - k;
+            float sy = (1.0F - k) * (1.0F - k) * (1.0F - k);
+            if (sx > 0.01F) {
+                GL11.glPushMatrix();
+                GL11.glTranslatef(cx, cy, 0.0F);
+                GL11.glScalef(sx, Math.max(sy, 0.002F), 1.0F);
+                GL11.glTranslatef(-cx, -cy, 0.0F);
+                float fade = alpha * (1.0F - k * 0.6F);
+                drawLogo(w, h, fade);
+                drawProgress(w, h, fade);
+                drawFooter(w, h, fade);
+                GL11.glPopMatrix();
+            }
+
+            // The core: brightens as the matter lands in it, then gutters out.
+            float burn = pull * pull;
+            float out = clamp01((outro - 0.72F) / 0.28F);
+            float core = burn * (1.0F - out * out) * alpha;
+            float radius = 6.0F + burn * 34.0F * (1.0F - out);
+            glow(cx, cy, radius * 2.2F, 0.35F * core);
+            glow(cx, cy, radius * 0.6F, core);
+            // A flat flare across the middle, where the lines were squeezed from.
+            float flare = Math.min(w * 0.45F, 260.0F) * burn * (1.0F - out);
+            flareHalf(cx, cy, flare, -1.0F, 0.8F * core);
+            flareHalf(cx, cy, flare, 1.0F, 0.8F * core);
+        }
+
+        private void flareHalf(float cx, float cy, float length, float dir, float a) {
+            if (a <= 0.003F || length <= 0.5F) {
+                return;
+            }
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+            GL11.glShadeModel(GL11.GL_SMOOTH);
+            GL11.glBegin(GL11.GL_QUADS);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, a);
+            GL11.glVertex2f(cx, cy - 0.5F);
+            GL11.glVertex2f(cx, cy + 0.5F);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, 0.0F);
+            GL11.glVertex2f(cx + dir * length, cy + 0.5F);
+            GL11.glVertex2f(cx + dir * length, cy - 0.5F);
+            GL11.glEnd();
+            GL11.glShadeModel(GL11.GL_FLAT);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+        }
+
+        /** Additive white disc fading from {@code a} at the centre to nothing at the rim. */
+        private void glow(float cx, float cy, float radius, float a) {
+            if (a <= 0.003F || radius <= 0.5F) {
+                return;
+            }
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
+            GL11.glShadeModel(GL11.GL_SMOOTH);
+            GL11.glBegin(GL11.GL_TRIANGLE_FAN);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, a);
+            GL11.glVertex2f(cx, cy);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, 0.0F);
+            for (int i = 0; i <= 32; i++) {
+                double t = i * 2.0 * Math.PI / 32;
+                GL11.glVertex2f(cx + (float) Math.cos(t) * radius, cy + (float) Math.sin(t) * radius);
+            }
+            GL11.glEnd();
+            GL11.glShadeModel(GL11.GL_FLAT);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         }
 
         /** Mirrors vanilla's GUI scale so the splash matches the menus that follow. */

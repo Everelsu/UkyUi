@@ -61,6 +61,10 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     private float parallaxX;
     private float parallaxY;
 
+    /** Where the hole was drawn this frame, parallax included; the intro aims at it. */
+    private float holeDrawX;
+    private float holeDrawY;
+
     /** Pointer from the previous frame; the backdrop draws before drawContent runs. */
     private int lastMouseX;
     private int lastMouseY;
@@ -487,6 +491,11 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         if (arrived) {
             return;
         }
+        if (this.intro.isActive()) {
+            // The intro starts in the dark and picks up the splash's ember itself.
+            arrived = true;
+            return;
+        }
         long splashEnd = UkySplash.finishedAtNanos();
         if (splashEnd == 0L) {
             // No splash ran; there is nothing to continue from.
@@ -514,6 +523,27 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         });
     }
 
+    private final float[] shake = new float[2];
+
+    /** The hit rattles the sky and kicks the camera in; see TitleIntro.shake. */
+    @Override
+    protected void drawBackdrop() {
+        this.intro.shake(this.shake);
+        float punch = this.intro.punch();
+        if (this.shake[0] == 0.0F && this.shake[1] == 0.0F && punch == 1.0F) {
+            super.drawBackdrop();
+            return;
+        }
+        float cx = this.width * 0.5F;
+        float cy = this.height * 0.5F;
+        GL11.glPushMatrix();
+        GL11.glTranslatef(cx + this.shake[0], cy + this.shake[1], 0.0F);
+        GL11.glScalef(punch, punch, 1.0F);
+        GL11.glTranslatef(-cx, -cy, 0.0F);
+        super.drawBackdrop();
+        GL11.glPopMatrix();
+    }
+
     @Override
     protected void drawBackgroundArt() {
         // Pointer parallax on top of the base drift: the artwork leans away from
@@ -537,15 +567,19 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             // recede-and-return the shader screens use — nothing here ever asks for it,
             // but arriving from a screen that did should finish the move rather than
             // snap out of it.
-            drawSky(cameraX + this.parallaxX * 6.0F,
-                    cameraY + this.parallaxY * 4.0F,
-                    cameraRadius * Transitions.holeScale(),
+            this.holeDrawX = cameraX + this.parallaxX * 6.0F;
+            this.holeDrawY = cameraY + this.parallaxY * 4.0F;
+            // The intro opens the lens from nothing; see TitleIntro.holeScale.
+            drawSky(this.holeDrawX, this.holeDrawY,
+                    cameraRadius * Transitions.holeScale() * this.intro.holeScale(),
                     this.intro.holeIntensity(),
                     this.intro.warp());
             return;
         }
 
         this.intro.update(this.delta);
+        this.holeDrawX = blackHoleCenterX();
+        this.holeDrawY = blackHoleCenterY();
         if ("solid".equals(UiConfig.background) || !Quality.blackHole()) {
             return;
         }
@@ -581,8 +615,12 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         this.lastMouseX = mouseX;
         this.lastMouseY = mouseY;
 
+        // Same shake as the sky under it (drawBackdrop filled `shake` this frame).
+        GL11.glPushMatrix();
+        GL11.glTranslatef(this.shake[0], this.shake[1], 0.0F);
         this.intro.render(this.width, this.height,
-                blackHoleCenterX(), blackHoleCenterY(), Math.max(8.0F, blackHoleRadius()));
+                this.holeDrawX, this.holeDrawY, Math.max(8.0F, blackHoleRadius()));
+        GL11.glPopMatrix();
 
         if (!this.intro.isActive()) {
             startMenuMusic();

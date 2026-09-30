@@ -3,7 +3,11 @@ package com.console.uky.client.sound;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.ISound;
 import net.minecraft.client.audio.PositionedSound;
+import net.minecraft.client.audio.SoundHandler;
+import net.minecraft.client.audio.SoundManager;
 import net.minecraft.util.ResourceLocation;
+
+import java.lang.reflect.Field;
 
 /**
  * The mod's own sound events, wired to {@code assets/uky/sounds.json}.
@@ -14,6 +18,8 @@ import net.minecraft.util.ResourceLocation;
 public final class UkySounds {
 
     public static final ResourceLocation INTRO_IMPACT = new ResourceLocation("uky", "intro_impact");
+    /** The build-up under the intro's gather; ends in silence right where the impact lands. */
+    public static final ResourceLocation INTRO_RISER = new ResourceLocation("uky", "intro_riser");
     public static final ResourceLocation MENU_MUSIC = new ResourceLocation("uky", "menu_music");
     public static final ResourceLocation BUTTON = new ResourceLocation("uky", "button");
     public static final ResourceLocation DELETE_HOLD = new ResourceLocation("uky", "delete_hold");
@@ -62,12 +68,67 @@ public final class UkySounds {
      * whole reason the button sounds went quiet after entering and leaving a world.
      * Attenuation NONE plays it at the listener, wherever that happens to be.
      */
-    public static void play(ResourceLocation sound, float volume, float pitch) {
+    public static ISound play(ResourceLocation sound, float volume, float pitch) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.getSoundHandler() == null) {
-            return;
+            return null;
         }
-        mc.getSoundHandler().playSound(new UiSound(sound, volume, pitch));
+        ISound handle = new UiSound(sound, volume, pitch);
+        mc.getSoundHandler().playSound(handle);
+        return handle;
+    }
+
+    public static void stop(ISound sound) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (sound != null && mc.getSoundHandler() != null) {
+            mc.getSoundHandler().stopSound(sound);
+        }
+    }
+
+    private static Field managerField;
+    private static Field loadedField;
+    private static boolean readinessUnknown;
+
+    /**
+     * Whether the sound engine can play anything right now.
+     *
+     * The resource reload at the end of start-up tears the engine down and brings it
+     * back up on a thread of its own, and {@code SoundManager.playSound} silently drops
+     * whatever arrives in between — which is exactly when the title intro wants its
+     * hit. Answers true when the fields cannot be found, so a renamed field costs a
+     * wait, never a sound.
+     */
+    public static boolean isReady() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.getSoundHandler() == null) {
+            return false;
+        }
+        if (readinessUnknown) {
+            return true;
+        }
+        try {
+            if (managerField == null) {
+                managerField = field(SoundHandler.class, "sndManager", "field_147694_f");
+                loadedField = field(SoundManager.class, "loaded", "field_148617_f");
+            }
+            Object manager = managerField.get(mc.getSoundHandler());
+            return manager != null && loadedField.getBoolean(manager);
+        } catch (Throwable t) {
+            readinessUnknown = true;
+            return true;
+        }
+    }
+
+    /** Dev runs see MCP names, released jars see SRG names. */
+    private static Field field(Class<?> owner, String mcp, String srg) throws NoSuchFieldException {
+        Field f;
+        try {
+            f = owner.getDeclaredField(mcp);
+        } catch (NoSuchFieldException e) {
+            f = owner.getDeclaredField(srg);
+        }
+        f.setAccessible(true);
+        return f;
     }
 
     public static void play(ResourceLocation sound) {

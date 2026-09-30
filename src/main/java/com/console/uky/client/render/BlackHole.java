@@ -620,6 +620,59 @@ public final class BlackHole {
         OffscreenTarget spare = previous;
         previous = offscreen;
         offscreen = spare;
+        float[] spareCrop = previousCrop;
+        previousCrop = crop;
+        crop = spareCrop;
+    }
+
+    /**
+     * The part of the frame each buffer holds, as {left, top, right, bottom} in 0..1
+     * of the quad (top down). Swapped along with the buffers.
+     *
+     * <p>Only the part of the quad that is on screen gets traced. The quad is sized
+     * to the disk's glow, not to the window, and on the title screen it runs about
+     * twice the window's size each way — so tracing all of it spent three quarters
+     * of the most expensive thing in the mod on pixels that were thrown away. The
+     * buffer keeps its window-sized allocation and its density against the frame;
+     * the trace just fills the corner of it that covers the visible window.
+     */
+    private static float[] crop = {0.0F, 0.0F, 1.0F, 1.0F};
+    private static float[] previousCrop = {0.0F, 0.0F, 1.0F, 1.0F};
+    private static final float[] wantedCrop = new float[4];
+
+    /** Slack traced past each window edge, so parallax and small moves stay covered. */
+    private static final float CROP_MARGIN = 0.08F;
+    /**
+     * Until when every trace covers the whole frame again.
+     *
+     * Set whenever the camera runs out of the traced region, which only happens
+     * while it is moving — a screen change, the dive, the return from it. Cropping
+     * then would run out again on the next frame and re-trace every frame of the
+     * move; tracing it all for the length of a move costs what it always did.
+     */
+    private static long fullFrameUntil;
+    private static final long FULL_FRAME_NANOS = 700_000_000L;
+
+    /**
+     * The window, plus {@code margin} of it on every side, in the quad's 0..1 frame.
+     *
+     * @return false when none of the quad is on screen
+     */
+    private boolean visibleCrop(float cx, float cy, float halfW, float halfH, float margin, float[] out) {
+        float left = cx - halfW;
+        float top = cy - halfH;
+        float mx = this.width * margin;
+        float my = this.height * margin;
+        out[0] = Ease.clamp01((-mx - left) / (2.0F * halfW));
+        out[1] = Ease.clamp01((-my - top) / (2.0F * halfH));
+        out[2] = Ease.clamp01((this.width + mx - left) / (2.0F * halfW));
+        out[3] = Ease.clamp01((this.height + my - top) / (2.0F * halfH));
+        return out[2] > out[0] && out[3] > out[1];
+    }
+
+    private static boolean contains(float[] outer, float[] inner) {
+        return inner[0] >= outer[0] && inner[1] >= outer[1]
+                && inner[2] <= outer[2] && inner[3] <= outer[3];
     }
 
     /**
@@ -654,7 +707,18 @@ public final class BlackHole {
         // Only re-trace when the picture would actually differ. On an idle menu this
         // is the single biggest saving available: the blit below still runs every
         // frame, so nothing about the compositing changes.
-        if (traceIsStale() || !offscreen.hasContent()) {
+        if (!visibleCrop(cx, cy, halfW, halfH, 0.0F, wantedCrop)) {
+            return true; // entirely off screen; nothing to trace or draw
+        }
+        // The camera outran the traced region: re-trace now rather than show a hole
+        // with a missing slice until the clock says so.
+        boolean escaped = offscreen.hasContent() && Display.isActive()
+                && offscreen.matches(targetW, targetH) && !contains(crop, wantedCrop);
+        if (escaped) {
+            lastTraceNanos = System.nanoTime();
+            fullFrameUntil = lastTraceNanos + FULL_FRAME_NANOS;
+        }
+        if (escaped || traceIsStale() || !offscreen.hasContent()) {
             // The trace that is about to be replaced becomes the one dissolved from,
             // so the two buffers alternate rather than one being copied to the other.
             if (offscreen.hasContent() && offscreen.matches(targetW, targetH)) {
@@ -663,6 +727,25 @@ public final class BlackHole {
             if (!offscreen.begin(targetW, targetH)) {
                 return false;
             }
+            // Snapped to whole texels so both buffers sit on the same grid and the
+            // dissolve can line them up with a plain offset.
+            if (System.nanoTime() < fullFrameUntil) {
+                crop[0] = 0.0F;
+                crop[1] = 0.0F;
+                crop[2] = 1.0F;
+                crop[3] = 1.0F;
+            } else {
+                visibleCrop(cx, cy, halfW, halfH, CROP_MARGIN, crop);
+            }
+            int x0 = (int) Math.floor(crop[0] * targetW);
+            int y0 = (int) Math.floor(crop[1] * targetH);
+            int x1 = (int) Math.ceil(crop[2] * targetW);
+            int y1 = (int) Math.ceil(crop[3] * targetH);
+            crop[0] = x0 / (float) targetW;
+            crop[1] = y0 / (float) targetH;
+            crop[2] = x1 / (float) targetW;
+            crop[3] = y1 / (float) targetH;
+            GL11.glViewport(0, 0, x1 - x0, y1 - y0);
 
             // Inside the buffer the quad is the whole surface, so the projection is a
             // plain unit box rather than the GUI's ortho.
@@ -681,14 +764,16 @@ public final class BlackHole {
             // be reused across frames that only differ in brightness or position.
             bindShaderUniforms(1.0F);
             GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+            // The texture coordinate is what the shader builds each ray from, so
+            // handing it the crop traces exactly that window of the frame.
             GL11.glBegin(GL11.GL_QUADS);
-            GL11.glTexCoord2f(0.0F, 0.0F);
+            GL11.glTexCoord2f(crop[0], crop[1]);
             GL11.glVertex2f(0.0F, 0.0F);
-            GL11.glTexCoord2f(0.0F, 1.0F);
+            GL11.glTexCoord2f(crop[0], crop[3]);
             GL11.glVertex2f(0.0F, 1.0F);
-            GL11.glTexCoord2f(1.0F, 1.0F);
+            GL11.glTexCoord2f(crop[2], crop[3]);
             GL11.glVertex2f(1.0F, 1.0F);
-            GL11.glTexCoord2f(1.0F, 0.0F);
+            GL11.glTexCoord2f(crop[2], crop[1]);
             GL11.glVertex2f(1.0F, 0.0F);
             GL11.glEnd();
             ShaderProgram.unbind();
@@ -736,6 +821,9 @@ public final class BlackHole {
             dissolve.set("uTap", 1.0F / Math.max(1, mc.displayWidth),
                     1.0F / Math.max(1, mc.displayHeight));
             dissolve.set("uRingLift", ringLift(mc.displayWidth));
+            // Where the older trace's window sits against the newer one's.
+            dissolve.set("uPrevOffset", crop[0] - previousCrop[0], previousCrop[3] - crop[3]);
+            dissolve.set("uPrevMax", previousCrop[2] - previousCrop[0], previousCrop[3] - previousCrop[1]);
 
             GL13.glActiveTexture(GL13.GL_TEXTURE1);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -773,18 +861,29 @@ public final class BlackHole {
         return shortfall <= 0.0F ? 0.0F : (shortfall >= 1.0F ? 1.0F : shortfall);
     }
 
-    /** Premultiplied quad covering the hole's rect. */
+    /**
+     * Premultiplied quad covering the traced window of the hole's rect.
+     *
+     * The trace fills the buffer from its bottom-left corner at the frame's own
+     * density, so the window is {@code crop} wide in texture units too.
+     */
     private static void blitQuad(float cx, float cy, float halfW, float halfH, float alpha) {
+        float x0 = cx - halfW + crop[0] * 2.0F * halfW;
+        float x1 = cx - halfW + crop[2] * 2.0F * halfW;
+        float y0 = cy - halfH + crop[1] * 2.0F * halfH;
+        float y1 = cy - halfH + crop[3] * 2.0F * halfH;
+        float u = crop[2] - crop[0];
+        float v = crop[3] - crop[1];
         GL11.glColor4f(alpha, alpha, alpha, alpha);
         GL11.glBegin(GL11.GL_QUADS);
-        GL11.glTexCoord2f(0.0F, 1.0F);
-        GL11.glVertex2f(cx - halfW, cy - halfH);
+        GL11.glTexCoord2f(0.0F, v);
+        GL11.glVertex2f(x0, y0);
         GL11.glTexCoord2f(0.0F, 0.0F);
-        GL11.glVertex2f(cx - halfW, cy + halfH);
-        GL11.glTexCoord2f(1.0F, 0.0F);
-        GL11.glVertex2f(cx + halfW, cy + halfH);
-        GL11.glTexCoord2f(1.0F, 1.0F);
-        GL11.glVertex2f(cx + halfW, cy - halfH);
+        GL11.glVertex2f(x0, y1);
+        GL11.glTexCoord2f(u, 0.0F);
+        GL11.glVertex2f(x1, y1);
+        GL11.glTexCoord2f(u, v);
+        GL11.glVertex2f(x1, y0);
         GL11.glEnd();
     }
 

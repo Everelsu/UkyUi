@@ -52,6 +52,15 @@ const float ESCAPE         = 110.0;
 const float FAR_FIELD      = 42.0;
 /** How far before closest approach the integration actually starts. */
 const float RUN_IN         = 45.0;
+/**
+ * Past this, a ray that is moving outward is done. Outside the photon sphere an
+ * outgoing photon never turns back, and nothing of the disk (whose slab ends at
+ * r = 30 and |z| < 0.05 l) can be sampled beyond about 36 — so the ~40 steps it
+ * used to take on its way out to ESCAPE changed nothing in the pixel.
+ */
+const float DISK_REACH     = 37.0;
+/** Where the vertical Gaussian has fallen to e^-8: sampling past it adds nothing. */
+const float SLAB_CUTOFF    = SIGMA * 4.0;
 
 float hash(vec3 p) {
     p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
@@ -103,7 +112,10 @@ void sampleDisk(vec3 p, vec3 dir, out vec3 emission, out float density) {
         return;
     }
     float thickness = THICKNESS * l;
-    if (abs(p.z) > thickness * 0.5) {
+    // Checked against where the density actually lives, not the slab's nominal
+    // half-height: the outer fifth of the slab carries under 1e-3 of the peak and
+    // was paying the full noise and trigonometry below for it.
+    if (abs(p.z) > thickness * SLAB_CUTOFF) {
         return;
     }
 
@@ -199,6 +211,9 @@ void main() {
     vec3 colour = vec3(0.0);
     float transmission = 1.0;
     bool captured = false;
+    // Carried between steps: the force at the end of one step is the force at the
+    // start of the next, so it is evaluated once per step rather than twice.
+    vec3 a = accel(p, h2);
 
     for (int i = 0; i < 512; i++) {
         // A hard limit, deliberately. Letting rays still deep in the field run on to
@@ -221,6 +236,9 @@ void main() {
         if (r > ESCAPE || transmission < 0.01) {
             break;
         }
+        if (r > DISK_REACH && dot(p, v) > 0.0) {
+            break; // leaving, and nothing out there to meet; see DISK_REACH
+        }
 
         // Coarse far away, tight where the path bends and where the disk lives.
         // Continuous, with no branch on radius.
@@ -232,9 +250,9 @@ void main() {
         // path is bending, without a discontinuity anywhere.
         float dt = clamp(0.038 * r, 0.025, 1.8);
 
-        // Velocity Verlet: two force evaluations, stable enough at this step size
-        // and half the cost of RK4, which matters when it runs per pixel.
-        vec3 a = accel(p, h2);
+        // Velocity Verlet: stable enough at this step size and a fraction of the cost
+        // of RK4, which matters when it runs per pixel. One new force evaluation per
+        // step; the other is carried over from the step before.
         vec3 pNext = p + v * dt + 0.5 * a * dt * dt;
         vec3 aNext = accel(pNext, h2);
         vec3 vNext = v + 0.5 * (a + aNext) * dt;
@@ -263,6 +281,7 @@ void main() {
 
         p = pNext;
         v = vNext;
+        a = aNext;
     }
 
     // No tone mapping. A knee was added here to tame a jagged white arc over the

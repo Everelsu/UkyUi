@@ -281,6 +281,7 @@ public final class UiConfig {
 
     // ---- intro ----
     public static boolean introEnabled = true;
+    public static double introVolume = 0.45D;
     public static boolean menuMusic = true;
     public static double menuMusicVolume = 0.55D;
 
@@ -799,6 +800,9 @@ public final class UiConfig {
         introEnabled = bool(CAT_MENU, "intro", introEnabled,
                 "Play the impact-and-black-hole intro the first time the title screen "
                         + "opens each launch. Click or press a key to skip.");
+        introVolume = dbl(CAT_MENU, "introVolume", introVolume, 0.0D, 1.0D,
+                "Volume of the intro's build-up and impact, on top of the game's master "
+                        + "slider. 0 plays it silent.");
         menuMusic = bool(CAT_MENU, "music", menuMusic, "Loop the menu track on the title screen.");
         menuMusicVolume = dbl(CAT_MENU, "musicVolume", menuMusicVolume, 0.0D, 1.0D,
                 "Volume of the menu track, on top of the game's music slider.");

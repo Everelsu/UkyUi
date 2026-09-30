@@ -2,7 +2,13 @@
   "intro_impact": {
     "category": "master",
     "sounds": [
-      { "name": "low", "stream": false }
+      { "name": "intro_impact", "stream": false }
+    ]
+  },
+  "intro_riser": {
+    "category": "master",
+    "sounds": [
+      { "name": "intro_riser", "stream": false }
     ]
   },
   "menu_music": {

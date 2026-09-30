@@ -20,6 +20,8 @@ uniform float uMix;        // 0 = entirely the previous trace, 1 = entirely the 
 uniform float uIntensity;  // screen fade, applied on the way out as before
 uniform vec2  uTap;        // one pixel of the *output*, in UV
 uniform float uRingLift;   // 0 on a large window, 1 on a small one
+uniform vec2  uPrevOffset; // the older trace's window against the newer one's, in UV
+uniform vec2  uPrevMax;    // extent of the older trace's window, in UV
 
 float luma(vec4 c) {
     return dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -79,7 +81,14 @@ vec4 widenThinHighlights(sampler2D tex, vec2 uv) {
 }
 
 void main() {
-    vec4 previous = widenThinHighlights(uPrevious, vUv);
+    // Each trace covers only the part of the frame that was on screen when it was
+    // taken, so the older one is looked up through its own window. Where it never
+    // covered, the new trace stands on its own — fading it in from nothing is what
+    // made the hole's corners draw themselves in on the way back to the title.
     vec4 current = widenThinHighlights(uCurrent, vUv);
+    vec2 pv = vUv + uPrevOffset;
+    vec4 previous = (pv.x < 0.0 || pv.y < 0.0 || pv.x > uPrevMax.x || pv.y > uPrevMax.y)
+            ? current
+            : widenThinHighlights(uPrevious, pv);
     gl_FragColor = mix(previous, current, uMix) * uIntensity;
 }
