@@ -870,9 +870,7 @@ public final class UiConfig {
 
         customSplash = bool(CAT_SPLASH, "customSplash", customSplash,
                 "Replace FML's mod-loading screen. Turn off if the loading screen misbehaves "
-                        + "on your GPU; the game falls back to Forge's own splash. Ignored when "
-                        + "Angelica is installed, which manages GL state in a way this screen "
-                        + "cannot be made to share.");
+                        + "on your GPU; the game falls back to Forge's own splash.");
         showPercent = bool(CAT_SPLASH, "showPercent", showPercent,
                 "Show a percentage beside each bar on the mod-loading screen. Bars "
                         + "that report no total have no percentage to show and are "

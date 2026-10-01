@@ -211,6 +211,21 @@ public final class BlackHole {
         fallSpin[i] = (0.7F + random.nextFloat() * 0.9F) * (random.nextFloat() < 0.85F ? 1.0F : -1.0F);
     }
 
+    private float jetStrength;
+    /** The jets as of the last trace; a trace that no longer matches them is stale. */
+    private static float tracedJetStrength;
+
+    /**
+     * Relativistic jets along the spin axis, traced with the disk so they are lensed
+     * like it. Off unless something turns them on, every frame it wants them. Their
+     * shape is fixed in the shader; only the brightness is animated.
+     *
+     * @param strength brightness, 0 for none
+     */
+    public void setJets(float strength) {
+        this.jetStrength = Math.max(0.0F, strength);
+    }
+
     public void update(float deltaSeconds) {
         this.lastDelta = deltaSeconds;
         // Slower half-life than the position easing: the turn should read as the
@@ -299,8 +314,14 @@ public final class BlackHole {
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
         GL11.glShadeModel(GL11.GL_SMOOTH);
         GL11.glDisable(GL11.GL_TEXTURE_2D);
+        // Same as render(): the faintest stars are below the GUI's alpha test.
+        boolean alphaTest = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
+        GL11.glDisable(GL11.GL_ALPHA_TEST);
 
         drawStars(cx, cy, 0.0F, 0.0F, intensity);
+        if (alphaTest) {
+            GL11.glEnable(GL11.GL_ALPHA_TEST);
+        }
 
         GL11.glShadeModel(GL11.GL_FLAT);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
@@ -339,6 +360,25 @@ public final class BlackHole {
         }
         float shadow = radius * SHADOW_SCALE * warp;
 
+        // Minecraft keeps the alpha test on through the GUI (greater than 0.1), and
+        // everything drawn here is premultiplied light whose alpha is only how much of
+        // the background it blocks. Emission over empty sky has alpha 0 and was being
+        // thrown away by it: the jets showed only where they crossed the disk's own
+        // coverage, cut off in a hard line where its halo thinned past the threshold,
+        // and the faintest of the halo and the stars went the same way.
+        boolean alphaTest = GL11.glIsEnabled(GL11.GL_ALPHA_TEST);
+        GL11.glDisable(GL11.GL_ALPHA_TEST);
+        try {
+            renderLit(cx, cy, radius, intensity, starIntensity, warp, mirrored, shadow);
+        } finally {
+            if (alphaTest) {
+                GL11.glEnable(GL11.GL_ALPHA_TEST);
+            }
+        }
+    }
+
+    private void renderLit(float cx, float cy, float radius, float intensity,
+                           float starIntensity, float warp, boolean mirrored, float shadow) {
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
         GL11.glShadeModel(GL11.GL_SMOOTH);
@@ -581,6 +621,16 @@ public final class BlackHole {
         long now = System.nanoTime();
         float pose = LensLibrary.elevationAt(this.poseCurrent);
 
+        // Jets flaring up or dying away change the picture faster than the idle
+        // interval allows; left to the clock, the trace held them at a brightness
+        // they no longer had.
+        if (jetsChanged() && now - lastTraceNanos >= Quality.traceIntervalNanos(true)) {
+            lastTraceNanos = now;
+            lastTracePose = pose;
+            lastTraceInterval = Quality.traceIntervalNanos(true);
+            return true;
+        }
+
         boolean moving = !Float.isNaN(lastTracePose)
                 && Math.abs(pose - lastTracePose) > POSE_MOVING_EPSILON;
         long interval = Quality.traceIntervalNanos(moving);
@@ -592,6 +642,22 @@ public final class BlackHole {
             return true;
         }
         return false;
+    }
+
+    /** The palette as of the last trace; see {@link #jetsChanged()}. */
+    private static float tracedEasy;
+
+    private boolean jetsChanged() {
+        // The disk's colours are traced in, so a palette that has moved on since —
+        // the change between Easy and Standard — needs a fresh trace like the jets do.
+        if (Math.abs(Theme.easy() - tracedEasy) > 0.03F) {
+            return true;
+        }
+        if (this.jetStrength <= 0.0F && tracedJetStrength <= 0.0F) {
+            return false;
+        }
+        return Math.abs(this.jetStrength - tracedJetStrength) > 0.05F
+                || (this.jetStrength > 0.0F) != (tracedJetStrength > 0.0F);
     }
 
     /** 0 at the moment of a trace, 1 by the time the next one is due. */
@@ -899,10 +965,15 @@ public final class BlackHole {
         shader.set("uIntensity", intensity);
         shader.set("uGain", DISK_GAIN * SHADER_GAIN_TRIM);
         shader.set("uSteps", Quality.blackHoleQuality());
+        shader.set("uJet", this.jetStrength);
+        tracedJetStrength = this.jetStrength;
 
-        setColour("uHot", UiConfig.colorBlackHoleHot);
-        setColour("uMid", UiConfig.colorBlackHoleMid);
-        setColour("uCold", UiConfig.colorBlackHoleCold);
+        // Through the theme, not the config: Easy moves the disk's colours with the
+        // rest of the palette, and a change between modes is traced as it happens.
+        setColour("uHot", Theme.holeHot);
+        setColour("uMid", Theme.holeMid);
+        setColour("uCold", Theme.holeCold);
+        tracedEasy = Theme.easy();
     }
 
     private void drawShadedDirect(float cx, float cy, float halfW, float halfH, float intensity) {

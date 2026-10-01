@@ -160,3 +160,17 @@ uky.graphics.minimal.hint=Дыра считается мелко и редко. 
 uky.graphics.balanced.hint=Полное разрешение без суперсэмплинга. В движении почти неотличимо от максимума.
 uky.graphics.maximum.hint=Без ограничений. Всё рисуется как настроено.
 
+uky.settings.pack=Сборка
+uky.settings.packMode=Режим сборки
+uky.settings.packMode.easy=Easy
+uky.settings.packMode.standard=Standard
+uky.settings.packMode.pending=%s — после перезапуска
+uky.title.easy=EASY
+uky.welcome.mode=Режим сборки
+uky.welcome.mode.easy.hint=Обычные мобы и спокойные полнолуния. Для игры без лишней боли.
+uky.welcome.mode.standard.hint=Мобы-осадники, особые мобы и кошмарное полнолуние. Как задумано.
+uky.welcome.mode.restart=Моды поменяются после перезапуска.
+uky.restart.title=Режим %s выбран
+uky.restart.body=Меню уже переключилось, а моды поменяются после перезапуска игры. Выйти сейчас и запустить заново из лаунчера?
+uky.restart.quit=Выйти из игры
+uky.restart.later=Позже

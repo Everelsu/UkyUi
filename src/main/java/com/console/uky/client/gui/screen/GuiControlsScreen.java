@@ -494,6 +494,12 @@ public class GuiControlsScreen extends MenuScreen {
         super.keyTyped(typedChar, keyCode);
     }
 
+    /** A key being bound is a key being bound, arrows and Enter included. */
+    @Override
+    protected boolean capturesKeys() {
+        return this.capturing != null;
+    }
+
     @Override
     public void updateScreen() {
         super.updateScreen();

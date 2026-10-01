@@ -21,7 +21,11 @@ import net.minecraft.client.resources.I18n;
  * among the rest. A player who has just watched an unfamiliar menu appear needs to
  * be told what it is and asked one question.
  *
- * <p>That question is the graphics preset. Everything else in this mod is taste and
+ * <p>A pack with an Easy mode gets a second question under it: Easy or Standard. It
+ * decides which mods load, so it belongs here, before the first world, rather than
+ * buried in the settings where somebody finds it a world too late.
+ *
+ * <p>The first question is the graphics preset. Everything else in this mod is taste and
  * can be found later; the preset is the only setting that decides whether the menu
  * runs at all on the machine in front of it, and it has to be answered before the
  * player forms an opinion about the menu from a version of it that stutters.
@@ -31,6 +35,12 @@ public class GuiWelcomeScreen extends MenuScreen {
     private static final int ID_PRESET_BASE = 400;
     private static final int ID_SETTINGS = 200;
     private static final int ID_DONE = 201;
+    private static final int ID_MODE_BASE = 500;
+    /** Left to right on the row: the friendlier one first. */
+    private static final String[] MODES = {
+            com.console.uky.core.PackMode.EASY, com.console.uky.core.PackMode.STANDARD};
+    /** Where the pack-mode section starts, below the preset hint. */
+    private static final int MODE_TOP = 158;
 
     private int panelX1;
     private int panelY1;
@@ -52,7 +62,8 @@ public class GuiWelcomeScreen extends MenuScreen {
         this.panelX1 = Math.max(12, (int) (this.width * 0.08F));
         this.panelX2 = this.panelX1 + panelWidth;
 
-        int panelHeight = Math.min(this.height - 40, 210);
+        boolean modes = com.console.uky.client.gui.PackLook.available();
+        int panelHeight = Math.min(this.height - 40, modes ? 292 : 210);
         this.panelY1 = Math.max(14, (this.height - panelHeight) / 2);
         this.panelY2 = this.panelY1 + panelHeight;
 
@@ -74,6 +85,19 @@ public class GuiWelcomeScreen extends MenuScreen {
                             : MenuButton.Style.NORMAL);
             button.entrance(0.04F + i * 0.03F);
             this.buttonList.add(button);
+        }
+
+        if (modes) {
+            String chosen = com.console.uky.client.gui.PackLook.chosen();
+            int modeWidth = (inner - gap) / 2;
+            for (int i = 0; i < MODES.length; i++) {
+                MenuButton button = new MenuButton(ID_MODE_BASE + i,
+                        x + i * (modeWidth + gap), this.panelY1 + MODE_TOP + 12, modeWidth, 20,
+                        GuiSettingsScreen.modeName(MODES[i]),
+                        MODES[i].equals(chosen) ? MenuButton.Style.PRIMARY : MenuButton.Style.NORMAL);
+                button.entrance(0.12F + i * 0.03F);
+                this.buttonList.add(button);
+            }
         }
 
         MenuButton settings = new MenuButton(ID_SETTINGS, x, this.panelY2 - 56, inner, 20,
@@ -140,6 +164,18 @@ public class GuiWelcomeScreen extends MenuScreen {
 
         drawWrapped(I18n.format("uky.graphics." + Quality.current() + ".hint", new Object[0]),
                 x, panelY1 + 120, wrapWidth);
+
+        if (com.console.uky.client.gui.PackLook.available()) {
+            this.fontRendererObj.drawString(
+                    I18n.format("uky.welcome.mode", new Object[0]), x, panelY1 + MODE_TOP,
+                    Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
+            String hint = I18n.format("uky.welcome.mode." + com.console.uky.client.gui.PackLook.chosen()
+                    + ".hint", new Object[0]);
+            if (com.console.uky.client.gui.PackLook.restartPending()) {
+                hint += " " + I18n.format("uky.welcome.mode.restart", new Object[0]);
+            }
+            drawWrapped(hint, x, panelY1 + MODE_TOP + 38, wrapWidth);
+        }
     }
 
     /** Body copy, wrapped to the panel; the font renderer does the breaking. */
@@ -162,6 +198,12 @@ public class GuiWelcomeScreen extends MenuScreen {
             this.pickFlash = 1.0F;
             // Rebuilt rather than repainted: which button is the primary one is part
             // of the layout, and the backdrop may have just been switched off.
+            relayout();
+            return;
+        }
+        if (button.id >= ID_MODE_BASE && button.id < ID_MODE_BASE + MODES.length) {
+            com.console.uky.client.gui.PackLook.choose(MODES[button.id - ID_MODE_BASE],
+                    button.xPosition + button.width / 2.0F, button.yPosition + button.height / 2.0F);
             relayout();
             return;
         }

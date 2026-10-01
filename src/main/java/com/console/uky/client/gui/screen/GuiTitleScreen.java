@@ -159,7 +159,8 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         int columnWidth = (int) Math.max(110, this.width * 0.26F);
         int y = (int) (this.height * 0.52F - stackHeight / 2.0F);
         // Keep the column clear of the wordmark above and the footer below.
-        y = Math.max(y, this.captionY + 30);
+        // Clear of the wordmark, and of the "EASY" under it where the pack has one.
+        y = Math.max(y, this.captionY + (com.console.uky.client.gui.PackLook.available() ? 42 : 30));
         y = Math.min(y, this.height - stackHeight - 46);
 
         int index = 0;
@@ -344,6 +345,9 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         if (hasTagline) {
             captionHeight += 12;
         }
+        if (com.console.uky.client.gui.PackLook.available()) {
+            captionHeight += 12;
+        }
 
         int gap = 18;
         // Whatever is left once the caption, gap, stack and the corner text are
@@ -525,10 +529,39 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
     private final float[] shake = new float[2];
 
+    /** Feeding the hole the whole title switches it on. See {@link Quasar}. */
+    private final Quasar quasar = new Quasar();
+
+    /**
+     * Whether a click here would drop something into the hole: near it, in empty
+     * sky. Not a hit on the hole itself — there is nothing there to hit.
+     */
+    private boolean isNearHole(int mouseX, int mouseY) {
+        if (!isBlackHoleBackground() || !UiConfig.comets) {
+            return false;
+        }
+        float reach = blackHoleRadius() * 5.0F;
+        float dx = mouseX - this.holeDrawX;
+        float dy = mouseY - this.holeDrawY;
+        return dx * dx + dy * dy <= reach * reach;
+    }
+
+    /** Lets go of a clump of gas where the click was; the comets take it from there. */
+    private boolean feedHole(int mouseX, int mouseY) {
+        if (!comets.feedFrom(mouseX, mouseY)) {
+            return false;
+        }
+        if (UiConfig.buttonSounds) {
+            UkySounds.play(UkySounds.BUTTON, 0.3F, 0.6F);
+        }
+        return true;
+    }
+
     /** The hit rattles the sky and kicks the camera in; see TitleIntro.shake. */
     @Override
     protected void drawBackdrop() {
         this.intro.shake(this.shake);
+        this.quasar.shake(this.shake);
         float punch = this.intro.punch();
         if (this.shake[0] == 0.0F && this.shake[1] == 0.0F && punch == 1.0F) {
             super.drawBackdrop();
@@ -570,9 +603,14 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             this.holeDrawX = cameraX + this.parallaxX * 6.0F;
             this.holeDrawY = cameraY + this.parallaxY * 4.0F;
             // The intro opens the lens from nothing; see TitleIntro.holeScale.
+            this.quasar.update(this.delta);
+            // Divided by the disk's boost: that multiplies the whole trace on the way
+            // out, and the jets are not the disk — boosted with it they burned white
+            // and their falloff turned into a step.
+            blackHole.setJets(this.quasar.jetStrength() / this.quasar.diskBoost());
             drawSky(this.holeDrawX, this.holeDrawY,
                     cameraRadius * Transitions.holeScale() * this.intro.holeScale(),
-                    this.intro.holeIntensity(),
+                    this.intro.holeIntensity() * this.quasar.diskBoost(),
                     this.intro.warp());
             return;
         }
@@ -620,6 +658,8 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         GL11.glTranslatef(this.shake[0], this.shake[1], 0.0F);
         this.intro.render(this.width, this.height,
                 this.holeDrawX, this.holeDrawY, Math.max(8.0F, blackHoleRadius()));
+        this.quasar.render(this.width, this.height,
+                this.holeDrawX, this.holeDrawY, cameraRadius * Transitions.holeScale());
         GL11.glPopMatrix();
 
         if (!this.intro.isActive()) {
@@ -724,6 +764,47 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         if (UiConfig.tagline != null && !UiConfig.tagline.isEmpty()) {
             this.drawCenteredString(this.fontRendererObj, UiConfig.tagline, centerX, textY,
                     Draw.withAlpha(Theme.textDim, 0.9F * this.contentAlpha));
+            textY += 12;
+        }
+        // Clear of the accent rule, which sits four units under the wordmark.
+        drawModeCaption(centerX, textY + 5);
+    }
+
+    /**
+     * "EASY" under the wordmark while the pack is in Easy mode.
+     *
+     * Spelled out a letter at a time as the palette turns towards Easy and taken back
+     * the same way, so the change of mode reads on the title too — the same clock as
+     * the wave, see {@link com.console.uky.client.gui.PackLook}.
+     */
+    private void drawModeCaption(int centerX, int y) {
+        float easy = com.console.uky.client.gui.PackLook.easy();
+        if (easy <= 0.01F || this.contentAlpha <= 0.01F) {
+            return;
+        }
+        String word = I18n.format("uky.title.easy", new Object[0]);
+        final int tracking = 4;
+        int total = 0;
+        for (int i = 0; i < word.length(); i++) {
+            total += this.fontRendererObj.getCharWidth(word.charAt(i)) + tracking;
+        }
+        total -= tracking;
+
+        Draw.radialGlow(centerX, y + 4, total * 0.9F,
+                Draw.withAlpha(Theme.accent, 0.14F * easy * this.contentAlpha),
+                Draw.withAlpha(Theme.accent, 0.0F));
+        float cursor = centerX - total / 2.0F;
+        int n = word.length();
+        for (int i = 0; i < n; i++) {
+            char c = word.charAt(i);
+            // Letter i appears over its own slice of the change, left to right.
+            float a = Ease.clamp01(easy * (n + 1) - i);
+            if (a > 0.01F) {
+                float drop = (1.0F - Ease.outCubic(a)) * -5.0F;
+                this.fontRendererObj.drawString(String.valueOf(c), (int) cursor, (int) (y + drop),
+                        Draw.withAlpha(Theme.accent, a * this.contentAlpha), false);
+            }
+            cursor += this.fontRendererObj.getCharWidth(c) + tracking;
         }
     }
 
@@ -791,16 +872,32 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             this.glyphX[i] = cursor * scale;
             this.glyphWidth[i] = width * scale;
 
-            if (loose.isInPlace(i)) {
+            float back = loose.glyphAlpha(i);
+            if (loose.isInPlace(i) && back > 0.01F) {
                 String ch = String.valueOf(glyph);
-                this.fontRendererObj.drawString(ch, (int) (cursor + 1), (int) (baseY + 1), shadow, false);
-                this.fontRendererObj.drawString(ch, (int) cursor, (int) baseY, color, false);
+                this.fontRendererObj.drawString(ch, (int) (cursor + 1), (int) (baseY + 1),
+                        back < 1.0F ? Draw.fade(shadow, back) : shadow, false);
+                this.fontRendererObj.drawString(ch, (int) cursor, (int) baseY,
+                        back < 1.0F ? Draw.fade(color, back) : color, false);
             }
             cursor += width + tracking;
         }
         GL11.glPopMatrix();
 
-        loose.update(this.delta, this.holeCenterX, this.holeCenterY, this.holeRadius);
+        int eaten = loose.update(this.delta, this.holeCenterX, this.holeCenterY, this.holeRadius);
+        if (eaten > 0 && !this.quasar.isActive()) {
+            flareHole(0.45F);
+        }
+        // Letters back first: on the frame the quasar ends, the title is still all
+        // eaten, and checking that first started the whole thing over a second time.
+        if (this.quasar.takeFinished()) {
+            loose.restore();
+        }
+        if (loose.allEaten() && !this.quasar.isActive()) {
+            // The whole title went in. Not reset on the spot any more: the hole lights
+            // up on it first, and gives the letters back once it has calmed down.
+            this.quasar.start();
+        }
         loose.draw(this.fontRendererObj, this.contentAlpha);
 
         // Accent rule under the wordmark, growing outwards from the centre.
@@ -816,10 +913,14 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     private void drawCorners() {
         int dim = Draw.withAlpha(Theme.textDim, 0.75F * this.contentAlpha);
 
+        // The game's version on the bottom line, level with the mod's version in the
+        // other corner; the pack's own footer, when it has one, sits above it. The
+        // other way round left an empty line under "Minecraft 1.7.10" in every pack
+        // without a footer.
         String left = "Minecraft 1.7.10";
-        this.fontRendererObj.drawString(left, 6, this.height - 20, dim);
+        this.fontRendererObj.drawString(left, 6, this.height - 11, dim);
         if (UiConfig.footer != null && !UiConfig.footer.isEmpty()) {
-            this.fontRendererObj.drawString(UiConfig.footer, 6, this.height - 11, dim);
+            this.fontRendererObj.drawString(UiConfig.footer, 6, this.height - 20, dim);
         }
 
         if (UiConfig.footerRight != null && !UiConfig.footerRight.isEmpty()) {
@@ -897,6 +998,10 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             return;
         }
         if (knockOutLetter(mouseX, mouseY)) {
+            return;
+        }
+        if (button == 0 && isNearHole(mouseX, mouseY) && !overWidget(mouseX, mouseY)
+                && feedHole(mouseX, mouseY)) {
             return;
         }
         super.mouseClicked(mouseX, mouseY, button);

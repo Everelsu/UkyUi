@@ -56,6 +56,66 @@ public final class Comets {
     /** 0 is the palette's second accent, 1 the hot inner disk colour. */
     private final float[] hue = new float[MAX];
 
+    // ---- falling in ----
+
+    /**
+     * Chance that a spontaneous comet is aimed past the hole and does not come back.
+     *
+     * Rare enough to be an event, common enough that somebody who leaves the menu up
+     * will see it: at one comet every forty seconds, one in four is a capture every
+     * two or three minutes.
+     */
+    private static final float CAPTURE_CHANCE = 0.25F;
+    /** How long the tail takes to drain into the horizon after the head has crossed it. */
+    private static final float DRAIN_SECONDS = 0.45F;
+
+    private static final int STRAIGHT = 0;
+    /** Doomed, still on the way in, pulled by the hole. */
+    private static final int FALLING = 1;
+    /** Past its closest pass, winding down the spiral. */
+    private static final int SPIRAL = 2;
+    /** Head gone over the horizon, tail following it down. */
+    private static final int DRAINING = 3;
+
+    private final int[] phase = new int[MAX];
+    /** Gravity strength for a doomed comet, scaled so every hole size gets the same orbit. */
+    private final float[] pull = new float[MAX];
+    /** Spiral state: radius, angle, angular speed at its start, starting radius, sense, decay. */
+    private final float[] spiralR = new float[MAX];
+    private final float[] spiralAngle = new float[MAX];
+    private final float[] spiralSpin0 = new float[MAX];
+    private final float[] spiralStart = new float[MAX];
+    private final float[] spiralSense = new float[MAX];
+    private final float[] spiralDecay = new float[MAX];
+    private final float[] drain = new float[MAX];
+
+    /**
+     * Where each comet has been, newest last, so the tail follows the path it took
+     * rather than pointing straight back — a comet whipping round the hole has to
+     * drag its tail round with it, or the orbit reads as a stick spinning.
+     */
+    private static final int TRAIL = 72;
+    private final float[][] trailX = new float[MAX][TRAIL];
+    private final float[][] trailY = new float[MAX][TRAIL];
+    private final int[] trailHead = new int[MAX];
+    private final int[] trailCount = new int[MAX];
+
+    /** The hole this frame, in backdrop units; NaN when there is none. */
+    private float holeX = Float.NaN;
+    private float holeY;
+    private float holeR;
+    /**
+     * The hole as last drawn, kept across the end of the frame. A click is handled
+     * between frames, after {@link #clearAttractor()} has run, so anything acting on
+     * one reads this rather than the per-frame attractor — read from that, every
+     * click on the sky found no hole at all.
+     */
+    private float lastHoleX = Float.NaN;
+    private float lastHoleY;
+    private float lastHoleR;
+    /** Comets eaten since the last {@link #takeSwallowed()}. */
+    private int swallowed;
+
     private int width;
     private int height;
 
@@ -78,6 +138,38 @@ public final class Comets {
     public void resize(int width, int height) {
         this.width = width;
         this.height = height;
+    }
+
+    /**
+     * Where the hole is this frame, and its shadow's radius. Set every frame the sky
+     * draws it, cleared by {@link #clearAttractor()} once the comets have used it.
+     */
+    public void attractor(float x, float y, float radius) {
+        if (radius <= 1.0F) {
+            clearAttractor();
+            return;
+        }
+        this.holeX = x;
+        this.holeY = y;
+        this.holeR = radius;
+        this.lastHoleX = x;
+        this.lastHoleY = y;
+        this.lastHoleR = radius;
+    }
+
+    public void clearAttractor() {
+        this.holeX = Float.NaN;
+    }
+
+    private boolean hasHole() {
+        return !Float.isNaN(this.holeX);
+    }
+
+    /** How many comets crossed the horizon since last asked, so the hole can flare. */
+    public int takeSwallowed() {
+        int n = this.swallowed;
+        this.swallowed = 0;
+        return n;
     }
 
     /** Where the pointer is, in the same units the backdrop is drawn in. */
@@ -108,15 +200,198 @@ public final class Comets {
                 continue;
             }
             this.age[i] += deltaSeconds;
-            this.x[i] += this.vx[i] * deltaSeconds;
-            this.y[i] += this.vy[i] * deltaSeconds;
-            if (this.age[i] >= this.life[i]) {
+            move(i, deltaSeconds);
+            if (this.phase[i] != DRAINING) {
+                record(i);
+            }
+            if (this.age[i] >= this.life[i] || isLost(i)) {
                 this.life[i] = 0.0F;
             }
         }
         if (this.width > 0 && this.random.nextFloat() < deltaSeconds / MEAN_INTERVAL) {
-            launch();
+            if (!hasHole() || this.random.nextFloat() >= CAPTURE_CHANCE || !launchDoomed()) {
+                launch();
+            }
         }
+    }
+
+    private void move(int i, float dt) {
+        int phase = this.phase[i];
+        if (phase != STRAIGHT && !hasHole()) {
+            // The hole went out of frame (a screen without it). Nothing to fall into:
+            // let it slip away along its last heading.
+            if (phase == SPIRAL || phase == DRAINING) {
+                this.life[i] = Math.min(this.life[i], this.age[i] + 0.3F);
+            }
+            this.phase[i] = phase = STRAIGHT;
+        }
+        if (phase == STRAIGHT) {
+            this.x[i] += this.vx[i] * dt;
+            this.y[i] += this.vy[i] * dt;
+            return;
+        }
+        if (phase == DRAINING) {
+            this.drain[i] += dt;
+            if (this.drain[i] >= DRAIN_SECONDS) {
+                this.life[i] = 0.0F;
+            }
+            return;
+        }
+        float dx = this.x[i] - this.holeX;
+        float dy = this.y[i] - this.holeY;
+        if (phase == FALLING) {
+            float r = (float) Math.sqrt(dx * dx + dy * dy);
+            float soft = Math.max(r, this.holeR * 0.6F);
+            float a = this.pull[i] / (soft * soft * soft);
+            this.vx[i] -= a * dx * dt;
+            this.vy[i] -= a * dy * dt;
+            // Closest pass: from here a ballistic orbit would carry it back out, so it
+            // hands over to the spiral, at the same speed it arrived with.
+            if (dx * this.vx[i] + dy * this.vy[i] > 0.0F && r < this.holeR * 5.0F) {
+                float speed = (float) Math.sqrt(this.vx[i] * this.vx[i] + this.vy[i] * this.vy[i]);
+                this.phase[i] = SPIRAL;
+                this.spiralR[i] = r;
+                this.spiralStart[i] = r;
+                this.spiralAngle[i] = (float) Math.atan2(dy, dx);
+                this.spiralSpin0[i] = speed / r;
+                this.spiralSense[i] = dx * this.vy[i] - dy * this.vx[i] >= 0.0F ? 1.0F : -1.0F;
+                return;
+            }
+            this.x[i] += this.vx[i] * dt;
+            this.y[i] += this.vy[i] * dt;
+            return;
+        }
+        // SPIRAL: the radius decays, and the angular speed climbs as Kepler says it
+        // would for the tighter orbit — so it slings faster and faster the deeper it
+        // goes, which is the whole drama of it.
+        float r = this.spiralR[i] * (float) Math.exp(-this.spiralDecay[i] * dt);
+        this.spiralR[i] = r;
+        float ratio = this.spiralStart[i] / r;
+        float spin = this.spiralSpin0[i] * ratio * (float) Math.sqrt(ratio);
+        this.spiralAngle[i] += this.spiralSense[i] * spin * dt;
+        // Settles into the plane of the disk on the way down: the orbit flattens
+        // towards the disk's near edge-on ellipse.
+        float settle = Ease.clamp01((this.spiralStart[i] - r) / Math.max(1.0F, this.spiralStart[i] - this.holeR));
+        float squash = 1.0F - 0.7F * settle;
+        float nx = this.holeX + (float) Math.cos(this.spiralAngle[i]) * r;
+        float ny = this.holeY + (float) Math.sin(this.spiralAngle[i]) * r * squash;
+        if (dt > 0.0F) {
+            this.vx[i] = (nx - this.x[i]) / dt;
+            this.vy[i] = (ny - this.y[i]) / dt;
+        }
+        this.x[i] = nx;
+        this.y[i] = ny;
+        if (r < this.holeR * 1.05F) {
+            this.phase[i] = DRAINING;
+            this.drain[i] = 0.0F;
+            this.swallowed++;
+        }
+    }
+
+    /** Well clear of the frame and not coming back: free the slot. */
+    private boolean isLost(int i) {
+        return this.age[i] > 2.0F
+                && (this.x[i] < -this.width * 0.6F || this.x[i] > this.width * 1.6F
+                || this.y[i] < -this.height * 0.6F || this.y[i] > this.height * 1.6F);
+    }
+
+    private void record(int i) {
+        int head = this.trailHead[i];
+        if (this.trailCount[i] > 0) {
+            float dx = this.x[i] - this.trailX[i][head];
+            float dy = this.y[i] - this.trailY[i][head];
+            // Spaced by distance, so a slow comet does not spend the whole buffer on
+            // the last half second and a fast one still has a smooth curve.
+            if (dx * dx + dy * dy < 4.0F) {
+                return;
+            }
+            head = (head + 1) % TRAIL;
+        }
+        this.trailHead[i] = head;
+        this.trailX[i][head] = this.x[i];
+        this.trailY[i][head] = this.y[i];
+        this.trailCount[i] = Math.min(TRAIL, this.trailCount[i] + 1);
+    }
+
+    /**
+     * Lets go of a clump of gas at a point near the hole, already moving sideways —
+     * anything near a black hole is orbiting it — but too slowly to stay up, so it
+     * falls in on the same tightening spiral a captured comet takes.
+     *
+     * @return false when there is no hole, no free slot, or the point is inside it
+     */
+    public boolean feedFrom(float fromX, float fromY) {
+        int slot = free();
+        if (slot < 0 || Float.isNaN(this.lastHoleX)) {
+            return false;
+        }
+        float holeR = this.lastHoleR;
+        float dx = fromX - this.lastHoleX;
+        float dy = fromY - this.lastHoleY;
+        float r = (float) Math.sqrt(dx * dx + dy * dy);
+        if (r < holeR * 1.2F) {
+            return false;
+        }
+        // At the same scale as a comet's capture, so the spiral has the same shape.
+        float pull = 6.0F * holeR * holeR * holeR;
+        // 85% of circular speed: the orbit's low point is about half the release
+        // radius, inside the hand-over to the spiral.
+        float speed = 0.85F * (float) Math.sqrt(pull / r);
+        float sense = this.random.nextBoolean() ? 1.0F : -1.0F;
+        reset(slot, fromX, fromY, -dy / r * speed * sense, dx / r * speed * sense);
+        this.life[slot] = 30.0F;
+        this.phase[slot] = FALLING;
+        this.pull[slot] = pull;
+        this.spiralDecay[slot] = 0.3F;
+        // A clump, not a comet: short tail, a little dimmer.
+        this.length[slot] = holeR * 1.4F;
+        this.magnitude[slot] = 0.75F;
+        return true;
+    }
+
+    /**
+     * Sends one past the hole, close enough that it does not come back out.
+     *
+     * Aimed a few shadow radii to one side of it, not at it: a comet that dived
+     * straight in would look like it was shot. The pull is scaled to the speed and the
+     * hole's size so that every capture is the same shape — a swing round, then about
+     * a turn and a half of tightening spiral — whatever the window or the screen.
+     */
+    private boolean launchDoomed() {
+        int slot = free();
+        if (slot < 0 || this.width <= 0) {
+            return false;
+        }
+        boolean fromLeft = this.holeX > this.width * 0.5F
+                ? this.random.nextFloat() < 0.8F : this.random.nextFloat() < 0.2F;
+        float startX = fromLeft ? -this.width * 0.15F : this.width * 1.15F;
+        float startY = Math.max(-this.height * 0.15F, Math.min(this.height * 1.15F,
+                this.holeY + this.height * (this.random.nextFloat() - 0.6F) * 0.8F));
+        float dx = this.holeX - startX;
+        float dy = this.holeY - startY;
+        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+        if (dist < this.holeR * 3.0F) {
+            return false;
+        }
+        float side = this.random.nextBoolean() ? 1.0F : -1.0F;
+        float miss = this.holeR * (3.0F + this.random.nextFloat());
+        float aimX = this.holeX - dy / dist * miss * side;
+        float aimY = this.holeY + dx / dist * miss * side;
+
+        float seconds = LIFE_MIN + this.random.nextFloat() * (LIFE_MAX - LIFE_MIN);
+        float speed = this.width * 1.35F / seconds;
+        float ax = aimX - startX;
+        float ay = aimY - startY;
+        float aim = (float) Math.sqrt(ax * ax + ay * ay);
+
+        reset(slot, startX, startY, ax / aim * speed, ay / aim * speed);
+        this.life[slot] = 30.0F; // ended by the horizon, not the clock
+        this.phase[slot] = FALLING;
+        // Shape-invariant: the trajectory scales with holeR, its timing with speed.
+        float unit = speed / (2.5F * this.holeR);
+        this.pull[slot] = 6.0F * this.holeR * this.holeR * this.holeR * unit * unit;
+        this.spiralDecay[slot] = 0.3F * unit;
+        return true;
     }
 
     /**
@@ -163,17 +438,25 @@ public final class Comets {
             return false;
         }
         float seconds = LIFE_MIN + this.random.nextFloat() * (LIFE_MAX - LIFE_MIN);
+        reset(slot, startX, startY, (targetX - startX) / seconds, (targetY - startY) / seconds);
+        this.life[slot] = seconds;
+        return true;
+    }
+
+    private void reset(int slot, float startX, float startY, float vx, float vy) {
         this.x[slot] = startX;
         this.y[slot] = startY;
-        this.vx[slot] = (targetX - startX) / seconds;
-        this.vy[slot] = (targetY - startY) / seconds;
+        this.vx[slot] = vx;
+        this.vy[slot] = vy;
         this.age[slot] = 0.0F;
-        this.life[slot] = seconds;
+        this.phase[slot] = STRAIGHT;
+        this.trailCount[slot] = 0;
+        this.trailHead[slot] = 0;
         // A third of the screen at the long end. Anything shorter reads as a spark.
         this.length[slot] = this.height * (0.22F + this.random.nextFloat() * 0.16F);
         this.magnitude[slot] = 0.8F + this.random.nextFloat() * 0.2F;
         this.hue[slot] = this.random.nextFloat();
-        return true;
+        record(slot);
     }
 
     private int free() {
@@ -258,8 +541,7 @@ public final class Comets {
                 ? this.wishFlash * 3.0F : 0.0F);
         float spike = size * (3.2F + this.wishHover * 1.6F);
 
-        int warm = Draw.mix(0xFF000000 | UiConfig.colorAccent,
-                0xFF000000 | UiConfig.colorBlackHoleHot, 0.55F);
+        int warm = Draw.mix(Theme.accent, Theme.holeHot, 0.55F);
         float wr = ((warm >> 16) & 0xFF) / 255.0F;
         float wg = ((warm >> 8) & 0xFF) / 255.0F;
         float wb = (warm & 0xFF) / 255.0F;
@@ -283,7 +565,7 @@ public final class Comets {
             // backdrop that answers, and a thing that can be clicked should say so.
             end();
             Draw.ring(this.wishX, this.wishY, WISH_RADIUS + 2.0F, 1.0F,
-                    Draw.withAlpha(UiConfig.colorAccent, 0.55F * this.wishHover * alpha));
+                    Draw.withAlpha(Theme.accent, 0.55F * this.wishHover * alpha));
             return;
         }
         end();
@@ -329,59 +611,128 @@ public final class Comets {
     }
 
     private void emit(int i, float alpha) {
-        float t = this.age[i] / this.life[i];
-        // In over the first twentieth, out over the last quarter: a comet that winks
-        // out at full brightness reads as a rendering fault rather than as distance.
-        float fade = Math.min(1.0F, t / 0.05F) * Math.min(1.0F, (1.0F - t) / 0.25F);
+        // In over the first quarter second, out over the last quarter of its life: a
+        // comet that winks out at full brightness reads as a rendering fault rather
+        // than as distance.
+        float fade = Math.min(1.0F, this.age[i] / 0.25F)
+                * Math.min(1.0F, (this.life[i] - this.age[i]) / (this.life[i] * 0.25F));
         if (fade <= 0.0F) {
             return;
         }
         float speed = (float) Math.sqrt(this.vx[i] * this.vx[i] + this.vy[i] * this.vy[i]);
-        if (speed < 0.001F) {
+        if (speed < 0.001F && this.phase[i] != DRAINING) {
             return;
         }
-        float dx = this.vx[i] / speed;
-        float dy = this.vy[i] / speed;
-        float px = -dy;
-        float py = dx;
 
-        float head = this.magnitude[i] * fade * alpha;
-        float hx = this.x[i];
-        float hy = this.y[i];
-        float tailX = hx - dx * this.length[i];
-        float tailY = hy - dy * this.length[i];
+        float bright = this.magnitude[i] * fade * alpha;
+        float length = this.length[i];
+        boolean headShown = true;
+        if (this.phase[i] == SPIRAL) {
+            // Dimming into the horizon, the way light climbing out of a well does.
+            float above = (this.spiralR[i] - this.holeR) / (this.holeR * 0.8F);
+            bright *= 0.35F + 0.65F * Ease.clamp01(above);
+            // And stretched along the orbit as it speeds up.
+            length *= 1.0F + 0.6F * Ease.clamp01(1.0F - above);
+        } else if (this.phase[i] == DRAINING) {
+            float left = 1.0F - this.drain[i] / DRAIN_SECONDS;
+            length *= left;
+            bright *= 0.35F * left;
+            headShown = false;
+        }
 
-        int warm = Draw.mix(0xFF000000 | UiConfig.colorAccentAlt,
-                0xFF000000 | UiConfig.colorBlackHoleHot, this.hue[i]);
+        int warm = Draw.mix(Theme.accentAlt, Theme.holeHot, this.hue[i]);
         float wr = ((warm >> 16) & 0xFF) / 255.0F;
         float wg = ((warm >> 8) & 0xFF) / 255.0F;
         float wb = (warm & 0xFF) / 255.0F;
 
         // The wake: wide at the head, nothing at the tip.
-        streak(hx, hy, tailX, tailY, px, py, 4.5F, 0.6F, wr, wg, wb, head * 0.22F);
+        trail(i, length, 4.5F, 0.6F, wr, wg, wb, bright * 0.22F);
         // The core, half as wide and twice as bright.
-        streak(hx, hy, tailX, tailY, px, py, 1.7F, 0.2F, wr, wg, wb, head * 0.75F);
+        trail(i, length, 1.7F, 0.2F, wr, wg, wb, bright * 0.75F);
         // And a short white lead, so the front of it is a point of light.
-        streak(hx + dx * 3.0F, hy + dy * 3.0F, hx - dx * this.length[i] * 0.18F,
-                hy - dy * this.length[i] * 0.18F, px, py, 0.9F, 0.2F,
-                1.0F, 1.0F, 1.0F, head * 0.85F);
+        trail(i, length * 0.18F, 0.9F, 0.2F, 1.0F, 1.0F, 1.0F, bright * 0.85F);
 
+        if (!headShown) {
+            return;
+        }
+        float hx = this.x[i];
+        float hy = this.y[i];
+        float hidden = occlusion(i, hx, hy);
+        float head = bright * hidden;
         // Head: a halo, and a core inside it.
         quad(hx, hy, 5.5F, 5.5F, wr, wg, wb, head * 0.30F);
         quad(hx, hy, 2.6F, 2.6F, wr, wg, wb, head * 0.6F);
         quad(hx, hy, 1.3F, 1.3F, 1.0F, 1.0F, 1.0F, head * 0.95F);
     }
 
-    /** One tapering strip from the head back to the tail. */
-    private void streak(float hx, float hy, float tx, float ty, float px, float py,
-                        float halfHead, float halfTail,
-                        float r, float g, float b, float a) {
-        GL11.glColor4f(r, g, b, a);
-        GL11.glVertex2f(hx + px * halfHead, hy + py * halfHead);
-        GL11.glVertex2f(hx - px * halfHead, hy - py * halfHead);
-        GL11.glColor4f(r, g, b, 0.0F);
-        GL11.glVertex2f(tx - px * halfTail, ty - py * halfTail);
-        GL11.glVertex2f(tx + px * halfTail, ty + py * halfTail);
+    /**
+     * 0 where the shadow is in front of the point, 1 where it is not.
+     *
+     * The far side of an orbit passes behind the hole, and a comet drawn over the
+     * shadow there would put it in front of something it is behind. Near edge-on, the
+     * far side is the half above the centre. Only for comets that are in the hole's
+     * grip: one just crossing the sky is nearer than the hole and stays in front.
+     */
+    private float occlusion(int i, float px, float py) {
+        if (this.phase[i] == STRAIGHT || !hasHole() || py >= this.holeY) {
+            return 1.0F;
+        }
+        float dx = px - this.holeX;
+        float dy = py - this.holeY;
+        float d = (float) Math.sqrt(dx * dx + dy * dy);
+        return Ease.clamp01((d - this.holeR * 0.92F) / (this.holeR * 0.16F));
+    }
+
+    /**
+     * One tapering strip back along the path the comet actually flew, {@code length}
+     * units of it, from {@code halfHead} wide to {@code halfTail}.
+     */
+    private void trail(int i, float length, float halfHead, float halfTail,
+                       float r, float g, float b, float a) {
+        int count = this.trailCount[i];
+        if (count < 2 || length <= 0.5F || a <= 0.003F) {
+            return;
+        }
+        int idx = this.trailHead[i];
+        float ax = this.x[i];
+        float ay = this.y[i];
+        float walked = 0.0F;
+        for (int k = 0; k < count; k++) {
+            int prev = (idx - k + TRAIL) % TRAIL;
+            float bx = this.trailX[i][prev];
+            float by = this.trailY[i][prev];
+            float sx = ax - bx;
+            float sy = ay - by;
+            float seg = (float) Math.sqrt(sx * sx + sy * sy);
+            if (seg < 0.001F) {
+                continue;
+            }
+            float t0 = walked / length;
+            float t1 = Math.min(1.0F, (walked + seg) / length);
+            if (walked + seg > length) {
+                float keep = (length - walked) / seg;
+                bx = ax - sx * keep;
+                by = ay - sy * keep;
+            }
+            float nx = -sy / seg;
+            float ny = sx / seg;
+            float w0 = halfHead + (halfTail - halfHead) * t0;
+            float w1 = halfHead + (halfTail - halfHead) * t1;
+            float a0 = a * (1.0F - t0) * occlusion(i, ax, ay);
+            float a1 = a * (1.0F - t1) * occlusion(i, bx, by);
+            GL11.glColor4f(r, g, b, a0);
+            GL11.glVertex2f(ax + nx * w0, ay + ny * w0);
+            GL11.glVertex2f(ax - nx * w0, ay - ny * w0);
+            GL11.glColor4f(r, g, b, a1);
+            GL11.glVertex2f(bx - nx * w1, by - ny * w1);
+            GL11.glVertex2f(bx + nx * w1, by + ny * w1);
+            walked += seg;
+            if (walked >= length) {
+                return;
+            }
+            ax = bx;
+            ay = by;
+        }
     }
 
     /** An axis-aligned blob, brightest in the middle by virtue of being piled up. */

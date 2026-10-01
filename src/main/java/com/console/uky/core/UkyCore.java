@@ -41,8 +41,22 @@ public class UkyCore implements IFMLLoadingPlugin, IEarlyMixinLoader {
         return null;
     }
 
+    /**
+     * Applies an Easy/Standard switch chosen in the menu last session. Here because
+     * this runs after Forge has looked for coremods and closed every jar, and before
+     * it looks for mods — the one moment a mod's jar can be renamed. See {@link PackMode}.
+     */
     @Override
     public void injectData(Map<String, Object> data) {
+        Object dir = data.get("mcLocation");
+        if (dir instanceof java.io.File) {
+            try {
+                PackMode.applyPending((java.io.File) dir);
+            } catch (Throwable t) {
+                // A switch that fails must not be a launch that fails.
+                System.out.println("[UKY] pack mode: switch failed: " + t);
+            }
+        }
     }
 
     @Override

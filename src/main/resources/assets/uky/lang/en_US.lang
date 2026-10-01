@@ -179,3 +179,17 @@ uky.graphics.minimal.hint=The hole is traced small and slowly. For weak or old c
 uky.graphics.balanced.hint=Full resolution, no supersampling. Hard to tell from maximum in motion.
 uky.graphics.maximum.hint=No ceiling. Everything is drawn as configured.
 
+uky.settings.pack=Pack
+uky.settings.packMode=Pack mode
+uky.settings.packMode.easy=Easy
+uky.settings.packMode.standard=Standard
+uky.settings.packMode.pending=%s after restart
+uky.title.easy=EASY
+uky.welcome.mode=Pack mode
+uky.welcome.mode.easy.hint=Ordinary mobs and quiet full moons. For a game without the extra pain.
+uky.welcome.mode.standard.hint=Siege mobs, special mobs and nightmare full moons. As intended.
+uky.welcome.mode.restart=The mods change after a restart.
+uky.restart.title=%s mode chosen
+uky.restart.body=The menus have switched already; the mods change once the game is restarted. Quit now and start it again from the launcher?
+uky.restart.quit=Quit game
+uky.restart.later=Later

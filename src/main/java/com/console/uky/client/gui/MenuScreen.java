@@ -19,6 +19,8 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.client.gui.GuiTextField;
+import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 
 import java.util.List;
@@ -143,6 +145,19 @@ public abstract class MenuScreen extends GuiScreen {
                     mc.displayGuiScreen(parent);
                 }
             });
+        }
+    }
+
+    /**
+     * After a change of pack mode has played, offers to quit so the mods can follow.
+     * On the tick, not mid-draw, like any other screen change.
+     */
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        if (!(this instanceof com.console.uky.client.gui.screen.GuiRestartPrompt)
+                && !isClosing() && !Transitions.isBusy() && PackLook.takePrompt()) {
+            switchTo(new com.console.uky.client.gui.screen.GuiRestartPrompt(this));
         }
     }
 
@@ -435,6 +450,15 @@ public abstract class MenuScreen extends GuiScreen {
         // the conversion too.
         int localX = (int) (mouseX / this.uiScaleX);
         int localY = (int) (mouseY / this.uiScaleY);
+        // The pointer moving hands control back to the mouse: two lit rows, one for
+        // each, would leave nobody sure which one Enter presses.
+        if (localX != this.lastPointerX || localY != this.lastPointerY) {
+            if (this.lastPointerX != Integer.MIN_VALUE) {
+                setFocus(null);
+            }
+            this.lastPointerX = localX;
+            this.lastPointerY = localY;
+        }
         // The backdrop has one thing in it that answers the pointer. It is told where
         // the pointer is here rather than reading it, because this is the one place
         // that knows what a screen coordinate means in our units.
@@ -469,6 +493,10 @@ public abstract class MenuScreen extends GuiScreen {
                 }
             }
             super.drawScreen(localX, localY, partialTicks);
+            // Over every kind of control, whatever its own drawButton does.
+            if (this.focus != null) {
+                this.focus.drawFocus();
+            }
 
             drawOverlay();
         } finally {
@@ -489,6 +517,7 @@ public abstract class MenuScreen extends GuiScreen {
         this.delta = Math.min(dt, 0.1F);
         this.elapsed += this.delta;
         Transitions.update(this.delta);
+        PackLook.update(this.delta);
         this.fadeAlpha = Ease.outCubic((this.elapsed + this.fadeOffset) / FADE_IN_SECONDS);
 
         particles.update(this.delta);
@@ -519,6 +548,8 @@ public abstract class MenuScreen extends GuiScreen {
         }
         // The overdrawn base fill above is opaque, so anything drawn over it is safe.
         advanceHoleFade();
+        // Jets are an event, not a setting: whoever wants them sets them this frame.
+        blackHole.setJets(0.0F);
         drawBackgroundArt();
         // Here rather than inside drawBackgroundArt, because that is the method a
         // screen overrides when it wants its own sky — the title screen does, for the
@@ -560,12 +591,39 @@ public abstract class MenuScreen extends GuiScreen {
     private static final float HOLE_FADE_HALF_LIFE = 0.16F;
 
     private void advanceHoleFade() {
+        if (pulseStrength > 0.0F) {
+            pulseAge += this.delta;
+            if (pulseAge > PULSE_SECONDS) {
+                pulseStrength = 0.0F;
+            }
+        }
         float target = isStarfieldOnly() ? 0.0F : 1.0F;
         holeFade = Ease.approach(holeFade, target, HOLE_FADE_HALF_LIFE, this.delta);
         // Snapped at the ends, so "there is no hole" is a state that is actually
         // reached rather than approached forever at a thousandth of a radius.
         if (Math.abs(holeFade - target) < 0.01F) {
             holeFade = target;
+        }
+    }
+
+    /**
+     * The disk flaring as something falls in — a comet, a letter, a clump of gas.
+     *
+     * Brightness only. Matter hitting the disk heats it, and that is what is seen; the
+     * hole's mass, and so its lens, does not change by anything visible. Static for the
+     * same reason as the fade: it belongs to the one hole, not to whichever screen is
+     * drawing it this frame.
+     */
+    private static float pulseStrength;
+    private static float pulseAge;
+    private static final float PULSE_SECONDS = 2.0F;
+
+    /** A weaker flare never cuts a stronger one short. */
+    protected static void flareHole(float strength) {
+        float left = pulseStrength * (float) Math.exp(-pulseAge * 2.0F);
+        if (strength >= left) {
+            pulseStrength = strength;
+            pulseAge = 0.0F;
         }
     }
 
@@ -588,7 +646,14 @@ public abstract class MenuScreen extends GuiScreen {
      */
     protected void drawSky(float centreX, float centreY, float radius,
                            float diskIntensity, float warp) {
+        if (pulseStrength > 0.0F) {
+            // Fast rise, slow cooling: the infall is sudden, the heat takes a while
+            // to radiate away.
+            float rise = Ease.clamp01(pulseAge / 0.12F);
+            diskIntensity *= 1.0F + 0.9F * pulseStrength * rise * (float) Math.exp(-pulseAge * 2.0F);
+        }
         float left = radius * holeFade;
+        comets.attractor(centreX, centreY, left);
         if (left <= 1.0F) {
             // Nothing of it worth drawing. The starfield's own centre is the window's,
             // which is where the shrinking hole's stars have arrived by now.
@@ -639,6 +704,10 @@ public abstract class MenuScreen extends GuiScreen {
             return;
         }
         comets.update(this.delta);
+        if (comets.takeSwallowed() > 0) {
+            // A comet just went over the horizon. The hole answers it.
+            flareHole(0.55F);
+        }
         comets.render(this.fadeAlpha);
         if (showsWishStar()) {
             // Over the comets rather than under them: it is the thing that sends one,
@@ -646,6 +715,9 @@ public abstract class MenuScreen extends GuiScreen {
             // backwards.
             comets.renderWish(this.fadeAlpha);
         }
+        // Used for this frame only; a screen without a hole must not leave comets
+        // falling into where the last one was.
+        comets.clearAttractor();
     }
 
     /**
@@ -770,6 +842,9 @@ public abstract class MenuScreen extends GuiScreen {
             Draw.scanlines(this.width, this.height, 3.0F, Draw.withAlpha(0x000000, 0.10F * this.fadeAlpha));
         }
 
+        // Easy/Standard changing: a wave over everything, widgets included.
+        PackLook.draw(this.width, this.height);
+
         // The dive covers everything, including the widgets.
         float blackout = Transitions.blackout();
         if (blackout > 0.002F) {
@@ -818,6 +893,275 @@ public abstract class MenuScreen extends GuiScreen {
     public void handleInput() {
         ensureInitialised();
         super.handleInput();
+    }
+
+    // ------------------------------------------------------------ keyboard --
+
+    private MenuButton focus;
+    private int lastPointerX = Integer.MIN_VALUE;
+    private int lastPointerY;
+
+    /**
+     * Tab and the arrow keys move between controls; Enter or Space presses one.
+     *
+     * Here, once, for every screen: the keys are taken before the screen's own
+     * {@code keyTyped} sees them, and only while they mean navigation — never while a
+     * text field is being typed into, never during an entrance or an exit, and Enter
+     * only once something actually has focus, so a screen's own Enter still works
+     * when nobody has started using the keyboard.
+     */
+    @Override
+    public void handleKeyboardInput() {
+        if (Keyboard.getEventKeyState() && navigate(Keyboard.getEventKey())) {
+            return;
+        }
+        super.handleKeyboardInput();
+    }
+
+    private boolean navigate(int key) {
+        if (widgetFade() < 0.5F || isTyping() || capturesKeys()) {
+            return false;
+        }
+        if (this.focus != null && !isFocusable(this.focus)) {
+            // A screen that rebuilt its controls (a tab switch) keeps the focus on the
+            // control with the same id, rather than dropping it back to the top.
+            setFocus(byId(this.focus.id));
+        }
+        switch (key) {
+            case Keyboard.KEY_TAB:
+                boolean back = Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) || Keyboard.isKeyDown(Keyboard.KEY_RSHIFT);
+                setFocus(sequential(back ? -1 : 1));
+                return this.focus != null;
+            case Keyboard.KEY_UP:
+                return step(0, -1);
+            case Keyboard.KEY_DOWN:
+                return step(0, 1);
+            case Keyboard.KEY_LEFT:
+                return (this.focus != null && this.focus.nudge(-1)) || step(-1, 0);
+            case Keyboard.KEY_RIGHT:
+                return (this.focus != null && this.focus.nudge(1)) || step(1, 0);
+            case Keyboard.KEY_RETURN:
+            case Keyboard.KEY_NUMPADENTER:
+            case Keyboard.KEY_SPACE:
+                if (this.focus == null) {
+                    return false;
+                }
+                press(this.focus);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** True while the screen wants every key raw, e.g. one being bound to a control. */
+    protected boolean capturesKeys() {
+        return false;
+    }
+
+    /**
+     * The first press only lights a control — the open tab if the screen has one, the
+     * first control otherwise — and after that it moves.
+     */
+    private boolean step(int dx, int dy) {
+        MenuButton next = this.focus == null ? firstFocus() : nearest(dx, dy);
+        if (next != null) {
+            setFocus(next);
+        }
+        return this.focus != null;
+    }
+
+    private void press(MenuButton button) {
+        button.func_146113_a(this.mc.getSoundHandler());
+        actionPerformed(button);
+    }
+
+    private void setFocus(MenuButton button) {
+        if (this.focus != null) {
+            this.focus.focused = false;
+        }
+        this.focus = button;
+        if (button != null) {
+            button.focused = true;
+        }
+    }
+
+    private MenuButton byId(int id) {
+        for (Object o : this.buttonList) {
+            if (o instanceof MenuButton && ((MenuButton) o).id == id && isFocusable((MenuButton) o)) {
+                return (MenuButton) o;
+            }
+        }
+        return null;
+    }
+
+    private boolean isFocusable(MenuButton button) {
+        return button.visible && button.enabled && this.buttonList.contains(button);
+    }
+
+    private MenuButton firstFocus() {
+        for (Object o : this.buttonList) {
+            if (o instanceof MenuButton && ((MenuButton) o).isSelected() && isFocusable((MenuButton) o)) {
+                return (MenuButton) o;
+            }
+        }
+        return sequential(1);
+    }
+
+    /** Next or previous in reading order: top to bottom, then left to right. */
+    private MenuButton sequential(int direction) {
+        List<MenuButton> order = new java.util.ArrayList<MenuButton>();
+        for (Object o : this.buttonList) {
+            if (o instanceof MenuButton && isFocusable((MenuButton) o)) {
+                order.add((MenuButton) o);
+            }
+        }
+        if (order.isEmpty()) {
+            return null;
+        }
+        java.util.Collections.sort(order, new java.util.Comparator<MenuButton>() {
+            @Override
+            public int compare(MenuButton a, MenuButton b) {
+                // Rows within a few units of each other count as the same line.
+                int dy = (a.yPosition + a.height / 2) - (b.yPosition + b.height / 2);
+                if (Math.abs(dy) > 4) {
+                    return dy;
+                }
+                return a.xPosition - b.xPosition;
+            }
+        });
+        int at = this.focus == null ? -1 : order.indexOf(this.focus);
+        if (at < 0) {
+            return order.get(direction > 0 ? 0 : order.size() - 1);
+        }
+        return order.get((at + direction + order.size()) % order.size());
+    }
+
+    /**
+     * The control an arrow key leads to, the way a console menu does it.
+     *
+     * <p>First the nearest row (or column) in that direction, measured edge to edge —
+     * centres lie when a full-width Done button sits under two columns, or a short tab
+     * label over a long row. Then, within that row: the selected entry if it has one,
+     * so arriving at a tab strip lands on the open tab; otherwise the one lined up
+     * with where focus is coming from; otherwise the closest.
+     */
+    private MenuButton nearest(int dx, int dy) {
+        MenuButton from = this.focus;
+        List<MenuButton> ahead = new java.util.ArrayList<MenuButton>();
+        List<MenuButton> inLine = new java.util.ArrayList<MenuButton>();
+        for (Object o : this.buttonList) {
+            if (!(o instanceof MenuButton) || o == from || !isFocusable((MenuButton) o)) {
+                continue;
+            }
+            MenuButton b = (MenuButton) o;
+            if (gap(from, b, dx, dy) < -2.0F) {
+                continue; // not in that direction
+            }
+            ahead.add(b);
+            if (offAxis(from, b, dx, dy) < 1.0F) {
+                inLine.add(b);
+            }
+        }
+        // Along the same line first: Left on a tab goes to the tab beside it, not to a
+        // column of rows below that happens to start nearer horizontally. Only with
+        // nothing in line does the arrow reach diagonally for the closest thing.
+        if (!inLine.isEmpty()) {
+            ahead = inLine;
+        }
+        float bestGap = Float.MAX_VALUE;
+        for (MenuButton b : ahead) {
+            bestGap = Math.min(bestGap, gap(from, b, dx, dy));
+        }
+        MenuButton best = null;
+        float bestCost = Float.MAX_VALUE;
+        for (MenuButton b : ahead) {
+            if (gap(from, b, dx, dy) > bestGap + ROW_TOLERANCE) {
+                continue; // a row further on
+            }
+            float cost = b.isSelected() ? -1.0F : offAxis(from, b, dx, dy);
+            if (cost < bestCost) {
+                bestCost = cost;
+                best = b;
+            }
+        }
+        return best;
+    }
+
+    /** Rows this close to each other count as one row. */
+    private static final float ROW_TOLERANCE = 6.0F;
+
+    /** Edge-to-edge distance from {@code a} to {@code b} along the direction; negative if behind. */
+    private static float gap(MenuButton a, MenuButton b, int dx, int dy) {
+        if (dx > 0) {
+            return b.xPosition - (a.xPosition + a.width);
+        }
+        if (dx < 0) {
+            return a.xPosition - (b.xPosition + b.width);
+        }
+        if (dy > 0) {
+            return b.yPosition - (a.yPosition + a.height);
+        }
+        return a.yPosition - (b.yPosition + b.height);
+    }
+
+    /**
+     * How far off the line of travel {@code b} is: 0..1 when the two overlap across
+     * it (less for a bigger overlap), more by however far apart they are when not.
+     */
+    private static float offAxis(MenuButton a, MenuButton b, int dx, int dy) {
+        float a0;
+        float a1;
+        float b0;
+        float b1;
+        if (dx != 0) {
+            a0 = a.yPosition; a1 = a.yPosition + a.height;
+            b0 = b.yPosition; b1 = b.yPosition + b.height;
+        } else {
+            a0 = a.xPosition; a1 = a.xPosition + a.width;
+            b0 = b.xPosition; b1 = b.xPosition + b.width;
+        }
+        float overlap = Math.min(a1, b1) - Math.max(a0, b0);
+        if (overlap > 0.0F) {
+            return 1.0F - overlap / Math.max(1.0F, Math.min(a1 - a0, b1 - b0));
+        }
+        return 1.0F - overlap;
+    }
+
+    /** Fields of this screen's class that are text boxes; found once per class. */
+    private static final java.util.Map<Class<?>, java.lang.reflect.Field[]> TEXT_FIELDS =
+            new java.util.HashMap<Class<?>, java.lang.reflect.Field[]>();
+
+    /**
+     * Whether a text box on this screen has the caret, in which case every key is
+     * the text's. Found by looking rather than by asking each screen, so a screen
+     * written later cannot forget to say so.
+     */
+    private boolean isTyping() {
+        java.lang.reflect.Field[] fields = TEXT_FIELDS.get(getClass());
+        if (fields == null) {
+            List<java.lang.reflect.Field> found = new java.util.ArrayList<java.lang.reflect.Field>();
+            for (Class<?> c = getClass(); c != null && c != MenuScreen.class; c = c.getSuperclass()) {
+                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                    if (GuiTextField.class.isAssignableFrom(f.getType())) {
+                        f.setAccessible(true);
+                        found.add(f);
+                    }
+                }
+            }
+            fields = found.toArray(new java.lang.reflect.Field[found.size()]);
+            TEXT_FIELDS.put(getClass(), fields);
+        }
+        for (java.lang.reflect.Field f : fields) {
+            try {
+                GuiTextField field = (GuiTextField) f.get(this);
+                if (field != null && field.isFocused()) {
+                    return true;
+                }
+            } catch (IllegalAccessException ignored) {
+                // setAccessible above; unreachable in practice
+            }
+        }
+        return false;
     }
 
     @Override
@@ -870,7 +1214,7 @@ public abstract class MenuScreen extends GuiScreen {
      * The backdrop is behind everything, so anything drawn over it wins — a star that
      * drifted under the Quit button must not take the click meant for it.
      */
-    private boolean overWidget(int mouseX, int mouseY) {
+    protected boolean overWidget(int mouseX, int mouseY) {
         List<?> buttons = this.buttonList;
         for (int i = 0; i < buttons.size(); i++) {
             Object entry = buttons.get(i);

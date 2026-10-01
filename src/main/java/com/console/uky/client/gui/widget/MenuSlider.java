@@ -181,6 +181,19 @@ public class MenuSlider extends MenuButton {
         }
     }
 
+    /** Twenty steps end to end; the source snaps to its own step from there. */
+    @Override
+    public boolean nudge(int direction) {
+        if (!acceptsInput()) {
+            return false;
+        }
+        float t = this.source.normalized() + direction * 0.05F;
+        this.source.setNormalized(t < 0.0F ? 0.0F : (t > 1.0F ? 1.0F : t));
+        this.normalized = this.source.normalized();
+        this.displayString = this.source.caption();
+        return true;
+    }
+
     @Override
     public boolean mousePressed(Minecraft mc, int mouseX, int mouseY) {
         if (!acceptsInput()) {

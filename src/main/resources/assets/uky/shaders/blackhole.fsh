@@ -27,6 +27,7 @@ uniform vec3  uHot;         // inner disk colour
 uniform vec3  uMid;
 uniform vec3  uCold;        // outer disk colour
 uniform int   uSteps;       // integration budget, lowered on weak hardware
+uniform float uJet;         // relativistic jets: 0 off, else their brightness
 
 // Units: G = c = M = 1. Horizon at 2, photon sphere at 3, ISCO at 6.
 const float HORIZON       = 2.02;
@@ -95,6 +96,100 @@ float vnoise(vec3 x) {
  */
 float fbm(vec3 p) {
     return vnoise(p) * 0.5 + vnoise(p * 2.13) * 0.25 + vnoise(p * 4.31) * 0.125;
+}
+
+// ---- relativistic jets ----------------------------------------------------
+//
+// Adapted from the "physical jet" model in Adriwin's black-hole renderer
+// (https://github.com/Adriwin06/black-hole, shaders/raytracer/physics/jet.glsl):
+// a parabolic funnel (Asada & Nakamura 2012), a fast spine inside a bright sheath,
+// standing reconfinement knots, and the hot corona at the base. Integrated along the
+// same bent rays as the disk, so the jets are lensed round the shadow like
+// everything else rather than painted over it.
+//
+//   Copyright (c) 2015 Otto Seiskari
+//   Copyright (c) 2026 Adriwin
+//   Permission is hereby granted, free of charge, to any person obtaining a copy of
+//   this software and associated documentation files (the "Software"), to deal in
+//   the Software without restriction, including without limitation the rights to
+//   use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+//   the Software, and to permit persons to whom the Software is furnished to do so,
+//   subject to the following conditions: The above copyright notice and this
+//   permission notice shall be included in all copies or substantial portions of
+//   the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+//
+// Their units are Schwarzschild radii; ours are M, so every length is halved first.
+
+/**
+ * Widest the jets get, with margin, in M: the funnel tops out under 6 at full length
+ * and the corona is gone by 4. Everything that stays outside this cylinder round the
+ * axis cannot see them, which is what keeps them cheap.
+ */
+const float JET_BOUND = 7.0;
+/**
+ * How far up the axis the jets reach, in Schwarzschild radii. A constant, not a
+ * uniform: as one it could reach the trace stale or not at all, and every jet then
+ * came out as its base alone, a glow on the rim of the shadow. The jets grow in by
+ * brightness instead.
+ */
+const float JET_LENGTH = 40.0;
+
+const vec3 JET_SPINE = vec3(0.78, 0.88, 1.0);   // hot synchrotron, blue-white
+const vec3 JET_FAR   = vec3(1.0, 0.94, 0.88);   // aged electrons, cooler
+
+float jetEmissivity(vec3 p, out float zs) {
+    zs = abs(p.z) * 0.5;
+    if (zs < 0.8) {
+        return 0.0;
+    }
+    float cyl = length(p.xy) * 0.5;
+    float r3 = length(p) * 0.5;
+
+    // Corona at the launch point. Started further out and softened from the
+    // original: right at the photon sphere the rays are chaotic, and a 1/r^3 source
+    // there came out as speckle rather than glow.
+    float corona = smoothstep(1.6, 2.6, zs) * (1.0 - smoothstep(2.5, 5.0, zs))
+                 * exp(-1.4 * cyl * cyl) * 0.6 / (r3 * r3 * r3 + 1.5);
+
+    // Parabolic funnel: r ~ z^0.58 far out, a little wider at the base.
+    float k = mix(0.72, 0.58, smoothstep(3.0, 8.0, zs));
+    float jr = 0.30 * pow(zs, k);
+    float rn = cyl / jr;
+    if (rn > 1.15) {
+        return corona;
+    }
+    float spine = exp(-4.5 * rn * rn);
+    float sheath = 0.6 * exp(-15.0 * (rn - 0.82) * (rn - 0.82));
+    float profile = (spine + sheath) * (1.0 - smoothstep(0.95, 1.05, rn));
+
+    float onset = smoothstep(1.4, 3.5, zs);
+    // Gentler than the model's z^-1.25: the menu lays a top tint and a vignette over
+    // the sky, and under them the steeper falloff left only the glow at the base
+    // visible — the jets seemed to live on the shadow's rim.
+    float decay = pow(max(zs, 1.0), -0.75);
+    float cutoff = 1.0 - smoothstep(JET_LENGTH * 0.7, JET_LENGTH, zs);
+
+    // Standing shocks where the jet re-collimates: bright knots that stay put.
+    float knotPhase = sin(3.14159265 * zs / 4.5);
+    float knots = 1.0 + 1.6 * knotPhase * knotPhase
+                * smoothstep(3.0, 7.0, zs) * (1.0 - smoothstep(JET_LENGTH * 0.6, JET_LENGTH * 0.85, zs));
+
+    return profile * onset * decay * cutoff * knots + corona;
+}
+
+/**
+ * Relativistic beaming for a jet moving along +-z at Lorentz factor 3, seen along
+ * the ray. Normalised to 1 side-on, so near edge-on it is a gentle asymmetry:
+ * the jet leaning towards the camera brighter, the one leaning away dimmer.
+ */
+float jetBeaming(vec3 p, vec3 rayDir) {
+    const float GAMMA = 3.0;
+    const float BETA = 0.9428;
+    float cosTheta = dot(-rayDir, vec3(0.0, 0.0, sign(p.z)));
+    float d = 1.0 / (GAMMA * (1.0 - BETA * cosTheta));
+    float d0 = 1.0 / GAMMA;
+    float b = d / d0;
+    return b * b * b;
 }
 
 vec3 accel(vec3 p, float h2) {
@@ -191,7 +286,16 @@ void main() {
         float t = -camPos.z / denom;
         vec2 crossing = camPos.xy + dir.xy * t;
         float l = length(crossing);
-        if (t <= 0.0 || l < DISK_INNER * 0.9 || l > DISK_OUTER * 1.1) {
+        bool missesDisk = t <= 0.0 || l < DISK_INNER * 0.9 || l > DISK_OUTER * 1.1;
+        // Same question for the jets: does the straight line come near the axis?
+        bool missesJets = true;
+        if (uJet > 0.0) {
+            vec2 n = vec2(dir.y, -dir.x);
+            float nl = length(n);
+            float axisDistance = nl < 1e-5 ? length(camPos.xy) : abs(dot(camPos.xy, n)) / nl;
+            missesJets = axisDistance > JET_BOUND;
+        }
+        if (missesDisk && missesJets) {
             gl_FragColor = vec4(0.0);
             return;
         }
@@ -236,7 +340,10 @@ void main() {
         if (r > ESCAPE || transmission < 0.01) {
             break;
         }
-        if (r > DISK_REACH && dot(p, v) > 0.0) {
+        // Leaving, and nothing out there to meet: past the disk, and either no jets
+        // or clear of them and still moving away from the axis.
+        if (r > DISK_REACH && dot(p, v) > 0.0
+                && (uJet <= 0.0 || (length(p.xy) > JET_BOUND && dot(p.xy, v.xy) > 0.0))) {
             break; // leaving, and nothing out there to meet; see DISK_REACH
         }
 
@@ -256,6 +363,21 @@ void main() {
         vec3 pNext = p + v * dt + 0.5 * a * dt * dt;
         vec3 aNext = accel(pNext, h2);
         vec3 vNext = v + 0.5 * (a + aNext) * dt;
+
+        float seg = distance(p, pNext);
+        if (uJet > 0.0 && min(length(p.xy), length(pNext.xy)) < JET_BOUND + seg) {
+            // Three samples along the step: the funnel is narrow at its base, and one
+            // sample per step there misses it between neighbouring pixels.
+            for (int s = 0; s < 3; s++) {
+                vec3 q = mix(p, pNext, (float(s) + 0.5) / 3.0);
+                float zs;
+                float j = jetEmissivity(q, zs);
+                if (j > 0.0) {
+                    vec3 tint = mix(JET_SPINE, JET_FAR, smoothstep(2.0, 15.0, zs));
+                    colour += transmission * tint * j * jetBeaming(q, vNext) * uJet * seg / 3.0;
+                }
+            }
+        }
 
         // March the segment when it can touch the slab.
         float lMid = length(mix(p, pNext, 0.5).xy);

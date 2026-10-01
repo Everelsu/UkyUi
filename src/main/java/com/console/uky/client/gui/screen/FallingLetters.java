@@ -86,6 +86,32 @@ final class FallingLetters {
         for (int i = 0; i < this.taken.length; i++) {
             this.taken[i] = false;
         }
+        this.returning = -1.0F;
+    }
+
+    /** Seconds into the letters re-forming, or negative when they are simply there. */
+    private float returning = -1.0F;
+    private static final float RETURN_STAGGER = 0.07F;
+    private static final float RETURN_FADE = 0.45F;
+
+    /** Puts every letter back, fading them in one after another. */
+    void restore() {
+        reset();
+        this.returning = 0.0F;
+    }
+
+    /** Opacity of the glyph at {@code index} while the title re-forms; 1 otherwise. */
+    float glyphAlpha(int index) {
+        if (this.returning < 0.0F) {
+            return 1.0F;
+        }
+        float t = (this.returning - index * RETURN_STAGGER) / RETURN_FADE;
+        return t <= 0.0F ? 0.0F : (t >= 1.0F ? 1.0F : t * t * (3.0F - 2.0F * t));
+    }
+
+    /** Every letter has been knocked out and has gone into the hole. */
+    boolean allEaten() {
+        return this.loose.isEmpty() && allTaken();
     }
 
     /**
@@ -95,7 +121,8 @@ final class FallingLetters {
      *              becomes the sideways speed that turns the fall into an orbit
      */
     void knockOut(int index, float x, float y, float awayX) {
-        if (index < 0 || index >= this.taken.length || this.taken[index]) {
+        if (index < 0 || index >= this.taken.length || this.taken[index]
+                || Character.isWhitespace(this.text.charAt(index))) {
             return;
         }
         this.taken[index] = true;
@@ -106,10 +133,18 @@ final class FallingLetters {
         this.loose.add(letter);
     }
 
-    void update(float delta, float holeX, float holeY, float holeRadius) {
-        if (this.loose.isEmpty() || holeRadius <= 0.0F) {
-            return;
+    /** @return how many letters crossed into the hole this frame */
+    int update(float delta, float holeX, float holeY, float holeRadius) {
+        if (this.returning >= 0.0F) {
+            this.returning += delta;
+            if (this.returning > this.taken.length * RETURN_STAGGER + RETURN_FADE) {
+                this.returning = -1.0F;
+            }
         }
+        if (this.loose.isEmpty() || holeRadius <= 0.0F) {
+            return 0;
+        }
+        int eaten = 0;
         // Clamped so a frame that took a quarter of a second does not teleport a
         // letter through the hole and out the far side.
         float step = Math.min(delta, 0.05F);
@@ -141,24 +176,28 @@ final class FallingLetters {
 
             if (distance < holeRadius * SWALLOWED) {
                 this.loose.remove(i);
+                eaten++;
             }
         }
-
-        // Once the last letter is gone the wordmark comes back. Without this the
-        // title is destroyed for the rest of the session by anyone who kept clicking,
-        // and a toy that can only be used once is not a toy.
-        if (this.loose.isEmpty() && allTaken()) {
-            reset();
-        }
+        // The title does not come back here any more: the screen sees allEaten(),
+        // lets the hole answer, and calls restore() once it has.
+        return eaten;
     }
 
     private boolean allTaken() {
+        // Spaces count as gone: there is nothing there to click, and "ULTRAKILL
+        // YOURSELF" with every letter eaten was waiting on its space forever.
+        boolean any = false;
         for (int i = 0; i < this.taken.length; i++) {
+            if (Character.isWhitespace(this.text.charAt(i))) {
+                continue;
+            }
             if (!this.taken[i]) {
                 return false;
             }
+            any = true;
         }
-        return this.taken.length > 0;
+        return any;
     }
 
     void draw(FontRenderer font, float alpha) {

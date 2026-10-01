@@ -55,7 +55,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int COLUMN_GAP = 22;
 
     /** Rows each tab lays out, used to size the whole grid so it always fits. */
-    private static final int[] TAB_ROWS = {5, 7, 7, 7};
+    private static final int[] TAB_ROWS = {5, 7, 7, 9};
 
     private final GameSettings settings;
     /** Remembered across openings: coming back to the tab you left is the least surprising. */
@@ -416,6 +416,8 @@ public class GuiSettingsScreen extends MenuScreen {
                     // file: see [mods] wailaHiddenBlocks. The switch over that list is
                     // the half worth having on a screen.
                 }
+                y += this.rowHeight + this.rowGap;
+                addPackMode(y);
                 break;
         }
     }
@@ -516,6 +518,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int ID_ACHIEVEMENT_LINK = 114;
     private static final int ID_TOOLTIPS = 115;
     private static final int ID_WAILA_HIDE = 116;
+    private static final int ID_PACK_MODE = 117;
     /**
      * Every renderer option shares one id.
      *
@@ -728,6 +731,72 @@ public class GuiSettingsScreen extends MenuScreen {
                         UiConfig.setAchievementChatLink(value);
                     }
                 });
+    }
+
+    /**
+     * Easy or Standard, for a pack that has the mods Easy switches off.
+     *
+     * The menus change at once — see {@link com.console.uky.client.gui.PackLook} — and
+     * the mods on the next launch, which the row says: the jars cannot be renamed while
+     * the game has them loaded. See {@link com.console.uky.core.PackMode}.
+     */
+    private void addPackMode(int y) {
+        if (!com.console.uky.client.gui.PackLook.available()) {
+            return;
+        }
+        y = heading(I18n.format("uky.settings.pack", new Object[0]), y, false, false);
+        int width = this.panelX2 - PADDING - this.leftColumn;
+        final MenuButton[] self = new MenuButton[1];
+        MenuButton widget = new MenuOptionButton(ID_PACK_MODE, this.leftColumn, y, width,
+                this.rowHeight, new MenuOptionButton.Source() {
+                    @Override
+                    public String label() {
+                        return I18n.format("uky.settings.packMode", new Object[0]);
+                    }
+
+                    @Override
+                    public String value() {
+                        String name = modeName(com.console.uky.client.gui.PackLook.chosen());
+                        return com.console.uky.client.gui.PackLook.restartPending()
+                                ? I18n.format("uky.settings.packMode.pending", new Object[] {name})
+                                : name;
+                    }
+
+                    @Override
+                    public boolean toggle() {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean on() {
+                        return false;
+                    }
+
+                    @Override
+                    public void cycle() {
+                        String flipped = com.console.uky.core.PackMode.EASY.equals(
+                                com.console.uky.client.gui.PackLook.chosen())
+                                ? com.console.uky.core.PackMode.STANDARD
+                                : com.console.uky.core.PackMode.EASY;
+                        MenuButton row = self[0];
+                        com.console.uky.client.gui.PackLook.choose(flipped,
+                                row.xPosition + row.width * 0.75F, row.yPosition + row.height / 2.0F);
+                    }
+
+                    @Override
+                    public boolean available() {
+                        return true;
+                    }
+                });
+        self[0] = widget;
+        widget.entrance(stagger());
+        this.buttonList.add(widget);
+        this.contentRows.add(widget);
+    }
+
+    static String modeName(String mode) {
+        return I18n.format(com.console.uky.core.PackMode.EASY.equals(mode)
+                ? "uky.settings.packMode.easy" : "uky.settings.packMode.standard", new Object[0]);
     }
 
     /** One of this mod's own booleans, as the same pill switch the game's use. */
@@ -1013,25 +1082,41 @@ public class GuiSettingsScreen extends MenuScreen {
 
     // --------------------------------------------------------------- drawing --
 
+    /**
+     * Where the hole sits for each tab: {x, y, radius} as fractions of the window.
+     *
+     * A different framing per tab, so switching tabs is a camera move through the
+     * same sky rather than a card being swapped in front of a still. All of them stay
+     * right of the panel — the bright inner disk runs to about three radii, and none
+     * of these reach back under the second column.
+     */
+    private static final float[][] TAB_FRAMES = {
+            {0.87F, 0.55F, 0.13F},  // general: the resting view
+            {0.93F, 0.16F, 0.15F},  // graphics: big, high, crowding the corner
+            {0.85F, 0.86F, 0.11F},  // sound and chat: low, seen from under the disk
+            {0.90F, 0.40F, 0.08F},  // other: small and far off
+    };
+    private static final int[] TAB_POSES = {
+            LensLibrary.POSE_ABOVE, 9, LensLibrary.POSE_BELOW, LensLibrary.POSE_IN_PLANE,
+    };
+
+    private static float[] frame() {
+        return TAB_FRAMES[Math.max(0, Math.min(TAB_FRAMES.length - 1, activeTab))];
+    }
+
     @Override
     protected float blackHoleCenterX() {
-        // Pushed well clear of the panel. With the glass letting it through, a hole
-        // sitting directly behind the second column cost more readability than it
-        // was worth; out here it still frames the screen.
-        return this.width * 0.87F;
+        return this.width * frame()[0];
     }
 
     @Override
     protected float blackHoleCenterY() {
-        return this.height * 0.55F;
+        return this.height * frame()[1];
     }
 
     @Override
     protected float blackHoleRadius() {
-        // Smaller than the title screen's on purpose. The bright inner disk runs to
-        // roughly three times this, and at the old size it reached back under the
-        // right-hand column of controls.
-        return Math.min(this.width, this.height) * 0.13F;
+        return Math.min(this.width, this.height) * frame()[2];
     }
 
     @Override
@@ -1041,9 +1126,9 @@ public class GuiSettingsScreen extends MenuScreen {
 
     @Override
     protected int blackHolePose() {
-        // Looking down on the disk: the settings screen should not read as the
-        // title screen with a card dropped on it.
-        return LensLibrary.POSE_ABOVE;
+        // Never the title screen's edge-on view: this should not read as the title
+        // screen with a card dropped on it.
+        return TAB_POSES[Math.max(0, Math.min(TAB_POSES.length - 1, activeTab))];
     }
 
     @Override

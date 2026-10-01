@@ -62,6 +62,12 @@ public final class QuestBookTheme {
     private static DynamicTexture atlas;
     /** Cleared by a palette edit, which is what makes the sheet be painted again. */
     private static boolean current;
+    /**
+     * Where between Standard and Easy the sheet was painted. The mode moves the
+     * palette without touching the config, so a palette edit is not the only thing
+     * that can leave the painted sheet behind — the quest book stayed gold in Easy.
+     */
+    private static float paintedEasy = -1.0F;
 
     private QuestBookTheme() {
     }
@@ -92,10 +98,11 @@ public final class QuestBookTheme {
             return;
         }
         try {
-            if (theme == null || !current) {
+            if (theme == null || !current || paintedEasy != Theme.easy()) {
                 boolean first = theme == null;
                 build();
                 current = true;
+                paintedEasy = Theme.easy();
                 if (first) {
                     UkyUI.LOGGER.info("BetterQuesting theme \"{}\" registered as {}",
                             UkyUI.NAME, ID);

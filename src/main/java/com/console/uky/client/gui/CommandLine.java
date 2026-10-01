@@ -69,6 +69,17 @@ public final class CommandLine {
 
     /** Everything the last request produced, before the word narrowed it. */
     private final List<String> candidates = new ArrayList<String>();
+    /**
+     * The same candidates, lower-cased once, and as a set for the duplicate check.
+     *
+     * A command can answer with thousands of names — /achievement give lists every
+     * statistic in the pack, several per block and item — and a duplicate check by
+     * scanning the list made adding them quadratic: Tab froze the game for seconds.
+     */
+    private final List<String> candidatesLower = new ArrayList<String>();
+    private final java.util.Set<String> candidateSet = new java.util.HashSet<String>();
+    /** Width of the widest shown entry; measured when the list changes, not per frame. */
+    private int shownWidest;
     /** What is actually in the box, filtered by what has been typed since. */
     private final List<String> shown = new ArrayList<String>();
     private int selected;
@@ -114,8 +125,9 @@ public final class CommandLine {
     }
 
     public void close() {
-        this.candidates.clear();
+        clearCandidates();
         this.shown.clear();
+        this.shownWidest = 0;
         this.selected = 0;
         this.scroll = 0;
         this.awaitingServer = false;
@@ -298,7 +310,7 @@ public final class CommandLine {
         this.manual = manual;
         this.commandList = beforeCursor.charAt(0) == '/';
         this.requestedContext = context();
-        this.candidates.clear();
+        clearCandidates();
         if (beforeCursor.charAt(0) == '/') {
             ClientCommandHandler.instance.autoComplete(beforeCursor, currentWord());
             String[] local = ClientCommandHandler.instance.latestAutoComplete;
@@ -341,20 +353,29 @@ public final class CommandLine {
                 continue;
             }
             String clean = EnumChatFormatting.getTextWithoutFormattingCodes(value);
-            if (clean == null || clean.isEmpty() || this.candidates.contains(clean)) {
+            if (clean == null || clean.isEmpty() || !this.candidateSet.add(clean)) {
                 continue;
             }
             this.candidates.add(clean);
+            this.candidatesLower.add(clean.toLowerCase());
         }
+    }
+
+    private void clearCandidates() {
+        this.candidates.clear();
+        this.candidatesLower.clear();
+        this.candidateSet.clear();
     }
 
     private void narrow() {
         String word = currentWord().toLowerCase();
         this.shown.clear();
+        this.shownWidest = 0;
         for (int i = 0; i < this.candidates.size(); i++) {
-            String candidate = this.candidates.get(i);
-            if (candidate.toLowerCase().startsWith(word)) {
+            if (this.candidatesLower.get(i).startsWith(word)) {
+                String candidate = this.candidates.get(i);
                 this.shown.add(candidate);
+                this.shownWidest = Math.max(this.shownWidest, this.font.getStringWidth(candidate));
             }
         }
         this.selected = 0;
@@ -503,10 +524,7 @@ public final class CommandLine {
             return;
         }
         int rows = Math.min(VISIBLE_ROWS, this.shown.size());
-        int widest = 0;
-        for (int i = 0; i < this.shown.size(); i++) {
-            widest = Math.max(widest, this.font.getStringWidth(this.shown.get(i)));
-        }
+        int widest = this.shownWidest;
 
         String text = this.field.getText();
         int offset = Math.min(scrollOffset(), text.length());

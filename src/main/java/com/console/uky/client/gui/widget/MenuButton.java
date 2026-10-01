@@ -141,6 +141,26 @@ public class MenuButton extends GuiButton {
         return this;
     }
 
+    /**
+     * Holds the keyboard's focus. Drawn exactly like the pointer resting on it, so the
+     * keyboard and the mouse never disagree about what a lit row means.
+     */
+    public boolean focused;
+
+    /**
+     * Left or right on the keyboard while this has focus.
+     *
+     * @param direction -1 or 1
+     * @return true if the widget used it (a slider moving); false lets it navigate
+     */
+    public boolean nudge(int direction) {
+        return false;
+    }
+
+    public boolean isSelected() {
+        return this.selected;
+    }
+
     /** Marks this entry as the currently open one. */
     public MenuButton selected() {
         this.selected = true;
@@ -177,7 +197,8 @@ public class MenuButton extends GuiButton {
 
         // A selected entry stays lit whether or not the pointer is on it, so the
         // active tab reads as open rather than as merely hovered a moment ago.
-        float target = this.selected || (this.field_146123_n && this.enabled) ? 1.0F : 0.0F;
+        float target = this.selected || this.focused || (this.field_146123_n && this.enabled)
+                ? 1.0F : 0.0F;
         this.hover = Ease.approach(this.hover, target, 0.055F, deltaSeconds);
         this.press = Ease.approach(this.press, this.pressed ? 1.0F : 0.0F, 0.030F, deltaSeconds);
 
@@ -213,6 +234,39 @@ public class MenuButton extends GuiButton {
             drawPanel(x1, y1, x2, y2, alpha);
         }
         drawLabel(mc.fontRenderer, x1, y1, x2, y2, alpha);
+    }
+
+    /**
+     * Corner brackets round the control the keyboard is on.
+     *
+     * Its own mark, not just the lit state: an open tab is lit too, and with both
+     * looking the same there was no telling which of two lit tabs Enter would press.
+     */
+    public void drawFocus() {
+        if (!this.visible) {
+            return;
+        }
+        float alpha = this.entrance * this.screenFade;
+        float x1 = this.xPosition;
+        float y1 = this.yPosition;
+        float x2 = x1 + this.width;
+        float y2 = y1 + this.height;
+        float breathe = 0.7F + 0.3F * (float) Math.sin(this.age * 5.0F);
+        int c = Draw.withAlpha(accentColor(), breathe * alpha);
+        float o = 2.0F;
+        float l = Math.min(6.0F, Math.min(x2 - x1, y2 - y1) * 0.5F);
+        x1 -= o;
+        y1 -= o;
+        x2 += o;
+        y2 += o;
+        Draw.rect(x1, y1, x1 + l, y1 + 1, c);
+        Draw.rect(x1, y1, x1 + 1, y1 + l, c);
+        Draw.rect(x2 - l, y1, x2, y1 + 1, c);
+        Draw.rect(x2 - 1, y1, x2, y1 + l, c);
+        Draw.rect(x1, y2 - 1, x1 + l, y2, c);
+        Draw.rect(x1, y2 - l, x1 + 1, y2, c);
+        Draw.rect(x2 - l, y2 - 1, x2, y2, c);
+        Draw.rect(x2 - 1, y2 - l, x2, y2, c);
     }
 
     /**

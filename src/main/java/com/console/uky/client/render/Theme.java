@@ -21,6 +21,11 @@ public final class Theme {
     public static int textDim;
     public static int danger;
 
+    // the black hole's disk, inner to outer
+    public static int holeHot;
+    public static int holeMid;
+    public static int holeCold;
+
     // derived — panels
     public static int panelFill;
     public static int panelFillHover;
@@ -37,7 +42,38 @@ public final class Theme {
     public static int separator;
     public static int trackFill;
 
+    /**
+     * The Easy palette's accents: a soft mint and a pale sky blue in place of the
+     * pack's gold and its second accent. Friendlier, and still clearly the same
+     * interface — only the two colours everything else is derived from move.
+     */
+    private static final int EASY_ACCENT = 0xFF86D9BE;
+    private static final int EASY_ACCENT_ALT = 0xFF9CC9F2;
+    /**
+     * The disk in Easy: a white-mint core cooling through sea green to a deep teal,
+     * so the hole matches the interface over it instead of burning gold under mint.
+     */
+    private static final int EASY_HOLE_HOT = 0xFFF0FFF8;
+    private static final int EASY_HOLE_MID = 0xFF7FCFB4;
+    private static final int EASY_HOLE_COLD = 0xFF2F6F78;
+
+    /** How far towards the Easy palette, 0..1; animated by PackLook. */
+    private static float easy;
+
     private Theme() {
+    }
+
+    /** Moves the palette towards Easy (1) or Standard (0), rebuilding what derives from it. */
+    public static void setEasy(float t) {
+        t = t < 0.0F ? 0.0F : (t > 1.0F ? 1.0F : t);
+        if (t != easy) {
+            easy = t;
+            rebuild();
+        }
+    }
+
+    public static float easy() {
+        return easy;
     }
 
     static {
@@ -47,8 +83,11 @@ public final class Theme {
     public static void rebuild() {
         background = 0xFF000000 | UiConfig.colorBackground;
         surface = 0xFF000000 | UiConfig.colorSurface;
-        accent = 0xFF000000 | UiConfig.colorAccent;
-        accentAlt = 0xFF000000 | UiConfig.colorAccentAlt;
+        accent = Draw.mix(0xFF000000 | UiConfig.colorAccent, EASY_ACCENT, easy);
+        accentAlt = Draw.mix(0xFF000000 | UiConfig.colorAccentAlt, EASY_ACCENT_ALT, easy);
+        holeHot = Draw.mix(0xFF000000 | UiConfig.colorBlackHoleHot, EASY_HOLE_HOT, easy);
+        holeMid = Draw.mix(0xFF000000 | UiConfig.colorBlackHoleMid, EASY_HOLE_MID, easy);
+        holeCold = Draw.mix(0xFF000000 | UiConfig.colorBlackHoleCold, EASY_HOLE_COLD, easy);
         text = 0xFF000000 | UiConfig.colorText;
         textDim = 0xFF000000 | UiConfig.colorTextDim;
         danger = 0xFF000000 | UiConfig.colorDanger;

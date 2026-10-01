@@ -5,6 +5,73 @@ build sends to Modrinth, to CurseForge and to the GitHub release for it — see
 [RELEASING.md](RELEASING.md) — so it is written to be read by a player rather than by
 whoever wrote the commit.
 
+## 0.6.0
+
+**Easy and Standard**
+
+- A pack can now be played in two modes, Easy and Standard, chosen from a row at the
+  bottom of the settings' Other tab or on the welcome screen the first time the game
+  starts. Easy is the same pack with a few mods switched off; which ones is a list the
+  pack decides.
+- The mods change on the next launch, and the menu says so. A loaded mod's jar cannot be
+  renamed while the game runs, so the choice is written down and applied at the very
+  start of the next launch, before Forge goes looking for mods: a switched-off mod is
+  renamed to `.jar.disabled`, the same way launchers mark one. Once the change has played,
+  a small window offers to quit so the launcher can start the game again — or to carry on
+  and do it later. A switch that cannot be applied leaves the pack as it was and is tried
+  again the next time.
+- The list is `config/uky/easy-mode-mods.txt`, one mod a line: the jar's file name in
+  full (`SpecialMobs-3.7.0.jar`), or just the start of it (`SpecialMobs`) to keep working
+  when the mod is updated. The file explains itself at the top. The first time it is
+  written it lists whatever the pack already ships switched off, so a pack distributed in
+  its Easy form describes itself.
+
+**From the loading screen to the menu**
+
+- The two are one shot now. The loading screen ends by pulling everything on it into a
+  white-hot point in the middle of the window; the title screen picks that ember up, matter
+  spirals into it, it implodes, and the black hole is born out of the shock — the lens
+  opening from nothing and overshooting before it settles, with a pressure wave and a
+  knock to the camera. Click or press a key to skip it, as before.
+
+**The black hole**
+
+- Now and then a comet does not make it past: it swings round the hole, winds down a
+  tightening spiral, settles towards the plane of the disk, passes behind the shadow on the
+  far side, and goes over the horizon. The disk flares as it lands.
+- Click in the empty sky near the hole to let go of a clump of gas. It is already
+  orbiting, too slowly to stay up, and falls in the same way.
+- Knock the whole title into the hole and it lights up as a quasar: the disk charges, then
+  two relativistic jets erupt along the poles. They are traced with the disk rather than
+  painted over it, so they are bent by the hole like everything else — the lower one is
+  seen through the lens under the disk — and the one leaning towards the camera is the
+  brighter. The letters come back once it calms down.
+- Every settings tab looks at the hole from a place of its own, and switching tabs is a
+  camera move between them.
+- Cheaper to draw. Only the part of the hole that is on screen is traced — on the title
+  screen about a third of what was traced before — and the trace itself takes 43% fewer
+  integration steps for the same picture.
+
+**Keyboard**
+
+- Every menu can be used without a mouse. Tab and Shift+Tab go through the controls in
+  reading order, the arrow keys go to the nearest control in that direction (staying on
+  the same row or column first), Enter or Space presses it, and Left and Right move a
+  slider. The control with the keyboard's focus is marked with corner brackets of its own,
+  so it is never confused with an open tab. Typing in a text field, or binding a key on
+  the controls screen, keeps every key for itself.
+
+**Chat**
+
+- Completing a command whose answer runs to thousands of names — `/achievement give`
+  lists every statistic in the pack — no longer freezes the game when Tab is pressed, or
+  keeps it stuttering while the list is open.
+
+**Title screen**
+
+- "Minecraft 1.7.10" sits on the bottom line, level with the mod's version in the other
+  corner. The pack's own footer, when it has one, goes above it.
+
 ## 0.5.4
 
 **Shader packs** (needs Angelica)
