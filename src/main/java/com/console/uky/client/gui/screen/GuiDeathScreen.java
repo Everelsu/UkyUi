@@ -2,7 +2,7 @@ package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.death.DeathScene;
 import com.console.uky.client.death.DeathTheme;
-import com.console.uky.client.mods.GravesLink;
+import com.console.uky.client.mods.CorpsesLink;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
@@ -451,10 +451,10 @@ public class GuiDeathScreen extends GuiGameOver {
         }
         // The box's packet lands a tick before this screen opens, hence the slack.
         long sceneStart = System.currentTimeMillis() - (long) (DeathScene.elapsed() * 1000.0F);
-        int[] grave = GravesLink.graveSince(sceneStart - 10_000L);
-        if (grave != null) {
+        int[] corpse = CorpsesLink.corpseSince(sceneStart - 10_000L);
+        if (corpse != null) {
             this.drawCenteredString(this.fontRendererObj,
-                    I18n.format("uky.death.grave", grave[0], grave[1], grave[2]), centerX, y + 16,
+                    I18n.format("uky.death.corpse", corpse[0], corpse[1], corpse[2]), centerX, y + 16,
                     Draw.withAlpha(Theme.accent, 0.80F * in));
         }
     }

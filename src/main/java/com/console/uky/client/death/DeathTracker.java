@@ -1,6 +1,6 @@
 package com.console.uky.client.death;
 
-import com.console.uky.client.mods.GravesLink;
+import com.console.uky.client.mods.CorpsesLink;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import net.minecraft.block.material.Material;
@@ -22,7 +22,7 @@ import net.minecraftforge.client.event.sound.PlaySoundEvent17;
  * <p>Deliberately not clever about it. Guessing wrong costs a slightly-off palette;
  * guessing at all is what makes the screen feel like it noticed.
  *
- * <p>With ukygraves installed there is no guessing: it hands its own client the
+ * <p>With ukycorpses installed there is no guessing: it hands its own client the
  * server's death message, and that names the damage source.
  */
 public class DeathTracker {
@@ -33,7 +33,7 @@ public class DeathTracker {
     private static final float FALL_THRESHOLD = 3.5F;
     /** Blocks from the player an explosion has to be to have plausibly hit them. */
     private static final double BLAST_RANGE = 12.0D;
-    /** How old ukygraves' word on the death may be: its death camera runs first. */
+    /** How old ukycorpses' word on the death may be: its death camera runs first. */
     private static final long TOLD_WITHIN = 60_000L;
 
     private static int now;
@@ -116,7 +116,7 @@ public class DeathTracker {
      * the one that says something.
      */
     public static DeathTheme detect() {
-        DeathTheme told = fromMessage(GravesLink.causeSince(System.currentTimeMillis() - TOLD_WITHIN));
+        DeathTheme told = fromMessage(CorpsesLink.causeSince(System.currentTimeMillis() - TOLD_WITHIN));
         if (told != null) {
             return told;
         }

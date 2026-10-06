@@ -111,7 +111,7 @@ uky.settings.wailaHide=Quiet Waila on plain blocks
 # Six lines per cause. The scene picks one at random and holds it for that death.
 uky.death.prompt=Press any key or click to return
 uky.death.promptLeave=Press any key to leave
-uky.death.grave=Your things stayed here · %s %s %s
+uky.death.corpse=Your things stayed here · %s %s %s
 
 uky.death.generic.1=Signal lost. Nothing claimed the kill.
 uky.death.generic.2=You stopped. The world did not.

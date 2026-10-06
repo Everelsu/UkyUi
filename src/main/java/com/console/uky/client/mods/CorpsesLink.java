@@ -6,16 +6,16 @@ import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.IChatComponent;
 
 /**
- * Where ukygraves put the black box after this death, if it did, and what killed the
+ * Where ukycorpses put the black box after this death, if it did, and what killed the
  * player as the server told it.
  *
- * <p>Read through reflection: ukygraves is optional, and neither mod should need the
- * other to build. The public fields on {@code GraveClient} (and its {@code Death}) are
+ * <p>Read through reflection: ukycorpses is optional, and neither mod should need the
+ * other to build. The public fields on {@code CorpseClient} (and its {@code Death}) are
  * the whole contract.
  */
-public final class GravesLink {
+public final class CorpsesLink {
 
-    private static Field grave;
+    private static Field corpse;
     private static Field at;
     private static boolean looked;
     private static Field death;
@@ -23,25 +23,25 @@ public final class GravesLink {
     private static Field deathAt;
     private static boolean lookedDeath;
 
-    private GravesLink() {}
+    private CorpsesLink() {}
 
     /** {x, y, z, dim} of a box recorded at or after {@code sinceMillis}, or null. */
-    public static int[] graveSince(long sinceMillis) {
+    public static int[] corpseSince(long sinceMillis) {
         if (!looked) {
             looked = true;
             try {
-                Class<?> c = Class.forName("com.uky.graves.client.GraveClient");
-                grave = c.getField("lastGrave");
-                at = c.getField("lastGraveAt");
+                Class<?> c = Class.forName("com.uky.corpses.client.CorpseClient");
+                corpse = c.getField("lastCorpse");
+                at = c.getField("lastCorpseAt");
             } catch (ReflectiveOperationException | LinkageError e) {
-                grave = null; // not installed
+                corpse = null; // not installed
             }
         }
-        if (grave == null) {
+        if (corpse == null) {
             return null;
         }
         try {
-            int[] g = (int[]) grave.get(null);
+            int[] g = (int[]) corpse.get(null);
             return g != null && at.getLong(null) >= sinceMillis ? g : null;
         } catch (ReflectiveOperationException e) {
             return null;
@@ -49,7 +49,7 @@ public final class GravesLink {
     }
 
     /**
-     * The translation key of the death message ukygraves received at or after
+     * The translation key of the death message ukycorpses received at or after
      * {@code sinceMillis} ("death.attack.lava", "death.fell.accident.generic", ...), or
      * null: not installed, no such death, or a message that isn't a translation.
      */
@@ -57,13 +57,13 @@ public final class GravesLink {
         if (!lookedDeath) {
             lookedDeath = true;
             try {
-                Class<?> c = Class.forName("com.uky.graves.client.GraveClient");
-                Class<?> d = Class.forName("com.uky.graves.client.GraveClient$Death");
+                Class<?> c = Class.forName("com.uky.corpses.client.CorpseClient");
+                Class<?> d = Class.forName("com.uky.corpses.client.CorpseClient$Death");
                 death = c.getField("lastDeath");
                 deathCause = d.getField("cause");
                 deathAt = d.getField("at");
             } catch (ReflectiveOperationException | LinkageError e) {
-                death = null; // not installed, or an older ukygraves
+                death = null; // not installed, or an older ukycorpses
             }
         }
         if (death == null) {

@@ -16,6 +16,7 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiYesNoCallback;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
+import net.minecraft.client.network.LanServerDetector;
 import net.minecraft.client.network.OldServerPinger;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.resources.I18n;
@@ -25,7 +26,10 @@ import org.apache.commons.codec.binary.Base64;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -43,6 +47,11 @@ import java.util.Map;
  * lists in this menu confirmed the same destructive action in two different ways. The
  * hold is the confirmation — there is nothing to agree with, so the only thing that can
  * mean "yes" is not letting go — and sliding off it is the cancel.
+ *
+ * <p>Games opened to the local network turn up on their own after the saved servers,
+ * as they do on vanilla's screen: the same listener on the same multicast group, its
+ * finds drawn as cards that can only be joined. They are not entries anybody saved,
+ * so there is nothing to edit or delete.
  */
 public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
@@ -55,6 +64,13 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
     private ServerList servers;
     private OldServerPinger pinger;
+
+    /** What the LAN listener has heard; kept across the editor screens, its thread is not. */
+    private final LanServerDetector.LanServerList lanList = new LanServerDetector.LanServerList();
+    private LanServerDetector.ThreadLanServerFind lanFinder;
+    /** The LAN games as of the last frame the listener had news; after the saved servers. */
+    private List<LanServerDetector.LanServer> lan = Collections.emptyList();
+    private float[] lanHover = new float[0];
 
     /** Decoded server icons, keyed by address. */
     private final Map<String, ResourceLocation> icons = new HashMap<String, ResourceLocation>();
@@ -139,6 +155,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             this.pinger = new OldServerPinger();
             pingAll();
         }
+        listenLan();
 
         int margin = Math.max(24, (int) (this.width * 0.06F));
         this.gridX = margin;
@@ -305,7 +322,57 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     private int rowCount() {
-        return (this.servers.countServers() + 1 + this.columns - 1) / this.columns;
+        return (cardCount() + this.columns - 1) / this.columns;
+    }
+
+    /** The plus, the saved servers, the LAN games. */
+    private int cardCount() {
+        return 1 + this.servers.countServers() + this.lan.size();
+    }
+
+    // ------------------------------------------------------------------- lan --
+
+    /**
+     * Starts listening for games opened to LAN, unless already listening.
+     *
+     * Restarted rather than started once: the editor screens close this one on their
+     * way in, and closing stops the thread, so coming back has to start it again. The
+     * list it fills belongs to the screen and outlives the thread, so what was found
+     * is not forgotten in between.
+     */
+    private void listenLan() {
+        if (this.lanFinder != null) {
+            return;
+        }
+        try {
+            this.lanFinder = new LanServerDetector.ThreadLanServerFind(this.lanList);
+            this.lanFinder.start();
+        } catch (Exception e) {
+            // No multicast on this machine: no LAN games, the rest of the screen is fine.
+            UkyUI.LOGGER.warn("Could not listen for LAN games", e);
+        }
+    }
+
+    /** Takes what the listener heard since the last frame, if anything. */
+    @SuppressWarnings("unchecked")
+    private void pollLan() {
+        List<LanServerDetector.LanServer> found;
+        // The list hands out a view of what its thread keeps adding to; copied under
+        // the same lock that thread takes.
+        synchronized (this.lanList) {
+            if (!this.lanList.getWasUpdated()) {
+                return;
+            }
+            found = new ArrayList<LanServerDetector.LanServer>(this.lanList.getLanServers());
+            this.lanList.setWasNotUpdated();
+        }
+        this.lan = found;
+        if (this.lanHover.length != found.size()) {
+            float[] grown = new float[found.size()];
+            System.arraycopy(this.lanHover, 0, grown, 0, Math.min(this.lanHover.length, grown.length));
+            this.lanHover = grown;
+        }
+        clampScroll();
     }
 
     private void clampScroll() {
@@ -333,16 +400,22 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             // A failed ping tick is not worth a broken screen.
         }
 
+        pollLan();
         drawHeader();
         updateHover(mouseX, mouseY);
         updateHold();
 
         Draw.beginClip(this.gridX, this.gridY, this.gridWidth, this.gridHeight);
         drawAddCard(0);
-        for (int i = 0; i < this.servers.countServers(); i++) {
+        int saved = this.servers.countServers();
+        for (int i = 0; i < saved; i++) {
             drawServerCard(i, i + 1);
         }
+        for (int i = 0; i < this.lan.size(); i++) {
+            drawLanCard(i, saved + 1 + i);
+        }
         Draw.endClip();
+        drawScanning();
 
         drawShatter();
         drawEdgeFade();
@@ -419,14 +492,14 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         boolean inGrid = mouseX >= this.gridX && mouseX < this.gridX + this.gridWidth
                 && mouseY >= this.gridY && mouseY < this.gridY + this.gridHeight;
         if (inGrid) {
-            int total = this.servers.countServers() + 1;
+            int total = cardCount();
             for (int slot = 0; slot < total; slot++) {
                 float y = slotY(slot);
                 int x = slotX(slot);
                 if (mouseX >= x && mouseX < x + this.tileWidth
                         && mouseY >= y && mouseY < y + this.tileHeight) {
                     this.hoveredCard = slot - 1;
-                    if (this.hoveredCard >= 0) {
+                    if (this.hoveredCard >= 0 && this.hoveredCard < this.servers.countServers()) {
                         this.hoveredAction = hitTestActions(mouseX, mouseY, x, y);
                     }
                     break;
@@ -439,6 +512,11 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         for (int i = 0; i < this.hoverAmount.length; i++) {
             this.hoverAmount[i] = Ease.approach(this.hoverAmount[i],
                     this.hoveredCard == i ? 1.0F : 0.0F, 0.05F, this.delta);
+        }
+        int saved = this.servers.countServers();
+        for (int i = 0; i < this.lanHover.length; i++) {
+            this.lanHover[i] = Ease.approach(this.lanHover[i],
+                    this.hoveredCard == saved + i ? 1.0F : 0.0F, 0.05F, this.delta);
         }
     }
 
@@ -547,6 +625,60 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     /**
+     * A game opened to LAN: its world's name, its address, and a green dot, because
+     * hearing it at all is the answer a ping would give. No picture: a LAN game
+     * announces a name and an address and nothing else.
+     */
+    private void drawLanCard(int index, int slot) {
+        int x = slotX(slot);
+        float y = slotY(slot);
+        if (index >= this.lan.size() || y + this.tileHeight < this.gridY || y > this.gridY + this.gridHeight) {
+            return;
+        }
+        LanServerDetector.LanServer game = this.lan.get(index);
+        float hover = index < this.lanHover.length ? this.lanHover[index] : 0.0F;
+        float alpha = this.fadeAlpha;
+        float x2 = x + this.tileWidth;
+        float y2 = y + this.tileHeight;
+
+        Draw.rect(x, y, x2, y2, Draw.withAlpha(0x000000, 0.9F * alpha));
+        Draw.gradientV(x, y, x2, y2,
+                Draw.withAlpha(Theme.accent, (0.06F + 0.08F * hover) * alpha),
+                Draw.withAlpha(Theme.accent, 0.0F));
+        Draw.border(x, y, x2, y2, 1.0F, Draw.withAlpha(Theme.separator, alpha));
+
+        this.fontRendererObj.drawString(fit(strip(game.getServerMotd()), this.tileWidth - 12),
+                x + 6, (int) (y2 - 28),
+                Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
+        this.fontRendererObj.drawString(fit(game.getServerIpPort(), this.tileWidth - 12),
+                x + 6, (int) (y2 - 18), Draw.withAlpha(Theme.textDim, 0.85F * alpha));
+        Draw.rect(x + 6, y2 - 8, x + 9, y2 - 5, Draw.withAlpha(0xFF6ECB63, alpha));
+        this.fontRendererObj.drawString(
+                fit(I18n.format("lanServer.title", new Object[0]), this.tileWidth - 18),
+                x + 13, (int) (y2 - 9), Draw.withAlpha(Theme.textDim, 0.8F * alpha));
+
+        if (hover > 0.02F) {
+            drawJoin(x, y, this.hoveredCard == this.servers.countServers() + index, hover * alpha);
+            Draw.border(x, y, x2, y2, 1.0F, Draw.withAlpha(Theme.accent, hover * alpha));
+            Draw.glow(x, y, x2, y2, 5.0F, Draw.withAlpha(Theme.accent, 0.25F * hover * alpha), 4);
+        }
+    }
+
+    /**
+     * Under the grid while no LAN game has been heard. Vanilla says so too, and
+     * without it nobody would know the screen is listening at all.
+     */
+    private void drawScanning() {
+        if (!this.lan.isEmpty() || this.lanFinder == null) {
+            return;
+        }
+        int dots = (int) (System.currentTimeMillis() / 400L % 4L);
+        String text = I18n.format("lanServer.scanning", new Object[0]) + "...".substring(0, dots);
+        this.fontRendererObj.drawString(text, this.gridX, this.gridY + this.gridHeight + 10,
+                Draw.withAlpha(Theme.textDim, 0.6F * this.fadeAlpha));
+    }
+
+    /**
      * Ping and population, with a dot coloured by how healthy the ping is.
      *
      * Every failure says what actually went wrong, in the player's own language.
@@ -626,15 +758,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         float box = iconBox();
         float a = hover * alpha;
 
-        boolean joinHot = this.hoveredCard == index && this.hoveredAction == HIT_JOIN;
-        float cx = x + this.tileWidth / 2.0F;
-        float cy = y + this.tileHeight / 2.0F - 10;
-        float ring = box * 1.15F;
-        Draw.circle(cx, cy, ring, Draw.withAlpha(0x000000, (joinHot ? 0.6F : 0.4F) * a));
-        Draw.ring(cx, cy, ring, 1.5F,
-                Draw.withAlpha(joinHot ? Theme.accent : Theme.text, (joinHot ? 0.95F : 0.5F) * a));
-        Icons.play(cx + 1.0F, cy, box * 0.8F,
-                Draw.withAlpha(joinHot ? Theme.textHover : Theme.text, a));
+        drawJoin(x, y, this.hoveredCard == index && this.hoveredAction == HIT_JOIN, a);
 
         drawIconButton(x + this.tileWidth - box * 2 - 8, y + 4, box, a,
                 this.hoveredAction == HIT_EDIT && this.hoveredCard == index, false);
@@ -650,6 +774,19 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         } else if (this.holdCard == index && this.holdProgress > 0.0F) {
             drawBinFill(binX, y + 4, box, alpha, Ease.clamp01(this.holdProgress));
         }
+    }
+
+    /** The play ring in the middle of a card. */
+    private void drawJoin(int x, float y, boolean hot, float a) {
+        float box = iconBox();
+        float cx = x + this.tileWidth / 2.0F;
+        float cy = y + this.tileHeight / 2.0F - 10;
+        float ring = box * 1.15F;
+        Draw.circle(cx, cy, ring, Draw.withAlpha(0x000000, (hot ? 0.6F : 0.4F) * a));
+        Draw.ring(cx, cy, ring, 1.5F,
+                Draw.withAlpha(hot ? Theme.accent : Theme.text, (hot ? 0.95F : 0.5F) * a));
+        Icons.play(cx + 1.0F, cy, box * 0.8F,
+                Draw.withAlpha(hot ? Theme.textHover : Theme.text, a));
     }
 
     /**
@@ -880,6 +1017,13 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     return;
             }
         }
+        int lanIndex = this.hoveredCard - this.servers.countServers();
+        if (this.hoveredCard >= 0 && lanIndex >= 0 && lanIndex < this.lan.size()) {
+            // What vanilla joins a LAN game with: its name for the entry, its address.
+            LanServerDetector.LanServer game = this.lan.get(lanIndex);
+            join(new ServerData(game.getServerMotd(), game.getServerIpPort()));
+            return;
+        }
         super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -1026,6 +1170,10 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         super.onGuiClosed();
         if (this.pinger != null) {
             this.pinger.func_147226_b();
+        }
+        if (this.lanFinder != null) {
+            this.lanFinder.interrupt();
+            this.lanFinder = null;
         }
     }
 
