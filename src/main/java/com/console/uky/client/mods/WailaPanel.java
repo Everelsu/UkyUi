@@ -48,6 +48,11 @@ public final class WailaPanel {
      */
     private static final long GAP_NANOS = 150_000_000L;
 
+    /** Waila's own default transparency (80%), at which the panel is drawn as designed. */
+    private static final float WAILA_DEFAULT_ALPHA = 0.8F;
+    /** Whether the log has been told the hook works. */
+    private static boolean announced;
+
     private static long lastDrawNanos;
     private static long appearedNanos;
 
@@ -75,10 +80,21 @@ public final class WailaPanel {
      * @return whether it drew — false leaves Waila to paint its own box, which is
      *         what the config switch turns back on
      */
-    public static boolean draw(int x, int y, int width, int height) {
+    public static boolean draw(int x, int y, int width, int height, int wailaBackground) {
         if (!UiConfig.restyleWaila) {
             return false;
         }
+        if (!announced) {
+            announced = true;
+            // One line, so a pack where this never appears can be told apart from one
+            // where it does: the hook into Waila is a late mixin, and nothing else in
+            // the log says whether it took.
+            com.console.uky.UkyUI.LOGGER.info("Waila: drawing its tooltip as our panel");
+        }
+        // Waila's transparency slider, read out of the colour it hands us: its default
+        // (80%) is our panel exactly as designed, anything else scales every layer of
+        // it the same way. Without this the slider moved nothing.
+        float opacity = Math.min(1.0F, ((wailaBackground >>> 24) & 0xFF) / 255.0F / WAILA_DEFAULT_ALPHA);
         // A box with no area is Waila's way of saying it has nothing to show. Drawing
         // a rail and a border into it would leave two stray gold pixels on the screen.
         if (width <= 0 || height <= 0) {
@@ -95,14 +111,14 @@ public final class WailaPanel {
         // Reads over anything: this floats on the world, not on a menu backdrop, and
         // the thing behind it is as likely to be a white sheep as a cave wall.
         Draw.rect(x - 1, y - 1, x + width + 1, y + height + 1,
-                Draw.withAlpha(Theme.panelShadow, 0.35F));
-        Draw.rect(x, y, x + width, y + height, Draw.withAlpha(Theme.background, 0.82F));
-        Draw.border(x, y, x + width, y + height, 1.0F, Draw.withAlpha(Theme.text, 0.10F));
+                Draw.withAlpha(Theme.panelShadow, 0.35F * opacity));
+        Draw.rect(x, y, x + width, y + height, Draw.withAlpha(Theme.background, 0.82F * opacity));
+        Draw.border(x, y, x + width, y + height, 1.0F, Draw.withAlpha(Theme.text, 0.10F * opacity));
 
         float arrival = advance();
-        drawRail(x, y, height, arrival);
+        drawRail(x, y, height, arrival, opacity);
         if (arrival < 1.0F) {
-            drawSweep(x, y, width, arrival);
+            drawSweep(x, y, width, arrival, opacity);
         }
 
         drawMining(x, y, width, height);
@@ -117,22 +133,22 @@ public final class WailaPanel {
      * flourish that cannot touch anything the player is reading cannot be mistaken for
      * the interface glitching.
      */
-    private static void drawRail(int x, int y, int height, float arrival) {
+    private static void drawRail(int x, int y, int height, float arrival, float opacity) {
         Draw.gradientV(x, y, x + 2, y + height * arrival,
-                Draw.withAlpha(Theme.accent, 0.75F),
-                Draw.withAlpha(Theme.accent, 0.75F * (1.0F - arrival)));
+                Draw.withAlpha(Theme.accent, 0.75F * opacity),
+                Draw.withAlpha(Theme.accent, 0.75F * (1.0F - arrival) * opacity));
     }
 
     /** One highlight crossing the top edge, left to right, and gone. */
-    private static void drawSweep(int x, int y, int width, float arrival) {
+    private static void drawSweep(int x, int y, int width, float arrival, float opacity) {
         float band = 26.0F;
         float head = x - band + (width + band * 2.0F) * arrival;
         float fade = 1.0F - arrival;
 
         Draw.gradientH(Math.max(x, head - band), y, Math.min(x + width, head), y + 1.0F,
-                Draw.withAlpha(Theme.accent, 0.0F), Draw.withAlpha(Theme.accent, 0.85F * fade));
+                Draw.withAlpha(Theme.accent, 0.0F), Draw.withAlpha(Theme.accent, 0.85F * fade * opacity));
         Draw.gradientH(Math.max(x, head), y, Math.min(x + width, head + band * 0.4F), y + 1.0F,
-                Draw.withAlpha(Theme.accent, 0.85F * fade), Draw.withAlpha(Theme.accent, 0.0F));
+                Draw.withAlpha(Theme.accent, 0.85F * fade * opacity), Draw.withAlpha(Theme.accent, 0.0F));
     }
 
     /**

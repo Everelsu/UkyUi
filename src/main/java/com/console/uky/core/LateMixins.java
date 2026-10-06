@@ -77,6 +77,13 @@ public class LateMixins implements ILateMixinLoader {
             mixins.add("MixinBqTooltip");
             mixins.add("MixinBqNotice");
         }
+        // Xaero's HUD has no "hide under F3" in its 1.7.10 builds. See MixinXaeroInterfaces.
+        if (isLoaded(loadedMods, "XaeroMinimap")) {
+            mixins.add("MixinXaeroInterfaces");
+        }
+        // Said out loud: the hooks into other mods are applied late, and nothing else in
+        // the log says whether they were even asked for.
+        System.out.println("[UKY] late mixins for other mods: " + mixins);
         return mixins;
     }
 

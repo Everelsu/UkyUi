@@ -104,7 +104,10 @@ public final class XaeroFrame {
             restore();
             return;
         }
-        if (!resolve() || mc.theWorld == null || mc.gameSettings.hideGUI) {
+        // Not under F3 either: the map itself is kept off the debug screen (see
+        // MixinXaeroInterfaces), and a frame around nothing is worse than either.
+        if (!resolve() || mc.theWorld == null || mc.gameSettings.hideGUI
+                || mc.gameSettings.showDebugInfo) {
             return;
         }
         try {

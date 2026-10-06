@@ -38,7 +38,9 @@ public abstract class MixinWailaOverlay {
     private static void uky$drawOurPanel(int x, int y, int width, int height,
                                          int background, int gradient1, int gradient2,
                                          CallbackInfo ci) {
-        if (WailaPanel.draw(x, y, width, height)) {
+        // The background colour carries Waila's own transparency setting in its alpha
+        // byte; the panel takes it from there, so the slider in Waila's settings works.
+        if (WailaPanel.draw(x, y, width, height, background)) {
             ci.cancel();
         }
     }
@@ -66,6 +68,21 @@ public abstract class MixinWailaOverlay {
     private static void uky$hideListedBlock(CallbackInfoReturnable<Boolean> cir) {
         if (WailaHidden.hideTarget()) {
             cir.setReturnValue(Boolean.FALSE);
+        }
+    }
+
+    /**
+     * The same suppression for Waila 1.8.14, the build this pack actually ships: it
+     * has neither method above, and draws through {@code renderOverlay(Tooltip)} —
+     * which is why the list did nothing at all, silently, until this was added.
+     * {@code Tooltip} is Waila's own class and not on our classpath, so the handler
+     * takes only the callback; Mixin allows leaving the target's arguments out.
+     */
+    @Inject(method = "renderOverlay(Lmcp/mobius/waila/overlay/Tooltip;)V", at = @At("HEAD"),
+            cancellable = true, remap = false, require = 0)
+    private static void uky$hideListedBlockTooltip(CallbackInfo ci) {
+        if (WailaHidden.hideTarget()) {
+            ci.cancel();
         }
     }
 

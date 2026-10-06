@@ -1,5 +1,6 @@
 package com.console.uky.client.death;
 
+import com.console.uky.client.mods.GravesLink;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import net.minecraft.block.material.Material;
@@ -20,6 +21,9 @@ import net.minecraftforge.client.event.sound.PlaySoundEvent17;
  *
  * <p>Deliberately not clever about it. Guessing wrong costs a slightly-off palette;
  * guessing at all is what makes the screen feel like it noticed.
+ *
+ * <p>With ukygraves installed there is no guessing: it hands its own client the
+ * server's death message, and that names the damage source.
  */
 public class DeathTracker {
 
@@ -29,6 +33,8 @@ public class DeathTracker {
     private static final float FALL_THRESHOLD = 3.5F;
     /** Blocks from the player an explosion has to be to have plausibly hit them. */
     private static final double BLAST_RANGE = 12.0D;
+    /** How old ukygraves' word on the death may be: its death camera runs first. */
+    private static final long TOLD_WITHIN = 60_000L;
 
     private static int now;
     private static int burning = Integer.MIN_VALUE;
@@ -110,6 +116,10 @@ public class DeathTracker {
      * the one that says something.
      */
     public static DeathTheme detect() {
+        DeathTheme told = fromMessage(GravesLink.causeSince(System.currentTimeMillis() - TOLD_WITHIN));
+        if (told != null) {
+            return told;
+        }
         if (recent(voiding)) {
             return DeathTheme.VOID;
         }
@@ -126,6 +136,37 @@ public class DeathTracker {
             return DeathTheme.FALL;
         }
         if (recent(struck)) {
+            return DeathTheme.MOB;
+        }
+        return DeathTheme.GENERIC;
+    }
+
+    /**
+     * The theme for a vanilla death message key, null for none. Downed and bled out,
+     * the key is still the blow that knocked them down.
+     */
+    static DeathTheme fromMessage(String key) {
+        if (key == null) {
+            return null;
+        }
+        if (key.contains("outOfWorld")) {
+            return DeathTheme.VOID;
+        }
+        if (key.contains("explosion")) {
+            return DeathTheme.EXPLOSION;
+        }
+        if (key.contains("inFire") || key.contains("onFire") || key.contains("lava")
+                || key.contains("fireball")) {
+            return DeathTheme.FIRE;
+        }
+        if (key.contains("drown") || key.contains("inWall")) {
+            return DeathTheme.DROWN;
+        }
+        if (key.startsWith("death.fell") || key.contains("attack.fall")) {
+            return DeathTheme.FALL;
+        }
+        if (key.contains("mob") || key.contains("player") || key.contains("arrow") || key.contains("thrown")
+                || key.contains("indirectMagic") || key.contains("thorns")) {
             return DeathTheme.MOB;
         }
         return DeathTheme.GENERIC;
