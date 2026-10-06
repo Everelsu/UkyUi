@@ -1,14 +1,23 @@
 package com.console.uky.client.gui.screen;
 
+import com.console.uky.UkyUI;
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.Theme;
+import cpw.mods.fml.common.ObfuscationReflectionHelper;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.multiplayer.ThreadLanServerPing;
 import net.minecraft.client.resources.I18n;
+import net.minecraft.server.integrated.IntegratedServer;
+import net.minecraft.util.HttpUtil;
 
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.util.List;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.world.WorldSettings;
@@ -21,6 +30,11 @@ import net.minecraft.world.WorldSettings;
  * Start. Here the two choices are tiles like the world-creation screen's, so the
  * options are all visible at once rather than one-at-a-time behind a click, and the
  * consequence of each is written on it.
+ *
+ * <p>The port can be chosen, as in newer versions: the field starts on a free one picked
+ * the way vanilla picks it, any other can be typed in, and an empty field means "any
+ * free one". Whether the typed one can be used is said next to it before Start is
+ * pressed — out of range or already taken — rather than after, in chat.
  *
  * <p>Kept on plain dark like the rest of the multiplayer path.
  */
@@ -38,7 +52,17 @@ public class GuiShareScreen extends MenuScreen {
     private int modeY;
     private int modeHeight;
     private int cheatsY;
+    private int portY;
     private int actionY;
+
+    // ---- the port ----
+    private static final int PORT_OK = 0, PORT_AUTO = 1, PORT_RANGE = 2, PORT_BUSY = 3;
+    private GuiTextField portField;
+    /** What the field said, kept across a re-layout (which builds a new field). */
+    private String portText;
+    /** The text the state below was worked out for: checking a port opens a socket. */
+    private String portChecked;
+    private int portState;
 
     private final float[] modeHover = new float[MODES.length];
     private float cheatsHover;
@@ -89,13 +113,33 @@ public class GuiShareScreen extends MenuScreen {
         // ресурсы, мас…" — which tells a player choosing a mode nothing at all, and
         // was the more visible for the panel having a band of empty space under it.
         this.modeHeight = cramped ? 34 : 62;
-        int panelHeight = 52 + this.modeHeight + 12 + 22 + 16 + 20 + 20;
+        int panelHeight = 52 + this.modeHeight + 12 + 22 + 16 + 20 + 20 + 40;
         this.panelY1 = Math.max(16, (this.height - panelHeight) / 2);
         this.panelY2 = this.panelY1 + panelHeight;
 
         this.modeY = this.panelY1 + 46;
         this.cheatsY = this.modeY + this.modeHeight + 12;
+        this.portY = this.cheatsY + 22 + 24;
         this.actionY = this.panelY2 - 32;
+
+        if (this.portText == null) {
+            this.portText = String.valueOf(freePort());
+        }
+        this.portField = new GuiTextField(this.fontRendererObj, this.panelX1 + 18 + 5, this.portY + 4, 44, 16);
+        this.portField.setMaxStringLength(5);
+        this.portField.setEnableBackgroundDrawing(false);
+        this.portField.setText(this.portText);
+        this.portField.setFocused(true);
+    }
+
+    /** A free port, picked the way vanilla's shareToLAN picks one. */
+    private static int freePort() {
+        try {
+            int port = HttpUtil.func_76181_a();
+            return port > 0 ? port : 25564;
+        } catch (IOException e) {
+            return 25564;
+        }
     }
 
     private int columnWidth() {
@@ -119,6 +163,7 @@ public class GuiShareScreen extends MenuScreen {
 
         drawModes();
         drawCheats();
+        drawPort();
         drawActions();
     }
 
@@ -247,6 +292,66 @@ public class GuiShareScreen extends MenuScreen {
                 Draw.withAlpha(this.allowCheats ? Theme.text : Theme.textDim, this.fadeAlpha));
     }
 
+    /** Caption above, the dark strip with the number in it, and what can be said about it beside. */
+    private void drawPort() {
+        if (this.portField == null) {
+            return;
+        }
+        float a = this.fadeAlpha;
+        float x1 = this.portField.xPosition - 5;
+        float x2 = this.portField.xPosition + this.portField.getWidth() + 5;
+        float y1 = this.portField.yPosition - 4;
+        float y2 = this.portField.yPosition + 12;
+        this.fontRendererObj.drawString(I18n.format("uky.share.port", new Object[0]).toUpperCase(),
+                this.panelX1 + 18, this.portY - 12, Draw.withAlpha(Theme.textDim, 0.9F * a));
+        Draw.rect(x1, y1, x2, y2, Draw.withAlpha(0x000000, 0.55F * a));
+        int state = portState();
+        boolean bad = state == PORT_RANGE || state == PORT_BUSY;
+        Draw.rect(x1, y2 - 1, x2, y2, Draw.withAlpha(bad ? Theme.danger : Theme.accent, a));
+        this.portField.drawTextBox();
+        String key = state == PORT_OK ? "uky.share.portFree"
+                : state == PORT_AUTO ? "uky.share.portAuto"
+                : state == PORT_BUSY ? "uky.share.portBusy" : "uky.share.portRange";
+        int colour = state == PORT_OK ? 0xFF6ECB63 : bad ? Theme.danger : Theme.textDim;
+        this.fontRendererObj.drawString(I18n.format(key, new Object[0]), (int) x2 + 8, this.portY + 4,
+                Draw.withAlpha(colour, 0.9F * a));
+    }
+
+    /** What the field's port amounts to; worked out again only when the text changes. */
+    private int portState() {
+        String text = this.portField == null ? "" : this.portField.getText().trim();
+        if (text.equals(this.portChecked)) {
+            return this.portState;
+        }
+        this.portChecked = text;
+        this.portText = text;
+        if (text.isEmpty()) {
+            return this.portState = PORT_AUTO;
+        }
+        int port;
+        try {
+            port = Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            return this.portState = PORT_RANGE;
+        }
+        if (port < 1024 || port > 65535) {
+            return this.portState = PORT_RANGE;
+        }
+        // Taken by anything at all on this machine: a server, another game, another
+        // world opened to LAN. Bound and let go at once, which is how vanilla checks too.
+        try {
+            new ServerSocket(port).close();
+            return this.portState = PORT_OK;
+        } catch (IOException e) {
+            return this.portState = PORT_BUSY;
+        }
+    }
+
+    private boolean portUsable() {
+        int state = portState();
+        return state == PORT_OK || state == PORT_AUTO;
+    }
+
     private void drawActions() {
         int gap = 8;
         int x1 = this.panelX1 + 18;
@@ -259,8 +364,10 @@ public class GuiShareScreen extends MenuScreen {
         this.cancelHover = Ease.approach(this.cancelHover, overCancel ? 1.0F : 0.0F, 0.05F, this.delta);
 
         int fill = Draw.mix(Theme.accent, Theme.textHover, this.startHover * 0.2F);
+        // Dimmed while the port can't be used: Start would only fail.
+        float can = portUsable() ? 1.0F : 0.35F;
         Draw.rect(x1, this.actionY, x1 + half, this.actionY + 20,
-                Draw.withAlpha(fill, (0.62F + this.startHover * 0.18F) * this.fadeAlpha));
+                Draw.withAlpha(fill, (0.62F + this.startHover * 0.18F) * this.fadeAlpha * can));
         if (this.startHover > 0.02F) {
             Draw.glow(x1, this.actionY, x1 + half, this.actionY + 20, 5.0F,
                     Draw.withAlpha(Theme.accent, 0.3F * this.startHover * this.fadeAlpha), 4);
@@ -309,6 +416,10 @@ public class GuiShareScreen extends MenuScreen {
             this.allowCheats = !this.allowCheats;
             return;
         }
+        if (this.portField != null) {
+            this.portField.mouseClicked(mouseX, mouseY, button);
+            this.portField.setFocused(true); // the only field: typing always goes to it
+        }
 
         int x1 = this.panelX1 + 18;
         int half = (this.panelX2 - 18 - x1 - 8) / 2;
@@ -333,7 +444,22 @@ public class GuiShareScreen extends MenuScreen {
             start();
             return;
         }
+        // Digits, and the keys that move and erase; nothing else goes into a port.
+        if (this.portField != null && (Character.isDigit(typedChar) || keyCode == 14 || keyCode == 211
+                || keyCode == 203 || keyCode == 205 || keyCode == 199 || keyCode == 207
+                || GuiScreen.isCtrlKeyDown())) {
+            this.portField.textboxKeyTyped(typedChar, keyCode);
+            return;
+        }
         super.keyTyped(typedChar, keyCode);
+    }
+
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        if (this.portField != null) {
+            this.portField.updateCursorCounter();
+        }
     }
 
     /**
@@ -342,18 +468,54 @@ public class GuiShareScreen extends MenuScreen {
      * screen worse than the one it replaces.
      */
     private void start() {
-        if (this.started || this.mc.getIntegratedServer() == null) {
+        IntegratedServer server = this.mc.getIntegratedServer();
+        if (this.started || server == null || !portUsable()) {
             return;
         }
         this.started = true;
         this.mc.displayGuiScreen(null);
 
-        String port = this.mc.getIntegratedServer().shareToLAN(
-                WorldSettings.GameType.getByName(MODES[this.selectedMode]), this.allowCheats);
-        String message = port != null
-                ? I18n.format("commands.publish.started", new Object[]{port})
+        String text = this.portField == null ? "" : this.portField.getText().trim();
+        int port = text.isEmpty() ? freePort() : Integer.parseInt(text);
+        boolean ok = share(server, port, WorldSettings.GameType.getByName(MODES[this.selectedMode]),
+                this.allowCheats);
+        String message = ok
+                ? I18n.format("commands.publish.started", new Object[]{String.valueOf(port)})
                 : I18n.format("commands.publish.failed", new Object[0]);
         this.mc.ingameGUI.getChatGUI().printChatMessage(new ChatComponentText(message));
+    }
+
+    /**
+     * Vanilla's {@code IntegratedServer.shareToLAN}, step for step, on the port chosen
+     * here rather than one it picks: listen on it, mark the world public, announce it on
+     * the network, set the guests' game mode and whether they may cheat.
+     *
+     * <p>The two private fields go by both their names, the workspace's and the built
+     * game's. If they can't be reached the world is still open; it just isn't announced,
+     * and is joined by address instead of turning up in the list.
+     */
+    private static boolean share(IntegratedServer server, int port, WorldSettings.GameType type,
+                                 boolean cheats) {
+        try {
+            server.func_147137_ag().addLanEndpoint((InetAddress) null, port);
+        } catch (IOException e) {
+            UkyUI.LOGGER.warn("Could not open the world to LAN on port " + port, e);
+            return false;
+        }
+        UkyUI.LOGGER.info("Started on " + port);
+        try {
+            ObfuscationReflectionHelper.setPrivateValue(IntegratedServer.class, server, Boolean.TRUE,
+                    "isPublic", "field_71346_p");
+            ThreadLanServerPing ping = new ThreadLanServerPing(server.getMOTD(), String.valueOf(port));
+            ObfuscationReflectionHelper.setPrivateValue(IntegratedServer.class, server, ping,
+                    "lanServerPing", "field_71345_q");
+            ping.start();
+        } catch (Exception e) {
+            UkyUI.LOGGER.warn("The world is open on " + port + " but not announced on the network", e);
+        }
+        server.getConfigurationManager().func_152604_a(type);
+        server.getConfigurationManager().setCommandsAllowedForAll(cheats);
+        return true;
     }
 
     @Override
