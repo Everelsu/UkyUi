@@ -106,8 +106,10 @@ public final class XaeroFrame {
         }
         // Not under F3 either: the map itself is kept off the debug screen (see
         // MixinXaeroInterfaces), and a frame around nothing is worse than either.
+        // Nor while dead: the map is kept off the death screen too, and so is its frame.
         if (!resolve() || mc.theWorld == null || mc.gameSettings.hideGUI
-                || mc.gameSettings.showDebugInfo) {
+                || mc.gameSettings.showDebugInfo
+                || mc.thePlayer != null && mc.thePlayer.getHealth() <= 0.0F) {
             return;
         }
         try {

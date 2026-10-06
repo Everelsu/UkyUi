@@ -8,7 +8,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Keeps Xaero's minimap and its other on-screen panels off the debug screen.
+ * Keeps Xaero's minimap and its other on-screen panels off the debug screen, and off
+ * the screen while the player is dead.
  *
  * <p>This build of Xaero for 1.7.10 has no "hide under F3" of its own: its HUD pass
  * draws every interface whatever else is on screen, so the minimap sat on top of the
@@ -27,7 +28,13 @@ public abstract class MixinXaeroInterfaces {
             at = @At("HEAD"), cancellable = true, remap = false, require = 0)
     private void uky$hideUnderDebugScreen(CallbackInfo ci) {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc != null && mc.gameSettings != null && mc.gameSettings.showDebugInfo) {
+        if (mc == null) {
+            return;
+        }
+        // Under F3, and while dead: the death screen (ours, or ukycorpses' death camera)
+        // is no place for a map of where you were.
+        if (mc.gameSettings != null && mc.gameSettings.showDebugInfo
+                || mc.thePlayer != null && mc.thePlayer.getHealth() <= 0.0F) {
             ci.cancel();
         }
     }
