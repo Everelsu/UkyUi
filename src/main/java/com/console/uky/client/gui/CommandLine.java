@@ -97,6 +97,17 @@ public final class CommandLine {
      */
     private String requestedContext;
     /**
+     * The word as it was when the current candidates were asked for, lower-cased.
+     *
+     * The server answers with what starts with that word, not with everything: asked
+     * about {@code /corp}, it sends {@code /corpses} and nothing else. So the list can
+     * only be narrowed while the word still starts with it; erase past it and the
+     * commands the server left out are needed again, which means asking again. Without
+     * this, erasing {@code /corp} back to {@code /} showed only what began with
+     * {@code /corp}, for good.
+     */
+    private String requestedWord;
+    /**
      * Whether the open list was asked for by pressing Tab rather than by typing.
      *
      * The one thing that turns on it is the single-candidate shortcut in
@@ -132,6 +143,7 @@ public final class CommandLine {
         this.scroll = 0;
         this.awaitingServer = false;
         this.requestedContext = null;
+        this.requestedWord = null;
         this.manual = false;
         this.commandList = false;
     }
@@ -218,7 +230,9 @@ public final class CommandLine {
             close();
             return;
         }
-        if (this.requestedContext != null && this.requestedContext.equals(context())) {
+        if (this.requestedContext != null && this.requestedContext.equals(context())
+                && this.requestedWord != null
+                && currentWord().toLowerCase().startsWith(this.requestedWord)) {
             narrow();
             return;
         }
@@ -310,6 +324,7 @@ public final class CommandLine {
         this.manual = manual;
         this.commandList = beforeCursor.charAt(0) == '/';
         this.requestedContext = context();
+        this.requestedWord = currentWord().toLowerCase();
         clearCandidates();
         if (beforeCursor.charAt(0) == '/') {
             ClientCommandHandler.instance.autoComplete(beforeCursor, currentWord());

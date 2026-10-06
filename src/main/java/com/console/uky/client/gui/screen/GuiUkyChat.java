@@ -117,11 +117,21 @@ public class GuiUkyChat extends GuiChat {
             return;
         }
         super.keyTyped(typedChar, keyCode);
+        if (line == null) {
+            return;
+        }
+        // Up and down that the box did not take are the history, and a line brought
+        // back from it is not being typed: no list over it. Opening one there is what
+        // kept the history to a single step — the next press went to the list that had
+        // just opened over the recalled command, not to the line before it. The list
+        // comes back with the next key that actually edits.
+        if (keyCode == 200 || keyCode == 208) {
+            line.close();
+            return;
+        }
         // After, not before: the field is what the box narrows against, and this is
         // the first moment it holds what was just typed.
-        if (line != null) {
-            line.afterEdit();
-        }
+        line.afterEdit();
     }
 
     /**
