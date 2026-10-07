@@ -5,6 +5,46 @@ build sends to Modrinth, to CurseForge and to the GitHub release for it — see
 [RELEASING.md](RELEASING.md) — so it is written to be read by a player rather than by
 whoever wrote the commit.
 
+## 0.6.1
+
+**Multiplayer**
+
+- Games opened to LAN turn up in the server list on their own again, the way they do on
+  vanilla's screen: after your saved servers, as cards with the world's name and address,
+  joined with a click. They aren't entries anyone saved, so there is nothing to edit or
+  delete on them. Until one is heard, the list says it is listening.
+- Opening a world to LAN lets you pick the port, as newer versions do. The field starts on
+  a free one, any other can be typed in, and an empty field means "any free one". Next to it
+  is whether the port can be used — free, already taken, or outside 1024–65535 — and Start
+  waits until it can, instead of failing in chat afterwards.
+
+**Chat**
+
+- Up and down go back through everything you have sent, not just the last line. A command
+  brought back from history no longer opens the suggestion list over itself, which is what
+  took the next press.
+- Erasing a command back past where its suggestions were asked for brings the whole list
+  back. The server only answers with what starts with what was typed, so the box now asks
+  again instead of narrowing a list that was already cut short.
+
+**Death screen** (with UkyCorpses)
+
+- With UkyCorpses installed, what killed you comes from the server instead of being
+  guessed, so the colours and the line fit the death; and where your body lies is written
+  under it. Bled out or gave up while downed, it is the blow that knocked you down.
+- Xaero's minimap and its frame stay off the screen while you are dead.
+- Works with UkyCorpses, the renamed ukygraves; the old name is no longer looked for.
+
+**Waila**
+
+- Waila's own transparency slider works on the restyled panel.
+- The list of blocks Waila keeps quiet about works with Waila 1.8.14, the version the pack
+  ships. Before, it silently did nothing.
+
+**Xaero's Minimap**
+
+- Hidden under F3, as its newer versions do by default.
+
 ## 0.6.0
 
 **Easy and Standard**
