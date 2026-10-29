@@ -91,24 +91,24 @@ public final class DeathScene {
     // ------------------------------------------------------------------ sound --
 
     private static void startSounds() {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (!UiConfig.deathSounds || mc.getSoundHandler() == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (!UiConfig.deathSounds || mc.getSoundManager() == null) {
             return;
         }
         heartbeat = DeathLoop.heartbeat(theme);
         breathing = DeathLoop.breathing(theme);
-        mc.getSoundHandler().playSound(heartbeat);
-        mc.getSoundHandler().playSound(breathing);
+        mc.getSoundManager().play(heartbeat);
+        mc.getSoundManager().play(breathing);
     }
 
     private static void stopSounds() {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.getSoundHandler() != null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getSoundManager() != null) {
             if (heartbeat != null) {
-                mc.getSoundHandler().stopSound(heartbeat);
+                mc.getSoundManager().stop(heartbeat);
             }
             if (breathing != null) {
-                mc.getSoundHandler().stopSound(breathing);
+                mc.getSoundManager().stop(breathing);
             }
         }
         heartbeat = null;

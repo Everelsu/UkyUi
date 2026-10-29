@@ -4,10 +4,10 @@ import com.console.uky.UkyUI;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.util.ChatComponentText;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.network.Connection;
+import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -26,7 +26,7 @@ import java.lang.reflect.Modifier;
  */
 public class GuiConnectingScreen extends GuiScreen {
 
-    private final GuiScreen delegate;
+    private final net.minecraft.client.gui.screens.Screen delegate;
     /** Size the delegate was set up at; -1 until it has been. */
     private int delegateWidth = -1;
     private int delegateHeight = -1;
@@ -40,7 +40,7 @@ public class GuiConnectingScreen extends GuiScreen {
     /** One press only: the channel is closed by it, and closing it twice is not a no-op. */
     private boolean cancelled;
 
-    public GuiConnectingScreen(GuiScreen delegate) {
+    public GuiConnectingScreen(net.minecraft.client.gui.screens.Screen delegate) {
         this.delegate = delegate;
     }
 
@@ -71,36 +71,33 @@ public class GuiConnectingScreen extends GuiScreen {
         }
         this.delegateWidth = this.width;
         this.delegateHeight = this.height;
-        this.delegate.mc = this.mc;
-        this.delegate.setWorldAndResolution(this.mc, this.width, this.height);
+        this.delegate.init(this.mc, this.width, this.height);
     }
 
     /**
-     * Whether the socket is up and the handshake has moved on to logging in.
-     *
-     * Read once a tick rather than once a frame: it is reflection over the delegate's
-     * fields, and twenty answers a second is already more than a line of text needs.
+     * What vanilla's screen says it is doing — connecting, logging in, joining — read
+     * off its own status field, so this one never says anything that one would not.
+     * By name: the screen holds other components too, and NeoForge keeps Mojang's names.
      */
-    private boolean authorizing;
+    private String status() {
+        try {
+            Field field = this.delegate.getClass().getDeclaredField("status");
+            field.setAccessible(true);
+            Component status = (Component) field.get(this.delegate);
+            if (status != null) {
+                return status.getString();
+            }
+        } catch (Throwable ignored) {
+            // Fall through to the generic line.
+        }
+        return I18n.get("connect.connecting");
+    }
 
     @Override
     public void updateScreen() {
         // This is what actually drives the connection; skipping it would hang here.
         prepareDelegate();
-        this.delegate.updateScreen();
-
-        if (!this.authorizing) {
-            try {
-                // Vanilla tells the two stages apart the same way: its own screen has a
-                // network manager only once the connection is open, and says so. Without
-                // this the screen read "Connecting to the server..." from the first frame
-                // to the last, including the whole of the modded handshake — which on a
-                // large pack is most of the wait, and looks exactly like a hang.
-                this.authorizing = fieldOfType(NetworkManager.class) != null;
-            } catch (Throwable ignored) {
-                // The stage is a caption. Not worth a failure of any kind.
-            }
-        }
+        this.delegate.tick();
     }
 
     @Override
@@ -115,8 +112,7 @@ public class GuiConnectingScreen extends GuiScreen {
         Draw.rect(0, 0, this.width, this.height, Theme.background);
         Draw.vignette(this.width, this.height, 0.7F, 0xFF000000);
 
-        String message = I18n.format(
-                this.authorizing ? "connect.authorizing" : "connect.connecting", new Object[0]);
+        String message = status();
         this.drawCenteredString(this.fontRendererObj, message,
                 this.width / 2, this.height / 2 - 16, Draw.withAlpha(Theme.text, 0.9F));
 
@@ -185,7 +181,7 @@ public class GuiConnectingScreen extends GuiScreen {
         Draw.border(x, y, x + width, y + 20, 1.0F,
                 Draw.fade(Draw.mix(Theme.separator, Theme.accent, this.cancelHover), 0.9F));
 
-        String label = I18n.format("gui.cancel", new Object[0]);
+        String label = I18n.get("gui.cancel", new Object[0]);
         int labelWidth = this.fontRendererObj.getStringWidth(label);
         this.fontRendererObj.drawString(label, x + (width - labelWidth) / 2, y + 6,
                 Draw.withAlpha(Draw.mix(Theme.textDim, Theme.textHover, this.cancelHover), 0.95F));
@@ -211,12 +207,12 @@ public class GuiConnectingScreen extends GuiScreen {
         }
         this.cancelled = true;
 
-        GuiScreen parent = null;
+        net.minecraft.client.gui.screens.Screen parent = null;
         try {
             markAborted();
-            NetworkManager manager = fieldOfType(NetworkManager.class);
-            if (manager != null) {
-                manager.closeChannel(new ChatComponentText("Aborted"));
+            Connection connection = fieldOfType(Connection.class);
+            if (connection != null) {
+                connection.disconnect(Component.translatable("connect.aborted"));
             }
         } catch (Throwable t) {
             // Leaving matters more than leaving tidily: a screen with no way out is
@@ -225,11 +221,11 @@ public class GuiConnectingScreen extends GuiScreen {
             UkyUI.LOGGER.warn("Could not abort the connection cleanly", t);
         }
         try {
-            parent = fieldOfType(GuiScreen.class);
+            parent = fieldOfType(net.minecraft.client.gui.screens.Screen.class);
         } catch (Throwable ignored) {
             // Null falls back to the main menu below, which is still a way out.
         }
-        this.mc.displayGuiScreen(parent);
+        this.mc.setScreen(parent);
     }
 
     /** Sets the delegate's "the player left" flag; it declares exactly one boolean. */

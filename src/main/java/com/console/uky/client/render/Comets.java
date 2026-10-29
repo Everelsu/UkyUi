@@ -1,7 +1,7 @@
 package com.console.uky.client.render;
 
 import com.console.uky.config.UiConfig;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.GL11;
 
 import java.util.Random;
 

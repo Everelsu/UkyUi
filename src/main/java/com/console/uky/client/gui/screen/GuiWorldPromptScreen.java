@@ -7,13 +7,13 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.world.WorldPreviews;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiTextField;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.world.storage.ISaveFormat;
-import net.minecraft.world.storage.WorldInfo;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import com.console.uky.compat.GuiTextField;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.resources.ResourceLocation;
+import com.console.uky.compat.Saves;
+import net.minecraft.world.level.storage.LevelSummary;
 
 import java.util.List;
 
@@ -56,7 +56,7 @@ public class GuiWorldPromptScreen extends MenuScreen {
 
     private boolean done;
 
-    public GuiWorldPromptScreen(GuiScreen parent, Mode mode, String folder) {
+    public GuiWorldPromptScreen(net.minecraft.client.gui.screens.Screen parent, Mode mode, String folder) {
         super(parent);
         this.mode = mode;
         this.folder = folder;
@@ -74,13 +74,13 @@ public class GuiWorldPromptScreen extends MenuScreen {
     public void initGui() {
         super.initGui();
         if (this.mode == Mode.RENAME) {
-            org.lwjgl.input.Keyboard.enableRepeatEvents(true);
+            com.console.uky.compat.Keyboard.enableRepeatEvents(true);
         }
     }
 
     @Override
     public void onGuiClosed() {
-        org.lwjgl.input.Keyboard.enableRepeatEvents(false);
+        com.console.uky.compat.Keyboard.enableRepeatEvents(false);
         super.onGuiClosed();
     }
 
@@ -112,9 +112,10 @@ public class GuiWorldPromptScreen extends MenuScreen {
 
     private String readWorldName() {
         try {
-            WorldInfo info = this.mc.getSaveLoader().getWorldInfo(this.folder);
-            if (info != null && info.getWorldName() != null) {
-                return info.getWorldName();
+            for (LevelSummary summary : Saves.list()) {
+                if (summary.getLevelId().equals(this.folder)) {
+                    return summary.getLevelName();
+                }
             }
         } catch (Exception e) {
             UkyUI.LOGGER.warn("Could not read the name of world '{}'", this.folder, e);
@@ -146,8 +147,8 @@ public class GuiWorldPromptScreen extends MenuScreen {
 
     private void drawTitle() {
         String title = this.mode == Mode.RENAME
-                ? I18n.format("selectWorld.renameTitle", new Object[0])
-                : I18n.format("selectWorld.deleteQuestion", new Object[0]);
+                ? I18n.get("selectWorld.renameTitle", new Object[0])
+                : I18n.get("selectWorld.deleteQuestion", new Object[0]);
         int width = this.fontRendererObj.getStringWidth(title);
         this.fontRendererObj.drawString(title, (this.width - width) / 2, this.cardY - 22,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
@@ -209,7 +210,7 @@ public class GuiWorldPromptScreen extends MenuScreen {
         // name ("'X' will be lost forever!"), so on its own it reads as a dangling
         // clause. Put the name back in front of it.
         String warning = "'" + this.worldName + "' "
-                + I18n.format("selectWorld.deleteWarning", new Object[0]);
+                + I18n.get("selectWorld.deleteWarning", new Object[0]);
         List<?> lines = this.fontRendererObj.listFormattedStringToWidth(warning, this.cardWidth + 40);
         int y = this.cardY + this.cardHeight + 10;
         for (int i = 0; i < lines.size() && i < 2; i++) {
@@ -251,15 +252,15 @@ public class GuiWorldPromptScreen extends MenuScreen {
                 Draw.withAlpha(0x000000, (0.5F + this.cancelHover * 0.2F) * this.fadeAlpha));
         Draw.border(cancelX, y, cancelX + buttonWidth, y + 20, 1.0F,
                 Draw.fade(Draw.mix(Theme.separator, Theme.accent, this.cancelHover), this.fadeAlpha));
-        centred(I18n.format("gui.cancel", new Object[0]), cancelX, buttonWidth, y + 6,
+        centred(I18n.get("gui.cancel", new Object[0]), cancelX, buttonWidth, y + 6,
                 Draw.withAlpha(Draw.mix(Theme.textDim, Theme.textHover, this.cancelHover),
                         this.fadeAlpha));
     }
 
     private String confirmLabel() {
         return this.mode == Mode.RENAME
-                ? I18n.format("selectWorld.renameButton", new Object[0])
-                : I18n.format("selectWorld.deleteButton", new Object[0]);
+                ? I18n.get("selectWorld.renameButton", new Object[0])
+                : I18n.get("selectWorld.deleteButton", new Object[0]);
     }
 
     private void centred(String text, int x, int width, int y, int colour) {
@@ -334,24 +335,24 @@ public class GuiWorldPromptScreen extends MenuScreen {
         }
         this.done = true;
 
-        ISaveFormat saveFormat = this.mc.getSaveLoader();
-        if (this.mode == Mode.RENAME) {
-            saveFormat.renameWorld(this.folder, this.nameField.getText().trim());
-        } else {
-            // flushCache first: the save format keeps the directory open, and on
-            // Windows deleting it out from under that fails silently.
-            saveFormat.flushCache();
-            saveFormat.deleteWorldDirectory(this.folder);
-            WorldPreviews.invalidate(this.folder);
+        try {
+            if (this.mode == Mode.RENAME) {
+                Saves.rename(this.folder, this.nameField.getText().trim());
+            } else {
+                Saves.delete(this.folder);
+                WorldPreviews.invalidate(this.folder);
+            }
+        } catch (Exception e) {
+            UkyUI.LOGGER.warn("Could not change world '{}'", this.folder, e);
         }
-        this.mc.displayGuiScreen(this.parent);
+        this.mc.setScreen(this.parent);
     }
 
     private void cancel() {
         if (this.parent instanceof MenuScreen) {
             switchBack();
         } else {
-            this.mc.displayGuiScreen(this.parent);
+            this.mc.setScreen(this.parent);
         }
     }
 

@@ -4,11 +4,10 @@ import com.console.uky.UkyUI;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.Display;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL13;
+import com.console.uky.compat.GL11;
+import com.console.uky.compat.GL13;
 import org.lwjgl.opengl.GL12;
 
 import java.nio.IntBuffer;
@@ -490,8 +489,8 @@ public final class BlackHole {
             dissolveTried = true;
             try {
                 ShaderProgram program = new ShaderProgram(
-                        new ResourceLocation("uky", "shaders/dissolve.vsh"),
-                        new ResourceLocation("uky", "shaders/dissolve.fsh"));
+                        ResourceLocation.fromNamespaceAndPath("uky", "shaders/dissolve.vsh"),
+                        ResourceLocation.fromNamespaceAndPath("uky", "shaders/dissolve.fsh"));
                 dissolveShader = program.isUsable() ? program : null;
             } catch (Throwable t) {
                 dissolveShader = null;
@@ -509,8 +508,8 @@ public final class BlackHole {
             shaderAttemptsLeft--;
             if (ShaderProgram.isSupported()) {
                 shader = new ShaderProgram(
-                        new ResourceLocation("uky", "shaders/blackhole.vsh"),
-                        new ResourceLocation("uky", "shaders/blackhole.fsh"));
+                        ResourceLocation.fromNamespaceAndPath("uky", "shaders/blackhole.vsh"),
+                        ResourceLocation.fromNamespaceAndPath("uky", "shaders/blackhole.fsh"));
                 if (shader.isUsable()) {
                     shaderTried = true;
                     UkyUI.LOGGER.info("Black hole: rendering with GLSL");
@@ -614,7 +613,7 @@ public final class BlackHole {
         // full-screen window, or not — but a background window is exactly where the
         // game's own frame limiter and the driver's presentation stop agreeing with
         // each other, and this puts the hole's cost at zero there either way.
-        if (offscreen.hasContent() && !Display.isActive()) {
+        if (offscreen.hasContent() && !Minecraft.getInstance().isWindowActive()) {
             return false;
         }
 
@@ -753,7 +752,7 @@ public final class BlackHole {
      */
     private boolean drawShadedOffscreen(float cx, float cy, float halfW, float halfH,
                                         float intensity, int percent) {
-        Minecraft mc = Minecraft.getMinecraft();
+        Minecraft mc = Minecraft.getInstance();
 
         // Sized from the window alone, never from the quad.
         //
@@ -767,8 +766,8 @@ public final class BlackHole {
         //
         // Off the window size it is allocated once and then left alone, and the
         // cost is fixed instead of scaling with whatever the animation is doing.
-        int targetW = Math.max(64, mc.displayWidth * percent / 100);
-        int targetH = Math.max(64, mc.displayHeight * percent / 100);
+        int targetW = Math.max(64, mc.getWindow().getWidth() * percent / 100);
+        int targetH = Math.max(64, mc.getWindow().getHeight() * percent / 100);
 
         // Only re-trace when the picture would actually differ. On an idle menu this
         // is the single biggest saving available: the blit below still runs every
@@ -778,7 +777,7 @@ public final class BlackHole {
         }
         // The camera outran the traced region: re-trace now rather than show a hole
         // with a missing slice until the clock says so.
-        boolean escaped = offscreen.hasContent() && Display.isActive()
+        boolean escaped = offscreen.hasContent() && Minecraft.getInstance().isWindowActive()
                 && offscreen.matches(targetW, targetH) && !contains(crop, wantedCrop);
         if (escaped) {
             lastTraceNanos = System.nanoTime();
@@ -884,9 +883,9 @@ public final class BlackHole {
             dissolve.set("uIntensity", intensity);
             dissolve.set("uPrevious", 0);
             dissolve.set("uCurrent", 1);
-            dissolve.set("uTap", 1.0F / Math.max(1, mc.displayWidth),
-                    1.0F / Math.max(1, mc.displayHeight));
-            dissolve.set("uRingLift", ringLift(mc.displayWidth));
+            dissolve.set("uTap", 1.0F / Math.max(1, mc.getWindow().getWidth()),
+                    1.0F / Math.max(1, mc.getWindow().getHeight()));
+            dissolve.set("uRingLift", ringLift(mc.getWindow().getWidth()));
             // Where the older trace's window sits against the newer one's.
             dissolve.set("uPrevOffset", crop[0] - previousCrop[0], previousCrop[3] - crop[3]);
             dissolve.set("uPrevMax", previousCrop[2] - previousCrop[0], previousCrop[3] - previousCrop[1]);

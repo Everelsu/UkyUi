@@ -3,12 +3,12 @@ package com.console.uky.client.world;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.util.ResourceLocation;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.ScaledResolution;
+import net.minecraft.resources.ResourceLocation;
+import com.console.uky.compat.GL11;
 
 /**
  * Carries the loading still over the first moments of the live world.
@@ -98,12 +98,12 @@ public final class WorldEntryFade {
         running = false;
     }
 
-    /** Registered on FML's bus, where {@link TickEvent} lives. */
+    /** Registered on NeoForge's bus. */
     public static final class Handler {
 
         @SubscribeEvent
-        public void onRenderTick(TickEvent.RenderTickEvent event) {
-            if (event.phase != TickEvent.Phase.END || !running) {
+        public void onRenderTick(RenderFrameEvent.Post event) {
+            if (!running) {
                 return;
             }
 
@@ -121,14 +121,14 @@ public final class WorldEntryFade {
     }
 
     private static void draw(float progress) {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.theWorld == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
             // Left again before the fade finished; there is nothing to fade into.
             cancel();
             return;
         }
         ScaledResolution resolution =
-                new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+                new ScaledResolution(mc, mc.getWindow().getWidth(), mc.getWindow().getHeight());
         int width = resolution.getScaledWidth();
         int height = resolution.getScaledHeight();
 

@@ -6,14 +6,15 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
-import com.console.uky.client.world.UkyLoadingScreen;
 import com.console.uky.client.world.WorldPreviews;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
-import net.minecraftforge.client.event.sound.SoundLoadEvent;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.ScaledResolution;
+import net.minecraft.world.level.storage.LevelResource;
+import net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent;
+import com.console.uky.compat.GL11;
 
 /**
  * Takes the world's parting screenshot.
@@ -61,22 +62,23 @@ public class WorldCaptureHandler {
      * immediately — quitting must never be blocked by a screenshot.
      */
     public static void captureThen(Runnable afterwards) {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (pendingFolder != null || mc.theWorld == null || !mc.isSingleplayer()
-                || mc.getIntegratedServer() == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (pendingFolder != null || mc.level == null || !mc.hasSingleplayerServer()
+                || mc.getSingleplayerServer() == null) {
             afterwards.run();
             return;
         }
 
-        pendingFolder = mc.getIntegratedServer().getFolderName();
+        pendingFolder = String.valueOf(mc.getSingleplayerServer().getWorldPath(LevelResource.ROOT)
+                .toAbsolutePath().normalize().getFileName());
         pendingAction = afterwards;
         framesWaited = 0;
         ticksWaited = 0;
 
-        hidGui = mc.gameSettings.hideGUI;
-        mc.gameSettings.hideGUI = true;
+        hidGui = mc.options.hideGui;
+        mc.options.hideGui = true;
         // Close the menu so the next frame is the world alone.
-        mc.displayGuiScreen(null);
+        mc.setScreen(null);
     }
 
     /**
@@ -84,10 +86,17 @@ public class WorldCaptureHandler {
      * handle held across it. Without this the menu track is considered still
      * playing after coming back from a world, and stays silent.
      */
-    @SubscribeEvent
-    public void onSoundLoad(SoundLoadEvent event) {
-        UkySounds.onSoundSystemReloaded();
-        DeathScene.onSoundSystemReloaded();
+    /**
+     * Drops the sound handles kept across screens when the sound engine comes back up:
+     * they refer to an engine that no longer exists. Fired on the mod bus, hence a
+     * listener of its own.
+     */
+    public static final class SoundReload {
+        @SubscribeEvent
+        public void onSoundLoad(SoundEngineLoadEvent event) {
+            UkySounds.onSoundSystemReloaded();
+            DeathScene.onSoundSystemReloaded();
+        }
     }
 
     /**
@@ -104,8 +113,8 @@ public class WorldCaptureHandler {
     private static long lastFrameNanos;
 
     @SubscribeEvent
-    public void onRenderTick(TickEvent.RenderTickEvent event) {
-        if (pendingFolder == null || event.phase != TickEvent.Phase.END) {
+    public void onRenderTick(RenderFrameEvent.Post event) {
+        if (pendingFolder == null) {
             return;
         }
         if (fading) {
@@ -150,13 +159,13 @@ public class WorldCaptureHandler {
 
     /** The scrim, in its own projection because nothing else is set one up here. */
     private static void drawFade(float opacity) {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.theWorld == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) {
             finish();
             return;
         }
         ScaledResolution resolution =
-                new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+                new ScaledResolution(mc, mc.getWindow().getWidth(), mc.getWindow().getHeight());
         int width = resolution.getScaledWidth();
         int height = resolution.getScaledHeight();
 
@@ -216,8 +225,8 @@ public class WorldCaptureHandler {
      * gone there is nothing left to photograph, and the action is now overdue.
      */
     @SubscribeEvent
-    public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (pendingFolder == null || event.phase != TickEvent.Phase.END) {
+    public void onClientTick(ClientTickEvent.Post event) {
+        if (pendingFolder == null) {
             return;
         }
         // Counted only while waiting for the picture. Once the fade is running the render
@@ -226,7 +235,7 @@ public class WorldCaptureHandler {
         if (fading) {
             return;
         }
-        if (++ticksWaited > MAX_TICKS || Minecraft.getMinecraft().theWorld == null) {
+        if (++ticksWaited > MAX_TICKS || Minecraft.getInstance().level == null) {
             // No frame ever came, so there is no picture and nothing to fade from.
             finish();
         }
@@ -250,11 +259,7 @@ public class WorldCaptureHandler {
         }
 
         try {
-            Minecraft.getMinecraft().gameSettings.hideGUI = hidGui;
-            // Leaving is drawn by the same screen as arriving, so its picture and
-            // clock have to be cleared or the save screen reuses the ones from the
-            // load that is now ending.
-            UkyLoadingScreen.rearmIfInstalled(Minecraft.getMinecraft());
+            Minecraft.getInstance().options.hideGui = hidGui;
             WorldPreviews.setEnteringWorld(null);
         } finally {
             action.run();

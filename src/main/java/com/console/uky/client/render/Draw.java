@@ -1,10 +1,10 @@
 package com.console.uky.client.render;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.util.ResourceLocation;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.ScaledResolution;
+import com.console.uky.compat.Tessellator;
+import net.minecraft.resources.ResourceLocation;
+import com.console.uky.compat.GL11;
 
 /**
  * Immediate-mode drawing primitives for the UltraKill Yourself UI.
@@ -358,7 +358,7 @@ public final class Draw {
     public static void textureShard(ResourceLocation tex, float cx, float cy,
                                     float halfW, float halfH, float degrees,
                                     float u1, float v1, float u2, float v2, int argb) {
-        Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
+        GL11.bindTexture(tex);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
@@ -401,7 +401,7 @@ public final class Draw {
                                        float x2, float y2, float u2, float v2,
                                        float x3, float y3, float u3, float v3,
                                        int argb) {
-        Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
+        GL11.bindTexture(tex);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
@@ -421,7 +421,7 @@ public final class Draw {
     }
 
     public static void texture(ResourceLocation tex, float x, float y, float w, float h, int argb) {
-        Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
+        GL11.bindTexture(tex);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
@@ -458,7 +458,7 @@ public final class Draw {
         float u0 = (1.0F - uSpan) * 0.5F * (1.0F + panX);
         float v0 = (1.0F - vSpan) * 0.5F * (1.0F + panY);
 
-        Minecraft.getMinecraft().getTextureManager().bindTexture(tex);
+        GL11.bindTexture(tex);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
@@ -522,14 +522,14 @@ public final class Draw {
     }
 
     public static void beginClip(float x, float y, float w, float h) {
-        Minecraft mc = Minecraft.getMinecraft();
+        Minecraft mc = Minecraft.getInstance();
         float f = clipScale;
         if (f <= 0.0F) {
-            f = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight).getScaleFactor();
+            f = new ScaledResolution(mc, mc.getWindow().getWidth(), mc.getWindow().getHeight()).getScaleFactor();
         }
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
         // glScissor origin is bottom-left in real pixels, GUI space is top-left in scaled units
-        GL11.glScissor((int) (x * f), (int) (mc.displayHeight - (y + h) * f), (int) (w * f), (int) (h * f));
+        GL11.glScissor((int) (x * f), (int) (mc.getWindow().getHeight() - (y + h) * f), (int) (w * f), (int) (h * f));
     }
 
     public static void endClip() {

@@ -7,11 +7,10 @@ import com.console.uky.client.mods.ModConfigCatalog;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import cpw.mods.fml.common.Loader;
-import cpw.mods.fml.common.ModContainer;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
+import net.neoforged.fml.ModContainer;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,14 +38,14 @@ public class GuiModsScreen extends MenuScreen {
     private int panelY2;
     private int detailX;
 
-    public GuiModsScreen(GuiScreen parent) {
+    public GuiModsScreen(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
     }
 
     @Override
     protected void buildLayout() {
         this.mods.clear();
-        this.mods.addAll(Loader.instance().getModList());
+        this.mods.addAll(net.neoforged.fml.ModList.get().getSortedMods());
 
         int panelWidth = Math.min((int) (this.width * 0.72F), 440);
         this.panelX1 = Math.max(10, (this.width - panelWidth) / 2);
@@ -67,12 +66,12 @@ public class GuiModsScreen extends MenuScreen {
         }
 
         MenuButton done = new MenuButton(ID_DONE, this.panelX1 + 14, this.panelY2 - 30,
-                listWidth, 20, I18n.format("gui.done", new Object[0]), MenuButton.Style.PRIMARY);
+                listWidth, 20, I18n.get("gui.done", new Object[0]), MenuButton.Style.PRIMARY);
         done.entrance(0.05F);
         this.buttonList.add(done);
 
         this.configButton = new MenuButton(ID_CONFIG, this.detailX, this.panelY2 - 30, 110, 20,
-                I18n.format("uky.mods.config", new Object[0]), MenuButton.Style.NORMAL);
+                I18n.get("uky.mods.config", new Object[0]), MenuButton.Style.NORMAL);
         this.configButton.entrance(0.09F);
         this.buttonList.add(this.configButton);
     }
@@ -115,9 +114,9 @@ public class GuiModsScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, 0.5F * this.fadeAlpha),
                 Draw.withAlpha(Theme.accent, 0.0F));
 
-        this.fontRendererObj.drawString(I18n.format("uky.menu.mods", new Object[0]),
+        this.fontRendererObj.drawString(I18n.get("uky.menu.mods", new Object[0]),
                 panelX1 + 14, panelY1 + 14, Draw.withAlpha(Theme.text, this.fadeAlpha));
-        String count = this.mods.size() + " " + I18n.format("uky.mods.loaded", new Object[0]);
+        String count = this.mods.size() + " " + I18n.get("uky.mods.loaded", new Object[0]);
         this.fontRendererObj.drawString(count,
                 panelX2 - 14 - this.fontRendererObj.getStringWidth(count), panelY1 + 14,
                 Draw.withAlpha(Theme.textDim, 0.8F * this.fadeAlpha));
@@ -140,9 +139,9 @@ public class GuiModsScreen extends MenuScreen {
         // Mod metadata is written by whoever made the mod, so none of these have a
         // length this layout can rely on — a long author list used to run off the
         // right of the panel.
-        drawFitted(mod.getName(), x, y, maxWidth, Draw.withAlpha(Theme.text, this.fadeAlpha));
+        drawFitted(mod.getModInfo().getDisplayName(), x, y, maxWidth, Draw.withAlpha(Theme.text, this.fadeAlpha));
         y += 12;
-        drawFitted(mod.getVersion(), x, y, maxWidth,
+        drawFitted(mod.getModInfo().getVersion().toString(), x, y, maxWidth,
                 Draw.withAlpha(Theme.accent, 0.9F * this.fadeAlpha));
         y += 11;
         drawFitted(mod.getModId(), x, y, maxWidth,
@@ -160,7 +159,7 @@ public class GuiModsScreen extends MenuScreen {
         Draw.rect(x, y, x + maxWidth, y + 1, Draw.fade(Theme.separator, this.fadeAlpha));
         y += 8;
 
-        String description = mod.getMetadata() == null ? "" : mod.getMetadata().description;
+        String description = mod.getModInfo().getDescription().trim();
         if (description != null && !description.isEmpty()) {
             // drawSplitString is the one place vanilla's wrapping is exactly what we want.
             this.fontRendererObj.drawSplitString(description, x, y, maxWidth,
@@ -179,23 +178,14 @@ public class GuiModsScreen extends MenuScreen {
      * giving up.
      */
     private String authorsOf(ModContainer mod) {
-        if (mod.getMetadata() == null) {
-            return "";
+        Object authors = mod.getModInfo().getConfig().getConfigElement("authors").orElse(null);
+        if (authors != null && !authors.toString().trim().isEmpty()) {
+            return I18n.get("uky.mods.by") + " " + authors.toString().trim();
         }
-        List<String> list = mod.getMetadata().authorList;
-        if (list != null && !list.isEmpty()) {
-            StringBuilder joined = new StringBuilder();
-            for (int i = 0; i < list.size(); i++) {
-                if (i > 0) {
-                    joined.append(", ");
-                }
-                joined.append(list.get(i));
-            }
-            return I18n.format("uky.mods.by", new Object[0]) + " " + joined;
-        }
-        String credits = mod.getMetadata().credits;
-        return credits == null ? "" : credits.trim();
+        Object credits = mod.getModInfo().getConfig().getConfigElement("credits").orElse(null);
+        return credits == null ? "" : credits.toString().trim();
     }
+
 
     /** FML only exposes a config GUI when the mod declared a factory. */
     /**
@@ -233,9 +223,9 @@ public class GuiModsScreen extends MenuScreen {
             }
 
             int nameColor = isSelected ? Theme.textHover : Theme.text;
-            GuiModsScreen.this.fontRendererObj.drawString(trim(mod.getName(), rowWidth - 14),
+            GuiModsScreen.this.fontRendererObj.drawString(trim(mod.getModInfo().getDisplayName(), rowWidth - 14),
                     rowX + 8, rowY + 4, Draw.withAlpha(nameColor, alpha));
-            GuiModsScreen.this.fontRendererObj.drawString(mod.getVersion(),
+            GuiModsScreen.this.fontRendererObj.drawString(mod.getModInfo().getVersion().toString(),
                     rowX + 8, rowY + 13, Draw.withAlpha(Theme.textDim, 0.7F * alpha));
         }
 
@@ -270,7 +260,7 @@ public class GuiModsScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0) {
             this.list.mouseWheel(wheel > 0 ? 1 : -1);
         }
@@ -310,18 +300,12 @@ public class GuiModsScreen extends MenuScreen {
             return;
         }
 
-        MenuScreen ours = GuiModConfigScreen.forEntry(entry, this);
-        if (ours != null) {
-            switchTo(ours);
-            return;
-        }
-
-        final GuiScreen theirs = ModConfigCatalog.instantiate(entry, this);
+        final net.minecraft.client.gui.screens.Screen theirs = ModConfigCatalog.instantiate(entry, this);
         if (theirs != null) {
             closeWith(new Runnable() {
                 @Override
                 public void run() {
-                    mc.displayGuiScreen(theirs);
+                    mc.setScreen(theirs);
                 }
             });
         }

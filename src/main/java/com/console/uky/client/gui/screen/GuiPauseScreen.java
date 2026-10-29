@@ -7,10 +7,12 @@ import com.console.uky.client.render.Theme;
 import com.console.uky.client.gui.Transitions;
 import com.console.uky.handler.WorldCaptureHandler;
 
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiMainMenu;
-import net.minecraft.client.multiplayer.WorldClient;
-import net.minecraft.client.resources.I18n;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.Game;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.ShareToLanScreen;
+import net.minecraft.client.resources.language.I18n;
 
 /**
  * Themed pause menu. Unlike the other screens this keeps the live world
@@ -59,34 +61,34 @@ public class GuiPauseScreen extends MenuScreen {
         int index = 0;
 
         add(new MenuButton(ID_RETURN, left, y, fullWidth, ROW_HEIGHT,
-                I18n.format("menu.returnToGame", new Object[0]), MenuButton.Style.PRIMARY), index++);
+                I18n.get("menu.returnToGame", new Object[0]), MenuButton.Style.PRIMARY), index++);
         y += ROW_HEIGHT + ROW_GAP;
 
         add(new MenuButton(ID_ACHIEVEMENTS, left, y, halfWidth, ROW_HEIGHT,
-                I18n.format("gui.achievements", new Object[0]), MenuButton.Style.NORMAL), index++);
+                I18n.get("gui.advancements", new Object[0]), MenuButton.Style.NORMAL), index++);
         add(new MenuButton(ID_STATS, right, y, halfWidth, ROW_HEIGHT,
-                I18n.format("gui.stats", new Object[0]), MenuButton.Style.NORMAL), index++);
+                I18n.get("gui.stats", new Object[0]), MenuButton.Style.NORMAL), index++);
         y += ROW_HEIGHT + ROW_GAP;
 
         // No Mod Options here. FML's in-game screen lists only mods that registered a
         // config GUI, which for this pack is nothing — it opened an empty panel.
         // Mod configs are reachable from Mods in the settings screen instead.
         add(new MenuButton(ID_OPTIONS, left, y, fullWidth, ROW_HEIGHT,
-                I18n.format("menu.options", new Object[0]), MenuButton.Style.NORMAL), index++);
+                I18n.get("menu.options", new Object[0]), MenuButton.Style.NORMAL), index++);
         y += ROW_HEIGHT + ROW_GAP;
 
         // Full width: it is alone on its row. It was left at half width when the
         // multiplayer entry that used to sit beside it was removed, which read as a
         // button that had lost its pair.
         MenuButton lan = new MenuButton(ID_LAN, left, y, fullWidth, ROW_HEIGHT,
-                I18n.format("menu.shareToLan", new Object[0]), MenuButton.Style.NORMAL);
-        lan.enabled = this.mc.isSingleplayer() && !this.mc.getIntegratedServer().getPublic();
+                I18n.get("menu.shareToLan", new Object[0]), MenuButton.Style.NORMAL);
+        lan.enabled = this.mc.hasSingleplayerServer() && !this.mc.getSingleplayerServer().isPublished();
         add(lan, index++);
         y += ROW_HEIGHT + ROW_GAP;
 
-        String quitKey = this.mc.isIntegratedServerRunning() ? "menu.returnToMenu" : "menu.disconnect";
+        String quitKey = this.mc.isLocalServer() ? "menu.returnToMenu" : "menu.disconnect";
         add(new MenuButton(ID_QUIT, left, y, fullWidth, ROW_HEIGHT,
-                I18n.format(quitKey, new Object[0]), MenuButton.Style.DANGER), index);
+                I18n.get(quitKey, new Object[0]), MenuButton.Style.DANGER), index);
 
         this.panelX1 = left - 14;
         this.panelX2 = left + fullWidth + 14;
@@ -121,7 +123,7 @@ public class GuiPauseScreen extends MenuScreen {
         Draw.gradientH(panelX1, panelY1, panelX2, panelY1 + 1,
                 Draw.withAlpha(Theme.accent, 0.0F), Draw.withAlpha(Theme.accent, 0.5F * this.fadeAlpha));
 
-        drawHeading(I18n.format("menu.game", new Object[0]), this.width / 2, panelY1 + 12);
+        drawHeading(I18n.get("menu.game", new Object[0]), this.width / 2, panelY1 + 12);
     }
 
     @Override
@@ -142,26 +144,25 @@ public class GuiPauseScreen extends MenuScreen {
                 closeWith(new Runnable() {
                     @Override
                     public void run() {
-                        GuiPauseScreen.this.mc.displayGuiScreen(null);
-                        GuiPauseScreen.this.mc.setIngameFocus();
+                        Game.resume();
                     }
                 });
                 break;
             case ID_OPTIONS:
-                switchTo(new GuiSettingsScreen(GuiPauseScreen.this, mc.gameSettings));
+                switchTo(new GuiSettingsScreen(GuiPauseScreen.this, mc.options));
                 break;
             case ID_ACHIEVEMENTS:
-                if (mc.thePlayer != null) {
-                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, mc.thePlayer.getStatFileWriter(), GuiProgressScreen.achievementsTab()));
+                if (mc.player != null) {
+                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, GuiProgressScreen.achievementsTab()));
                 }
                 break;
             case ID_STATS:
-                if (mc.thePlayer != null) {
-                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, mc.thePlayer.getStatFileWriter(), GuiProgressScreen.statsTab()));
+                if (mc.player != null) {
+                    switchTo(new GuiProgressScreen(GuiPauseScreen.this, GuiProgressScreen.statsTab()));
                 }
                 break;
             case ID_LAN:
-                switchTo(new GuiShareScreen(GuiPauseScreen.this));
+                mc.setScreen(new ShareToLanScreen(GuiPauseScreen.this));
                 break;
             case ID_QUIT:
                 button.enabled = false;
@@ -204,8 +205,7 @@ public class GuiPauseScreen extends MenuScreen {
                 closeWith(new Runnable() {
                     @Override
                     public void run() {
-                        GuiPauseScreen.this.mc.displayGuiScreen(null);
-                        GuiPauseScreen.this.mc.setIngameFocus();
+                        Game.resume();
                     }
                 });
             }
@@ -216,28 +216,24 @@ public class GuiPauseScreen extends MenuScreen {
 
     private void quitToMenu() {
         // Our GuiOpenEvent handler swaps this for the UKY menu.
-        quitTo(new GuiMainMenu());
+        quitTo(new TitleScreen());
     }
 
     /**
      * Leaves the world and lands on {@code destination}.
      *
-     * The disconnect packet and {@code loadWorld(null)} are the whole of leaving; what
+     * Disconnecting is the whole of leaving; what
      * comes up afterwards is free, which is what lets the multiplayer entry go
      * straight to the server list rather than via the title screen.
      */
-    private void quitTo(net.minecraft.client.gui.GuiScreen destination) {
-        if (this.mc.theWorld != null) {
-            this.mc.theWorld.sendQuittingDisconnectingPacket();
-        }
-        this.mc.loadWorld((WorldClient) null);
+    private void quitTo(Screen destination) {
         // Whatever comes up arrives out of black rather than simply being there. By this
         // point the world has been faded down and the save screen has been through on the
         // same colour, so the menu climbing out of it is the last step of one continuous
         // move — and it is the same climb a screen makes returning to the title from a
         // list, so the exit and the entrance are mirror images.
         Transitions.emerge();
-        this.mc.displayGuiScreen(destination);
+        Game.disconnect(destination);
     }
 
     @Override

@@ -1,6 +1,6 @@
 package com.console.uky.client.death;
 
-import net.minecraft.client.resources.I18n;
+import net.minecraft.client.resources.language.I18n;
 
 import java.util.Random;
 
@@ -77,12 +77,12 @@ public enum DeathTheme {
      */
     public String message(int index) {
         String key = "uky.death." + this.key + "." + (index % this.messageCount + 1);
-        String line = I18n.format(key);
+        String line = I18n.get(key);
         if (!line.equals(key)) {
             return line;
         }
         String fallback = "uky.death.generic." + (index % GENERIC.messageCount + 1);
-        String generic = I18n.format(fallback);
+        String generic = I18n.get(fallback);
         return generic.equals(fallback) ? "" : generic;
     }
 }

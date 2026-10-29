@@ -4,15 +4,15 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.settings.GameSettings;
+import com.console.uky.compat.FontRenderer;
+import net.minecraft.client.OptionInstance;
 
 /**
  * Themed replacement for {@code GuiOptionSlider}: a thin track with an
  * accent fill and a knob that grows on hover. Writes straight through to the value it
  * is given, so it stays in sync with anything else reading the same option.
  *
- * <p>What that value is lives behind {@link Source}. Vanilla's {@link GameSettings}
+ * <p>What that value is lives behind {@link Source}. Vanilla's {@link OptionInstance}
  * options are one implementation; another mod's settings, reached by reflection and so
  * unnameable at compile time, are another — and a range is a range, so both are drawn
  * by this.
@@ -50,8 +50,8 @@ public class MenuSlider extends MenuButton {
     private boolean dragging;
     private float knobScale;
 
-    public MenuSlider(int id, int x, int y, int width, int height, GameSettings.Options option) {
-        this(id, x, y, width, height, new VanillaSource(option));
+    public MenuSlider(int id, int x, int y, int width, int height, OptionInstance<?> option) {
+        this(id, x, y, width, height, new VanillaSource<>(option));
     }
 
     public MenuSlider(int id, int x, int y, int width, int height, Source source) {
@@ -115,7 +115,7 @@ public class MenuSlider extends MenuButton {
         float trackH = 2.0F;
         float trackY = y2 - (tight ? 3.0F : 6.0F);
 
-        FontRenderer font = mc.fontRenderer;
+        FontRenderer font = com.console.uky.compat.FontRenderer.get();
         int labelColor = Draw.fade(this.enabled
                 ? Draw.mix(Theme.text, Theme.textHover, this.hover)
                 : Theme.textDisabled, alpha);
@@ -149,35 +149,49 @@ public class MenuSlider extends MenuButton {
         this.displayString = this.source.caption();
     }
 
-    /** A vanilla {@link GameSettings} option, which normalises its own range. */
-    private static final class VanillaSource implements Source {
+    /** A vanilla option on a track, which normalises its own range. */
+    private static final class VanillaSource<T> implements Source {
 
-        private final GameSettings.Options option;
+        private final OptionInstance<T> option;
 
-        VanillaSource(GameSettings.Options option) {
+        VanillaSource(OptionInstance<T> option) {
             this.option = option;
         }
 
+        @SuppressWarnings("unchecked")
+        private OptionInstance.SliderableValueSet<T> track() {
+            return this.option.values() instanceof OptionInstance.SliderableValueSet
+                    ? (OptionInstance.SliderableValueSet<T>) this.option.values() : null;
+        }
+
+        /**
+         * "Label: value". Most options caption themselves that way; a few — GUI scale
+         * at Auto — hand back the value alone, and a row with no name on it says nothing.
+         */
         @Override
         public String caption() {
-            return Minecraft.getMinecraft().gameSettings.getKeyBinding(this.option);
+            String full = this.option.toString.apply(this.option.get()).getString();
+            String label = this.option.caption.getString();
+            return full.startsWith(label) ? full : label + ": " + full;
         }
 
         @Override
         public float normalized() {
-            Minecraft mc = Minecraft.getMinecraft();
-            return this.option.normalizeValue(mc.gameSettings.getOptionFloatValue(this.option));
+            OptionInstance.SliderableValueSet<T> track = track();
+            return track == null ? 0.0F : (float) track.toSliderValue(this.option.get());
         }
 
         @Override
         public void setNormalized(float t) {
-            Minecraft mc = Minecraft.getMinecraft();
-            mc.gameSettings.setOptionFloatValue(this.option, this.option.denormalizeValue(t));
+            OptionInstance.SliderableValueSet<T> track = track();
+            if (track != null) {
+                this.option.set(track.fromSliderValue(t));
+            }
         }
 
         @Override
         public boolean available() {
-            return true;
+            return track() != null;
         }
     }
 
@@ -217,7 +231,7 @@ public class MenuSlider extends MenuButton {
 
     /** Sliders act on drag, so the click sound would fire continuously. */
     @Override
-    public void func_146113_a(net.minecraft.client.audio.SoundHandler soundHandler) {
+    public void func_146113_a(net.minecraft.client.sounds.SoundManager soundHandler) {
     }
 
     /**

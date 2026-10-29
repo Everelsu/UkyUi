@@ -8,20 +8,16 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
-import com.console.uky.client.world.UkyLoadingScreen;
 import com.console.uky.client.world.WorldEntryFade;
 import com.console.uky.client.world.TileCracks;
 import com.console.uky.client.world.TileShatter;
 import com.console.uky.client.world.WorldPreviews;
-import cpw.mods.fml.client.FMLClientHandler;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiSelectWorld;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.world.storage.ISaveFormat;
-import net.minecraft.world.storage.SaveFormatComparator;
-import net.minecraft.world.storage.WorldInfo;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.resources.ResourceLocation;
+import com.console.uky.compat.Saves;
+import net.minecraft.world.level.storage.LevelSummary;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -57,7 +53,7 @@ public class GuiWorldsScreen extends MenuScreen {
     private static final int TILE_GAP = 10;
     private static final float TILE_ASPECT = 16.0F / 9.0F;
 
-    private final List<SaveFormatComparator> worlds = new ArrayList<SaveFormatComparator>();
+    private final List<LevelSummary> worlds = new ArrayList<LevelSummary>();
     /** Smoothed hover weight per card, including the create card at index -1. */
     private float[] hoverAmount = new float[0];
     private float createHover;
@@ -125,7 +121,7 @@ public class GuiWorldsScreen extends MenuScreen {
 
     private boolean launching;
 
-    public GuiWorldsScreen(GuiScreen parent) {
+    public GuiWorldsScreen(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
     }
 
@@ -194,10 +190,8 @@ public class GuiWorldsScreen extends MenuScreen {
     private void loadWorlds() {
         this.worlds.clear();
         try {
-            List<SaveFormatComparator> list = this.mc.getSaveLoader().getSaveList();
-            this.worlds.addAll(list);
             // Most recently played first: almost always the one wanted.
-            Collections.sort(this.worlds);
+            this.worlds.addAll(Saves.list());
 
             // Anything cached under a folder that is no longer here is dropped, and this
             // is the general form of a bug that showed up as one specific thing: a world
@@ -208,7 +202,7 @@ public class GuiWorldsScreen extends MenuScreen {
             // every way a save can go, including ones this screen never sees.
             Set<String> live = new HashSet<String>();
             for (int i = 0; i < this.worlds.size(); i++) {
-                live.add(this.worlds.get(i).getFileName());
+                live.add(this.worlds.get(i).getLevelId());
             }
             WorldPreviews.retainOnly(live);
         } catch (Exception e) {
@@ -323,7 +317,7 @@ public class GuiWorldsScreen extends MenuScreen {
                 + (this.height - this.zoomFromY - this.zoomFromH) * t;
 
         ResourceLocation preview = this.zoomIndex < this.worlds.size()
-                ? WorldPreviews.texture(this.worlds.get(this.zoomIndex).getFileName())
+                ? WorldPreviews.texture(this.worlds.get(this.zoomIndex).getLevelId())
                 : null;
         if (preview != null) {
             // Brightens toward the loading screen's own level as it grows, so the two
@@ -353,7 +347,7 @@ public class GuiWorldsScreen extends MenuScreen {
     }
 
     private void drawHeader() {
-        String title = I18n.format("selectWorld.title", new Object[0]);
+        String title = I18n.get("selectWorld.title", new Object[0]);
         this.fontRendererObj.drawString(title, this.gridX, 26,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
         Draw.gradientH(this.gridX, 40, this.gridX + this.gridWidth, 41,
@@ -364,7 +358,7 @@ public class GuiWorldsScreen extends MenuScreen {
         boolean over = isOverBack(this.lastMouseX, this.lastMouseY);
         int colour = Draw.withAlpha(over ? Theme.textHover : Theme.textDim, this.fadeAlpha);
         Icons.back(this.gridX + this.gridWidth - 10, 30, 9, colour);
-        this.fontRendererObj.drawString(I18n.format("gui.back", new Object[0]),
+        this.fontRendererObj.drawString(I18n.get("gui.back", new Object[0]),
                 this.gridX + this.gridWidth - 8 + 6 - 44, 26, colour);
     }
 
@@ -460,7 +454,7 @@ public class GuiWorldsScreen extends MenuScreen {
         int colour = Draw.withAlpha(Draw.mix(Theme.textDim, Theme.accent, hover), alpha);
         Icons.plus(cx, cy, 18 + hover * 3, 2.0F, colour);
 
-        String label = I18n.format("selectWorld.create", new Object[0]);
+        String label = I18n.get("selectWorld.create", new Object[0]);
         int w = this.fontRendererObj.getStringWidth(label);
         this.fontRendererObj.drawString(label, (int) (cx - w / 2.0F),
                 (int) (cy + 16), colour);
@@ -478,7 +472,7 @@ public class GuiWorldsScreen extends MenuScreen {
             return;
         }
 
-        SaveFormatComparator world = this.worlds.get(index);
+        LevelSummary world = this.worlds.get(index);
         float hover = this.hoverAmount[index];
         float alpha = this.fadeAlpha;
         float x2 = x + this.tileWidth;
@@ -487,7 +481,7 @@ public class GuiWorldsScreen extends MenuScreen {
         // Black plate: a world with no capture yet is exactly this and nothing more.
         Draw.rect(x, y, x2, y2, Draw.withAlpha(0x000000, 0.9F * alpha));
 
-        ResourceLocation preview = WorldPreviews.texture(world.getFileName());
+        ResourceLocation preview = WorldPreviews.texture(world.getLevelId());
         if (preview != null) {
             // Dimmed at rest, lifting under the pointer.
             int tint = (int) ((0.62F + hover * 0.38F) * 255.0F);
@@ -499,14 +493,14 @@ public class GuiWorldsScreen extends MenuScreen {
         Draw.gradientV(x, y2 - 26, x2, y2,
                 Draw.withAlpha(0x000000, 0.0F), Draw.withAlpha(0x000000, 0.85F * alpha));
 
-        String name = fit(world.getDisplayName(),
+        String name = fit(world.getLevelName(),
                 this.tileWidth - 12);
         this.fontRendererObj.drawString(name, x + 6, (int) (y2 - 20),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
-        this.fontRendererObj.drawString(DATE.format(new Date(world.getLastTimePlayed())),
+        this.fontRendererObj.drawString(DATE.format(new Date(world.getLastPlayed())),
                 x + 6, (int) (y2 - 10), Draw.withAlpha(Theme.textDim, 0.85F * alpha));
 
-        if (world.isHardcoreModeEnabled()) {
+        if (world.isHardcore()) {
             this.fontRendererObj.drawString("HARDCORE", x + 6, (int) y + 6,
                     Draw.withAlpha(Theme.danger, 0.95F * alpha));
         }
@@ -674,7 +668,7 @@ public class GuiWorldsScreen extends MenuScreen {
      * too, which makes sliding away the natural cancel.
      */
     private void updateHold() {
-        boolean down = org.lwjgl.input.Mouse.isButtonDown(0);
+        boolean down = com.console.uky.compat.Mouse.isButtonDown(0);
         if (!down) {
             this.holdSuppressed = false;
         }
@@ -753,18 +747,14 @@ public class GuiWorldsScreen extends MenuScreen {
         }
         UkySounds.play(UkySounds.DELETE_BREAK);
 
-        SaveFormatComparator world = this.worlds.get(index);
-        String folder = world.getFileName();
+        LevelSummary world = this.worlds.get(index);
+        String folder = world.getLevelId();
         float x = slotX(index + 1);
         float y = slotY(index + 1);
         ResourceLocation preview = WorldPreviews.texture(folder);
 
         try {
-            ISaveFormat saveFormat = this.mc.getSaveLoader();
-            // flushCache first: the save format keeps the directory open, and on
-            // Windows an open handle makes the delete fail silently.
-            saveFormat.flushCache();
-            saveFormat.deleteWorldDirectory(folder);
+            Saves.delete(folder);
         } catch (Throwable t) {
             UkyUI.LOGGER.warn("Could not delete world {}", folder, t);
         }
@@ -799,15 +789,15 @@ public class GuiWorldsScreen extends MenuScreen {
             return;
         }
         if (this.hoveredCard == -1) {
-            this.mc.displayGuiScreen(new GuiCreateWorldScreen(this));
+            Saves.create(this);
             return;
         }
         if (this.hoveredCard >= 0 && this.hoveredCard < this.worlds.size()) {
-            final SaveFormatComparator world = this.worlds.get(this.hoveredCard);
+            final LevelSummary world = this.worlds.get(this.hoveredCard);
             switch (this.hoveredAction) {
                 case HIT_RENAME:
-                    this.mc.displayGuiScreen(new GuiWorldPromptScreen(this,
-                            GuiWorldPromptScreen.Mode.RENAME, world.getFileName()));
+                    this.mc.setScreen(new GuiWorldPromptScreen(this,
+                            GuiWorldPromptScreen.Mode.RENAME, world.getLevelId()));
                     return;
                 case HIT_RECREATE:
                     recreate(world);
@@ -846,7 +836,7 @@ public class GuiWorldsScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0) {
             this.scrollTarget -= (wheel > 0 ? 1 : -1) * (this.tileHeight + TILE_GAP) * 0.6F;
             clampScroll();
@@ -863,42 +853,27 @@ public class GuiWorldsScreen extends MenuScreen {
      * that quietly does nothing is better than one that takes the game down, so a
      * failure leaves the list exactly where it was.
      */
-    private void recreate(SaveFormatComparator world) {
-        WorldInfo info = null;
-        try {
-            info = this.mc.getSaveLoader().getWorldInfo(world.getFileName());
-        } catch (Throwable t) {
-            UkyUI.LOGGER.warn("Could not read {} to re-create it", world.getFileName(), t);
-        }
-        if (info != null) {
-            this.mc.displayGuiScreen(GuiCreateWorldScreen.recreating(this, info));
-        }
+    private void recreate(LevelSummary world) {
+        Saves.recreate(world.getLevelId(), this);
     }
 
-    private void play(SaveFormatComparator world) {
+    private void play(LevelSummary world) {
         if (this.launching) {
             return;
         }
         this.launching = true;
 
         // Tell the loading screen which picture to show while the world comes up.
-        WorldPreviews.setEnteringWorld(world.getFileName());
-        // Has to happen here: the game replaces its loading screen after mod init
-        // and again on every resize, so start-up is too early to claim it.
-        UkyLoadingScreen.install(this.mc);
-
-        this.mc.displayGuiScreen(null);
-        // FML's loader adds the checks vanilla does not: missing mods, old save
-        // formats. It insists on a GuiSelectWorld to return to if it has to warn,
-        // so it gets a throwaway one pointing back where this screen came from.
-        FMLClientHandler.instance().tryLoadExistingWorld(
-                new GuiSelectWorld(this.parent), world.getFileName(), world.getDisplayName());
+        WorldPreviews.setEnteringWorld(world.getLevelId());
+        // Vanilla's opener adds the checks: old versions, experimental features, a
+        // save locked by another game. Any of them coming back lands here again.
+        Saves.play(world.getLevelId(), this);
     }
 
     private void back() {
         // Climb back out of the hole on the way to the title screen.
         Transitions.emerge();
-        this.mc.displayGuiScreen(this.parent);
+        this.mc.setScreen(this.parent);
     }
 
     @Override

@@ -9,18 +9,29 @@ import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.ItemIcon;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiTextField;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.stats.Achievement;
-import net.minecraft.stats.AchievementList;
-import net.minecraft.stats.StatBase;
-import net.minecraft.stats.StatFileWriter;
-import net.minecraft.stats.StatList;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiTextField;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.advancements.AdvancementNode;
+import net.minecraft.advancements.AdvancementProgress;
+import net.minecraft.advancements.AdvancementType;
+import net.minecraft.advancements.DisplayInfo;
+import net.minecraft.client.multiplayer.ClientAdvancements;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.stats.Stat;
+import net.minecraft.stats.Stats;
+import net.minecraft.stats.StatsCounter;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Achievements and statistics, in this pack's language.
@@ -53,7 +64,7 @@ public class GuiProgressScreen extends MenuScreen {
 
     private static final int TAB_ACHIEVEMENTS = 0;
     private static final int TAB_STATS = 1;
-    private static final String[] TABS = {"gui.achievements", "gui.stats"};
+    private static final String[] TABS = {"gui.advancements", "gui.stats"};
 
     /** Everything, only what has been earned, only what has not. */
     private static final int FILTER_ALL = 0;
@@ -69,13 +80,20 @@ public class GuiProgressScreen extends MenuScreen {
     /** How long the row a link landed on keeps announcing itself. */
     private static final float FOCUS_SECONDS = 2.4F;
 
-    private final StatFileWriter stats;
+    private final StatsCounter stats;
+    private final ClientAdvancements advancements;
+    /**
+     * Progress by advancement, as the server last reported it. The client keeps its own
+     * copy private and hands it out only to a listener, so this screen listens.
+     */
+    private final Map<AdvancementHolder, AdvancementProgress> progress =
+            new HashMap<AdvancementHolder, AdvancementProgress>();
     /** Remembered across openings, like the settings tabs. */
     private static int activeTab = TAB_ACHIEVEMENTS;
     private static int activeFilter = FILTER_ALL;
 
     private final List<Entry> achievements = new ArrayList<Entry>();
-    private final List<StatBase> statRows = new ArrayList<StatBase>();
+    private final List<Stat<?>> statRows = new ArrayList<Stat<?>>();
 
     /**
      * Indentation per level of the chain, and how many levels of it are drawn.
@@ -112,17 +130,13 @@ public class GuiProgressScreen extends MenuScreen {
      * picks another row — because the layout is rebuilt on a tab switch and a resize,
      * and losing the highlight to a window drag would be its own small mystery.
      */
-    private Achievement focus;
+    private AdvancementNode focus;
     private float focusAt = -1.0F;
 
-    public GuiProgressScreen(GuiScreen parent, StatFileWriter stats) {
+    public GuiProgressScreen(net.minecraft.client.gui.screens.Screen parent, int tab) {
         super(parent);
-        this.stats = stats;
-    }
-
-    /** Opens straight onto one tab, so the two pause-menu buttons still differ. */
-    public GuiProgressScreen(GuiScreen parent, StatFileWriter stats, int tab) {
-        this(parent, stats);
+        this.stats = this.mc.player.getStats();
+        this.advancements = this.mc.player.connection.getAdvancements();
         activeTab = Math.max(0, Math.min(tab, TABS.length - 1));
     }
 
@@ -142,7 +156,7 @@ public class GuiProgressScreen extends MenuScreen {
      * that does not work, and the player did not choose either of those settings on
      * this trip.
      */
-    public void focusOn(Achievement achievement) {
+    public void focusOn(AdvancementNode achievement) {
         this.focus = achievement;
         activeTab = TAB_ACHIEVEMENTS;
         activeFilter = FILTER_ALL;
@@ -153,15 +167,65 @@ public class GuiProgressScreen extends MenuScreen {
 
     // ---------------------------------------------------------------- layout --
 
+    /** Keeps {@link #progress} current and the tree rebuilt as the server changes it. */
+    private final ClientAdvancements.Listener listener = new ClientAdvancements.Listener() {
+        @Override
+        public void onUpdateAdvancementProgress(AdvancementNode node, AdvancementProgress value) {
+            GuiProgressScreen.this.progress.put(node.holder(), value);
+            changed();
+        }
+
+        @Override
+        public void onSelectedTabChanged(AdvancementHolder tab) {
+        }
+
+        @Override
+        public void onAddAdvancementRoot(AdvancementNode node) {
+            changed();
+        }
+
+        @Override
+        public void onRemoveAdvancementRoot(AdvancementNode node) {
+            changed();
+        }
+
+        @Override
+        public void onAddAdvancementTask(AdvancementNode node) {
+            changed();
+        }
+
+        @Override
+        public void onRemoveAdvancementTask(AdvancementNode node) {
+            changed();
+        }
+
+        @Override
+        public void onAdvancementsCleared() {
+            GuiProgressScreen.this.progress.clear();
+            changed();
+        }
+    };
+
+    private void changed() {
+        if (this.list != null && this.search != null) {
+            applyFilter();
+        }
+    }
+
     @Override
     public void initGui() {
         super.initGui();
-        org.lwjgl.input.Keyboard.enableRepeatEvents(true);
+        this.advancements.setListener(this.listener);
+        // Stats are the server's; vanilla's screen asks for them on opening, and so does this.
+        this.mc.getConnection().send(new ServerboundClientCommandPacket(
+                ServerboundClientCommandPacket.Action.REQUEST_STATS));
+        com.console.uky.compat.Keyboard.enableRepeatEvents(true);
     }
 
     @Override
     public void onGuiClosed() {
-        org.lwjgl.input.Keyboard.enableRepeatEvents(false);
+        this.advancements.setListener(null);
+        com.console.uky.compat.Keyboard.enableRepeatEvents(false);
         super.onGuiClosed();
     }
 
@@ -214,7 +278,7 @@ public class GuiProgressScreen extends MenuScreen {
         applyFilter();
 
         MenuButton done = new MenuButton(ID_DONE, this.panelX1 + 15, doneY,
-                contentWidth, doneHeight, I18n.format("gui.done", new Object[0]),
+                contentWidth, doneHeight, I18n.get("gui.done", new Object[0]),
                 MenuButton.Style.PRIMARY);
         done.entrance(0.05F);
         this.buttonList.add(done);
@@ -226,7 +290,7 @@ public class GuiProgressScreen extends MenuScreen {
         int labelPad = 12;
         int x = this.panelX1 + 15;
         for (int i = 0; i < TABS.length; i++) {
-            String label = I18n.format(TABS[i], new Object[0]);
+            String label = I18n.get(TABS[i], new Object[0]);
             this.tabWidth[i] = this.fontRendererObj.getStringWidth(label) + label.length()
                     + labelPad * 2;
             this.tabX[i] = x;
@@ -253,7 +317,7 @@ public class GuiProgressScreen extends MenuScreen {
         int[] widths = new int[FILTERS.length];
         int total = 0;
         for (int i = 0; i < FILTERS.length; i++) {
-            String label = I18n.format(FILTERS[i], new Object[0]);
+            String label = I18n.get(FILTERS[i], new Object[0]);
             widths[i] = this.fontRendererObj.getStringWidth(label) + 16;
             total += widths[i];
         }
@@ -264,7 +328,7 @@ public class GuiProgressScreen extends MenuScreen {
         int x = beside ? this.panelX2 - 15 - total : this.panelX1 + 15;
         for (int i = 0; i < FILTERS.length; i++) {
             MenuButton chip = new MenuButton(ID_FILTER_BASE + i, x, this.filterY,
-                    widths[i], 16, I18n.format(FILTERS[i], new Object[0]),
+                    widths[i], 16, I18n.get(FILTERS[i], new Object[0]),
                     MenuButton.Style.GHOST);
             chip.plain().steady();
             chip.entrance(0.04F + i * 0.02F);
@@ -295,13 +359,13 @@ public class GuiProgressScreen extends MenuScreen {
             this.showTree = query.isEmpty() && activeFilter == FILTER_ALL;
             for (int i = 0; i < tree.size(); i++) {
                 Entry entry = tree.get(i);
-                if (this.stats.hasAchievementUnlocked(entry.achievement)) {
+                if (entry.got(this.progress)) {
                     this.unlocked++;
                 }
-                if (activeFilter == FILTER_DONE && !entry.got(this.stats)) {
+                if (activeFilter == FILTER_DONE && !entry.got(this.progress)) {
                     continue;
                 }
-                if (activeFilter == FILTER_LEFT && entry.got(this.stats)) {
+                if (activeFilter == FILTER_LEFT && entry.got(this.progress)) {
                     continue;
                 }
                 if (query.isEmpty() || nameOf(entry.achievement).toLowerCase().contains(query)
@@ -313,8 +377,7 @@ public class GuiProgressScreen extends MenuScreen {
             // General stats first, then the mined/crafted object stats. Item stats are
             // left out: there is one per item per action, which is thousands of rows
             // of mostly zeroes, and the search box is the better way to reach those.
-            addStats(StatList.generalStats, query);
-            addStats(StatList.objectMineStats, query);
+            addStats(query);
         }
         this.list.setSelected(-1);
         applyFocus();
@@ -349,39 +412,36 @@ public class GuiProgressScreen extends MenuScreen {
     }
 
     /** Anything the player does themselves ends the highlight. */
-    private void clearFocus() {
+    private void clearHighlight() {
         this.focus = null;
         this.focusAt = -1.0F;
     }
 
-    @SuppressWarnings("unchecked")
-    private void addStats(List source, String query) {
-        if (source == null) {
-            return;
+    /**
+     * The general stats, every one, then each block mined at least once. 1.7.10 listed
+     * every block there was; with a modded registry that is thousands of zeroes.
+     */
+    private void addStats(String query) {
+        for (ResourceLocation id : BuiltInRegistries.CUSTOM_STAT) {
+            addStat(Stats.CUSTOM.get(id), query);
         }
-        for (int i = 0; i < source.size(); i++) {
-            Object entry = source.get(i);
-            if (!(entry instanceof StatBase)) {
-                continue;
-            }
-            StatBase stat = (StatBase) entry;
-            if (query.isEmpty() || nameOf(stat).toLowerCase().contains(query)) {
-                this.statRows.add(stat);
+        for (Block block : BuiltInRegistries.BLOCK) {
+            Stat<Block> stat = Stats.BLOCK_MINED.get(block);
+            if (this.stats.getValue(stat) > 0) {
+                addStat(stat, query);
             }
         }
     }
 
-    /**
-     * One achievement, and where it sits in the chain of them.
-     *
-     * The tree is the answer to the question this screen could not answer before:
-     * "why can I not do this one yet". Vanilla drew it as arrows between icons on a
-     * canvas you had to drag around; this is the same information as indentation,
-     * which is how every other list of dependent things is shown.
-     */
+    private void addStat(Stat<?> stat, String query) {
+        if (query.isEmpty() || nameOf(stat).toLowerCase().contains(query)) {
+            this.statRows.add(stat);
+        }
+    }
+
     private static final class Entry {
 
-        final Achievement achievement;
+        final AdvancementNode achievement;
         /** How many achievements have to be earned before this one is reachable. */
         final int depth;
         /** True when nothing else in the tree shares this parent below it. */
@@ -391,15 +451,15 @@ public class GuiProgressScreen extends MenuScreen {
         /** How many achievements this one directly opens up. */
         int children;
 
-        Entry(Achievement achievement, int depth, boolean last, int continuing) {
+        Entry(AdvancementNode achievement, int depth, boolean last, int continuing) {
             this.achievement = achievement;
             this.depth = depth;
             this.last = last;
             this.continuing = continuing;
         }
 
-        boolean got(StatFileWriter stats) {
-            return stats.hasAchievementUnlocked(this.achievement);
+        boolean got(Map<AdvancementHolder, AdvancementProgress> progress) {
+            return isDone(progress, this.achievement);
         }
     }
 
@@ -417,56 +477,71 @@ public class GuiProgressScreen extends MenuScreen {
      * a cache would have to notice a mod registering an achievement late, which some
      * do.
      */
-    @SuppressWarnings("unchecked")
+    /**
+     * Every advancement with something to show, as a tree: each tab's root, and under
+     * it what it leads to. Nodes with no display — recipe unlocks, invisible triggers —
+     * are skipped, and their children hang from whatever is above them.
+     */
     private List<Entry> tree() {
-        List<Achievement> all = AchievementList.achievementList;
-        java.util.Set<Achievement> known = new java.util.HashSet<Achievement>(all);
-        java.util.Map<Achievement, List<Achievement>> children =
-                new java.util.HashMap<Achievement, List<Achievement>>();
-        List<Achievement> roots = new ArrayList<Achievement>();
-
-        for (int i = 0; i < all.size(); i++) {
-            Achievement achievement = all.get(i);
-            Achievement parent = achievement.parentAchievement;
-            // A parent outside the list — a mod's achievement hanging off one that was
-            // removed — makes this a root. Better a top-level row than a lost one.
-            if (parent == null || parent == achievement || !known.contains(parent)) {
-                roots.add(achievement);
-                continue;
+        List<Entry> out = new ArrayList<Entry>();
+        java.util.Set<AdvancementNode> visited = new java.util.HashSet<AdvancementNode>();
+        List<AdvancementNode> roots = new ArrayList<AdvancementNode>();
+        for (AdvancementNode root : this.advancements.getTree().roots()) {
+            if (shown(root)) {
+                roots.add(root);
             }
-            List<Achievement> siblings = children.get(parent);
-            if (siblings == null) {
-                siblings = new ArrayList<Achievement>();
-                children.put(parent, siblings);
-            }
-            siblings.add(achievement);
         }
-
-        List<Entry> out = new ArrayList<Entry>(all.size());
-        java.util.Set<Achievement> visited = new java.util.HashSet<Achievement>();
         for (int i = 0; i < roots.size(); i++) {
-            walk(roots.get(i), 0, i == roots.size() - 1, 0, children, visited, out);
+            walk(roots.get(i), 0, i == roots.size() - 1, 0, visited, out);
         }
-        // Anything a cycle kept out of the walk still has to be listed; a pack whose
-        // achievements point at each other should get a flat list, not a short one.
-        for (int i = 0; i < all.size(); i++) {
-            if (visited.add(all.get(i))) {
-                out.add(new Entry(all.get(i), 0, true, 0));
+        return out;
+    }
+
+    private static boolean shown(AdvancementNode node) {
+        return node.advancement().display().isPresent();
+    }
+
+    /** The node's children, with displayless ones replaced by their own children. */
+    private static List<AdvancementNode> shownChildren(AdvancementNode node) {
+        List<AdvancementNode> out = new ArrayList<AdvancementNode>();
+        for (AdvancementNode child : node.children()) {
+            if (shown(child)) {
+                out.add(child);
+            } else {
+                out.addAll(shownChildren(child));
             }
         }
         return out;
     }
 
-    private void walk(Achievement achievement, int depth, boolean last, int continuing,
-                      java.util.Map<Achievement, List<Achievement>> children,
-                      java.util.Set<Achievement> visited, List<Entry> out) {
+    /** The nearest ancestor with a display, or null. */
+    private static AdvancementNode shownParent(AdvancementNode node) {
+        AdvancementNode parent = node.parent();
+        while (parent != null && !shown(parent)) {
+            parent = parent.parent();
+        }
+        return parent;
+    }
+
+    private static boolean isDone(Map<AdvancementHolder, AdvancementProgress> progress,
+                                  AdvancementNode node) {
+        AdvancementProgress value = progress.get(node.holder());
+        return value != null && value.isDone();
+    }
+
+    private boolean isDone(AdvancementNode node) {
+        return isDone(this.progress, node);
+    }
+
+    private void walk(AdvancementNode achievement, int depth, boolean last, int continuing,
+                      java.util.Set<AdvancementNode> visited, List<Entry> out) {
         if (!visited.add(achievement)) {
             return;
         }
         Entry entry = new Entry(achievement, depth, last, continuing);
         out.add(entry);
 
-        List<Achievement> mine = children.get(achievement);
+        List<AdvancementNode> mine = shownChildren(achievement);
         if (mine == null || mine.isEmpty()) {
             return;
         }
@@ -475,29 +550,35 @@ public class GuiProgressScreen extends MenuScreen {
         // rows underneath it; that is what this bit records for everything below.
         int nested = last ? continuing : continuing | (1 << depth);
         for (int i = 0; i < mine.size(); i++) {
-            walk(mine.get(i), depth + 1, i == mine.size() - 1, nested, children, visited, out);
+            walk(mine.get(i), depth + 1, i == mine.size() - 1, nested, visited, out);
         }
     }
 
-    private static String nameOf(StatBase stat) {
-        try {
-            return stat.func_150951_e().getUnformattedText();
-        } catch (Throwable t) {
-            // A modded stat with a broken name must not take the screen down.
-            return stat.statId;
-        }
+    private static DisplayInfo display(AdvancementNode node) {
+        return node.advancement().display().orElse(null);
     }
 
-    private static String descriptionOf(Achievement achievement) {
-        try {
-            String description = achievement.getDescription();
-            return description == null ? "" : description;
-        } catch (Throwable t) {
-            return "";
-        }
+    private static String nameOf(AdvancementNode node) {
+        DisplayInfo display = display(node);
+        return display == null ? node.holder().id().toString() : display.getTitle().getString();
     }
 
-    // --------------------------------------------------------------- drawing --
+    private static String nameOf(Stat<?> stat) {
+        Object value = stat.getValue();
+        if (value instanceof ResourceLocation) {
+            ResourceLocation id = (ResourceLocation) value;
+            return Component.translatable("stat." + id.toString().replace(':', '.')).getString();
+        }
+        if (value instanceof Block) {
+            return ((Block) value).getName().getString();
+        }
+        return stat.getName();
+    }
+
+    private static String descriptionOf(AdvancementNode node) {
+        DisplayInfo display = display(node);
+        return display == null ? "" : display.getDescription().getString();
+    }
 
     @Override
     protected float blackHoleCenterX() {
@@ -530,7 +611,7 @@ public class GuiProgressScreen extends MenuScreen {
         drawGlassPanel();
 
         this.fontRendererObj.drawString(
-                I18n.format(TABS[activeTab], new Object[0]).toUpperCase(),
+                I18n.get(TABS[activeTab], new Object[0]).toUpperCase(),
                 this.panelX1 + 15, this.panelY1 + 14,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
@@ -609,7 +690,7 @@ public class GuiProgressScreen extends MenuScreen {
                         this.fadeAlpha));
         if (this.search.getText().isEmpty()) {
             this.fontRendererObj.drawString(
-                    I18n.format("uky.progress.search", new Object[0]),
+                    I18n.get("uky.progress.search", new Object[0]),
                     this.search.xPosition, this.search.yPosition,
                     Draw.withAlpha(Theme.textDim, 0.5F * this.fadeAlpha));
         }
@@ -644,16 +725,17 @@ public class GuiProgressScreen extends MenuScreen {
         protected void onRowClicked(int index) {
             // Nothing to open; these rows are a record, not a control. Clicking one
             // is still the player taking over from the link that brought them here.
-            clearFocus();
+            clearHighlight();
         }
     }
 
     private void drawAchievementRow(int index, int rowX, int rowY, int rowWidth, int rowHeight,
                                     float alpha) {
         Entry entry = this.achievements.get(index);
-        Achievement achievement = entry.achievement;
-        boolean got = this.stats.hasAchievementUnlocked(achievement);
-        boolean reachable = this.stats.canUnlockAchievement(achievement);
+        AdvancementNode achievement = entry.achievement;
+        AdvancementNode parent = shownParent(achievement);
+        boolean got = isDone(achievement);
+        boolean reachable = got || parent == null || isDone(parent);
 
         drawFocusHighlight(achievement, rowX, rowY, rowWidth, rowHeight, alpha);
 
@@ -703,9 +785,9 @@ public class GuiProgressScreen extends MenuScreen {
         // the tree and the words are all that is left there.
         String second;
         float secondAlpha;
-        if (!reachable && achievement.parentAchievement != null) {
-            second = I18n.format("uky.progress.requires", new Object[0])
-                    + " " + nameOf(achievement.parentAchievement);
+        if (!reachable) {
+            second = I18n.get("uky.progress.requires", new Object[0])
+                    + " " + nameOf(parent);
             secondAlpha = 0.45F;
         } else {
             second = descriptionOf(achievement);
@@ -731,8 +813,8 @@ public class GuiProgressScreen extends MenuScreen {
      */
     private void drawTreeLines(Entry entry, int rowX, int rowY, int rowHeight, float alpha) {
         float middle = rowY + rowHeight * 0.5F;
-        boolean parentDone = entry.achievement.parentAchievement != null
-                && this.stats.hasAchievementUnlocked(entry.achievement.parentAchievement);
+        AdvancementNode parent = shownParent(entry.achievement);
+        boolean parentDone = parent != null && isDone(parent);
         int colour = Draw.withAlpha(parentDone ? Theme.accent : Theme.textDim,
                 (parentDone ? 0.45F : 0.30F) * alpha);
 
@@ -764,7 +846,7 @@ public class GuiProgressScreen extends MenuScreen {
      * to be found by an eye that was looking at the chat a moment ago, and then it has
      * to stop being the loudest thing on a screen the player is now reading.
      */
-    private void drawFocusHighlight(Achievement achievement, int rowX, int rowY, int rowWidth,
+    private void drawFocusHighlight(AdvancementNode achievement, int rowX, int rowY, int rowWidth,
                                     int rowHeight, float alpha) {
         if (this.focus != achievement || this.focusAt < 0.0F) {
             return;
@@ -784,12 +866,10 @@ public class GuiProgressScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, 0.75F * strength));
     }
 
-    private static boolean isSpecial(Achievement achievement) {
-        try {
-            return achievement.getSpecial();
-        } catch (Throwable t) {
-            return false;
-        }
+    /** Challenges, which is what 1.7.10 called special. */
+    private static boolean isSpecial(AdvancementNode achievement) {
+        DisplayInfo display = display(achievement);
+        return display != null && display.getType() == AdvancementType.CHALLENGE;
     }
 
     /**
@@ -800,21 +880,17 @@ public class GuiProgressScreen extends MenuScreen {
      * turned back on to come out the right way round. It was not, so every block in
      * this list was drawn inside out.
      */
-    private void drawItemIcon(Achievement achievement, int x, int y, float brightness) {
-        ItemIcon.draw(achievement.theItemStack,
+    private void drawItemIcon(AdvancementNode achievement, int x, int y, float brightness) {
+        DisplayInfo display = display(achievement);
+        ItemIcon.draw(display == null ? ItemStack.EMPTY : display.getIcon(),
                 x + ItemIcon.SIZE / 2.0F, y + ItemIcon.SIZE / 2.0F, brightness);
     }
 
     private void drawStatRow(int index, int rowX, int rowY, int rowWidth, int rowHeight,
                              float alpha) {
-        StatBase stat = this.statRows.get(index);
-        int raw = this.stats.writeStat(stat);
-        String value;
-        try {
-            value = stat.func_75968_a(raw);
-        } catch (Throwable t) {
-            value = String.valueOf(raw);
-        }
+        Stat<?> stat = this.statRows.get(index);
+        int raw = this.stats.getValue(stat);
+        String value = stat.format(raw);
 
         int valueWidth = this.fontRendererObj.getStringWidth(value);
         String name = fit(nameOf(stat),
@@ -856,7 +932,7 @@ public class GuiProgressScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0) {
             this.list.mouseWheel(wheel > 0 ? 1 : -1);
         }
@@ -869,17 +945,17 @@ public class GuiProgressScreen extends MenuScreen {
             return;
         }
         if (keyCode == 200) {
-            clearFocus();
+            clearHighlight();
             this.list.moveSelection(-1);
             return;
         }
         if (keyCode == 208) {
-            clearFocus();
+            clearHighlight();
             this.list.moveSelection(1);
             return;
         }
         if (this.search.textboxKeyTyped(typedChar, keyCode)) {
-            clearFocus();
+            clearHighlight();
             applyFilter();
             return;
         }
@@ -902,7 +978,7 @@ public class GuiProgressScreen extends MenuScreen {
         }
         if (button.id >= ID_FILTER_BASE && button.id < ID_FILTER_BASE + FILTERS.length) {
             activeFilter = button.id - ID_FILTER_BASE;
-            clearFocus();
+            clearHighlight();
             relayout();
             return;
         }

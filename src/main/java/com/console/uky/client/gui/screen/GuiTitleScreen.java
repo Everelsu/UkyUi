@@ -9,18 +9,15 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
-import com.console.uky.client.splash.UkySplash;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
-import cpw.mods.fml.client.GuiModList;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiConfirmOpenLink;
-import net.minecraft.client.gui.GuiMultiplayer;
-import net.minecraft.client.gui.GuiSelectWorld;
-import net.minecraft.client.gui.GuiYesNoCallback;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.util.ResourceLocation;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.client.splash.UkySplash;
+import com.console.uky.compat.Game;
+import com.console.uky.compat.GuiYesNoCallback;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.resources.ResourceLocation;
+import com.console.uky.compat.GL11;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -38,7 +35,7 @@ import java.util.List;
 public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
     private static final ResourceLocation LOGO =
-            new ResourceLocation("uky", "textures/gui/logo.png");
+            ResourceLocation.fromNamespaceAndPath("uky", "textures/gui/logo.png");
 
     private static final int ID_SINGLEPLAYER = 1;
     private static final int ID_MULTIPLAYER = 2;
@@ -166,26 +163,26 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         int index = 0;
         if (UiConfig.showSingleplayer) {
             addRow(ID_SINGLEPLAYER, columnX, y, columnWidth, rowHeight, index++,
-                    I18n.format("menu.singleplayer", new Object[0]), MenuButton.Style.GHOST);
+                    I18n.get("menu.singleplayer", new Object[0]), MenuButton.Style.GHOST);
             y += rowHeight + rowGap;
         }
         if (UiConfig.showMultiplayer) {
             addRow(ID_MULTIPLAYER, columnX, y, columnWidth, rowHeight, index++,
-                    I18n.format("menu.multiplayer", new Object[0]), MenuButton.Style.GHOST);
+                    I18n.get("menu.multiplayer", new Object[0]), MenuButton.Style.GHOST);
             y += rowHeight + rowGap;
         }
         addRow(ID_OPTIONS, columnX, y, columnWidth, rowHeight, index++,
-                I18n.format("menu.options", new Object[0]), MenuButton.Style.GHOST);
+                I18n.get("menu.options", new Object[0]), MenuButton.Style.GHOST);
         y += rowHeight + rowGap;
         if (UiConfig.showModList) {
             addRow(ID_MODS, columnX, y, columnWidth, rowHeight, index++,
-                    I18n.format("uky.menu.mods", new Object[0]), MenuButton.Style.GHOST);
+                    I18n.get("uky.menu.mods", new Object[0]), MenuButton.Style.GHOST);
             y += rowHeight + rowGap;
         }
         // Ghost like the rest of the column, just coloured as destructive — a
         // panelled Quit button was the only box in an otherwise text-only menu.
         addRow(ID_QUIT, columnX, y, columnWidth, rowHeight, index++,
-                I18n.format("menu.quit", new Object[0]), MenuButton.Style.GHOST).destructive();
+                I18n.get("menu.quit", new Object[0]), MenuButton.Style.GHOST).destructive();
         y += rowHeight + rowGap;
 
         // Lined up with the "01" of the menu entries above rather than with the
@@ -386,25 +383,25 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
         int index = 0;
         if (UiConfig.showSingleplayer) {
-            add(ID_SINGLEPLAYER, centerX, y, index++, I18n.format("menu.singleplayer", new Object[0]),
+            add(ID_SINGLEPLAYER, centerX, y, index++, I18n.get("menu.singleplayer", new Object[0]),
                     MenuButton.Style.PRIMARY);
             y += BUTTON_HEIGHT + BUTTON_GAP;
         }
         if (UiConfig.showMultiplayer) {
-            add(ID_MULTIPLAYER, centerX, y, index++, I18n.format("menu.multiplayer", new Object[0]),
+            add(ID_MULTIPLAYER, centerX, y, index++, I18n.get("menu.multiplayer", new Object[0]),
                     MenuButton.Style.NORMAL);
             y += BUTTON_HEIGHT + BUTTON_GAP;
         }
-        add(ID_OPTIONS, centerX, y, index++, I18n.format("menu.options", new Object[0]),
+        add(ID_OPTIONS, centerX, y, index++, I18n.get("menu.options", new Object[0]),
                 MenuButton.Style.NORMAL);
         y += BUTTON_HEIGHT + BUTTON_GAP;
         if (UiConfig.showModList) {
             // 1.7.10's vanilla menu hardcodes "Mods", so this one needs our own key.
-            add(ID_MODS, centerX, y, index++, I18n.format("uky.menu.mods", new Object[0]),
+            add(ID_MODS, centerX, y, index++, I18n.get("uky.menu.mods", new Object[0]),
                     MenuButton.Style.NORMAL);
             y += BUTTON_HEIGHT + BUTTON_GAP;
         }
-        add(ID_QUIT, centerX, y, index, I18n.format("menu.quit", new Object[0]), MenuButton.Style.DANGER);
+        add(ID_QUIT, centerX, y, index, I18n.get("menu.quit", new Object[0]), MenuButton.Style.DANGER);
         y += BUTTON_HEIGHT;
 
         buildLinkRow(centerX, y + 10, index + 1, (int) (this.width * 0.7F), true);
@@ -415,13 +412,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     private boolean resourceExists(ResourceLocation location) {
-        try {
-            this.mc.getResourceManager().getResource(location);
-            return true;
-        } catch (java.io.IOException e) {
-            // 1.7.10 has no "does this exist" query; a failed read is the check.
-            return false;
-        }
+        return this.mc.getResourceManager().getResource(location).isPresent();
     }
 
     private void add(int id, int centerX, int y, int index, String label, MenuButton.Style style) {
@@ -518,11 +509,11 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     /** Falls into the hole, then opens {@code target} on the other side. */
-    private void diveTo(final net.minecraft.client.gui.GuiScreen target) {
+    private void diveTo(final net.minecraft.client.gui.screens.Screen target) {
         Transitions.dive(new Runnable() {
             @Override
             public void run() {
-                GuiTitleScreen.this.mc.displayGuiScreen(target);
+                GuiTitleScreen.this.mc.setScreen(target);
             }
         });
     }
@@ -782,7 +773,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         if (easy <= 0.01F || this.contentAlpha <= 0.01F) {
             return;
         }
-        String word = I18n.format("uky.title.easy", new Object[0]);
+        String word = I18n.get("uky.title.easy", new Object[0]);
         final int tracking = 4;
         int total = 0;
         for (int i = 0; i < word.length(); i++) {
@@ -915,9 +906,9 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
         // The game's version on the bottom line, level with the mod's version in the
         // other corner; the pack's own footer, when it has one, sits above it. The
-        // other way round left an empty line under "Minecraft 1.7.10" in every pack
+        // other way round left an empty line under the "Minecraft" line in every pack
         // without a footer.
-        String left = "Minecraft 1.7.10";
+        String left = "Minecraft " + net.minecraft.SharedConstants.getCurrentVersion().getName();
         this.fontRendererObj.drawString(left, 6, this.height - 11, dim);
         if (UiConfig.footer != null && !UiConfig.footer.isEmpty()) {
             this.fontRendererObj.drawString(UiConfig.footer, 6, this.height - 20, dim);
@@ -940,16 +931,16 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
                 diveTo(new GuiWorldsScreen(this));
                 break;
             case ID_MULTIPLAYER:
-                diveTo(new GuiServersScreen(this));
+                diveTo(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(this));
                 break;
             case ID_OPTIONS:
-                switchTo(new GuiSettingsScreen(GuiTitleScreen.this, mc.gameSettings));
+                switchTo(new GuiSettingsScreen(GuiTitleScreen.this, mc.options));
                 break;
             case ID_MODS:
                 switchTo(new GuiModsScreen(GuiTitleScreen.this));
                 break;
             case ID_QUIT:
-                this.mc.shutdown();
+                Game.quit();
                 break;
             default:
                 openLink(button.id);
@@ -964,23 +955,16 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         }
         this.pendingLink = this.linkTargets.get(index);
         // Vanilla's confirmation screen: never send a player to a URL unprompted.
-        this.mc.displayGuiScreen(new GuiConfirmOpenLink(this, this.pendingLink, 0, false));
+        this.mc.setScreen(GuiYesNoCallback.confirmLink(this, this.pendingLink, 0));
     }
 
     @Override
     public void confirmClicked(boolean confirmed, int id) {
         if (confirmed && this.pendingLink != null) {
-            try {
-                Class<?> desktop = Class.forName("java.awt.Desktop");
-                Object instance = desktop.getMethod("getDesktop").invoke(null);
-                desktop.getMethod("browse", URI.class).invoke(instance, new URI(this.pendingLink));
-            } catch (Throwable t) {
-                // Headless JREs and some Linux setups have no Desktop; not worth a crash.
-                UkyUI.LOGGER.warn("Could not open link " + this.pendingLink, t);
-            }
+            GuiYesNoCallback.open(this.pendingLink);
         }
         this.pendingLink = null;
-        this.mc.displayGuiScreen(this);
+        this.mc.setScreen(this);
     }
 
     @Override

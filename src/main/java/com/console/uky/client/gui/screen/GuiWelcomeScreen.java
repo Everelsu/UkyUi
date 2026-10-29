@@ -8,9 +8,9 @@ import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
 
 /**
  * Shown once, the first time the title screen is reached.
@@ -50,7 +50,7 @@ public class GuiWelcomeScreen extends MenuScreen {
     /** Eases in behind the preset row when the choice changes, so it is not a hard cut. */
     private float pickFlash;
 
-    public GuiWelcomeScreen(GuiScreen parent) {
+    public GuiWelcomeScreen(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
     }
 
@@ -79,7 +79,7 @@ public class GuiWelcomeScreen extends MenuScreen {
         for (int i = 0; i < levels.length; i++) {
             MenuButton button = new MenuButton(ID_PRESET_BASE + i,
                     x + i * (cellWidth + gap), presetY, cellWidth, 20,
-                    I18n.format("uky.graphics." + levels[i], new Object[0]),
+                    I18n.get("uky.graphics." + levels[i], new Object[0]),
                     levels[i].equals(Quality.current())
                             ? MenuButton.Style.PRIMARY
                             : MenuButton.Style.NORMAL);
@@ -101,12 +101,12 @@ public class GuiWelcomeScreen extends MenuScreen {
         }
 
         MenuButton settings = new MenuButton(ID_SETTINGS, x, this.panelY2 - 56, inner, 20,
-                I18n.format("uky.welcome.settings", new Object[0]), MenuButton.Style.NORMAL);
+                I18n.get("uky.welcome.settings", new Object[0]), MenuButton.Style.NORMAL);
         settings.entrance(0.18F);
         this.buttonList.add(settings);
 
         MenuButton done = new MenuButton(ID_DONE, x, this.panelY2 - 30, inner, 20,
-                I18n.format("uky.welcome.start", new Object[0]), MenuButton.Style.PRIMARY);
+                I18n.get("uky.welcome.start", new Object[0]), MenuButton.Style.PRIMARY);
         done.entrance(0.22F);
         this.buttonList.add(done);
     }
@@ -151,28 +151,28 @@ public class GuiWelcomeScreen extends MenuScreen {
         // The pack's own name, not the mod's: the player is being welcomed to what
         // they installed, and they have never heard of this interface by name.
         String heading = UiConfig.title == null || UiConfig.title.isEmpty()
-                ? I18n.format("uky.welcome.title", new Object[0])
+                ? I18n.get("uky.welcome.title", new Object[0])
                 : UiConfig.title;
         this.fontRendererObj.drawString(fit(heading, wrapWidth), x, panelY1 + 16,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
-        drawWrapped(I18n.format("uky.welcome.body", new Object[0]), x, panelY1 + 34, wrapWidth);
+        drawWrapped(I18n.get("uky.welcome.body", new Object[0]), x, panelY1 + 34, wrapWidth);
 
         this.fontRendererObj.drawString(
-                I18n.format("uky.welcome.quality", new Object[0]), x, panelY1 + 84,
+                I18n.get("uky.welcome.quality", new Object[0]), x, panelY1 + 84,
                 Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
 
-        drawWrapped(I18n.format("uky.graphics." + Quality.current() + ".hint", new Object[0]),
+        drawWrapped(I18n.get("uky.graphics." + Quality.current() + ".hint", new Object[0]),
                 x, panelY1 + 120, wrapWidth);
 
         if (com.console.uky.client.gui.PackLook.available()) {
             this.fontRendererObj.drawString(
-                    I18n.format("uky.welcome.mode", new Object[0]), x, panelY1 + MODE_TOP,
+                    I18n.get("uky.welcome.mode", new Object[0]), x, panelY1 + MODE_TOP,
                     Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
-            String hint = I18n.format("uky.welcome.mode." + com.console.uky.client.gui.PackLook.chosen()
+            String hint = I18n.get("uky.welcome.mode." + com.console.uky.client.gui.PackLook.chosen()
                     + ".hint", new Object[0]);
             if (com.console.uky.client.gui.PackLook.restartPending()) {
-                hint += " " + I18n.format("uky.welcome.mode.restart", new Object[0]);
+                hint += " " + I18n.get("uky.welcome.mode.restart", new Object[0]);
             }
             drawWrapped(hint, x, panelY1 + MODE_TOP + 38, wrapWidth);
         }
@@ -208,7 +208,7 @@ public class GuiWelcomeScreen extends MenuScreen {
             return;
         }
         if (button.id == ID_SETTINGS) {
-            switchTo(GuiSettingsScreen.onVideoTab(this, this.mc.gameSettings));
+            switchTo(GuiSettingsScreen.onVideoTab(this, this.mc.options));
             return;
         }
         if (button.id == ID_DONE) {

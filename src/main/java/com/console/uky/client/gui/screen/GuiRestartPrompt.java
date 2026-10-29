@@ -5,9 +5,9 @@ import com.console.uky.client.gui.PackLook;
 import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
 
 /**
  * Offered once a change of pack mode has played: the menus have changed, the mods
@@ -27,7 +27,7 @@ public class GuiRestartPrompt extends MenuScreen {
     private int panelX2;
     private int panelY2;
 
-    public GuiRestartPrompt(GuiScreen parent) {
+    public GuiRestartPrompt(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
     }
 
@@ -45,11 +45,11 @@ public class GuiRestartPrompt extends MenuScreen {
         int x = this.panelX1 + 14;
         int y = this.panelY2 - 30;
         MenuButton quit = new MenuButton(ID_QUIT, x, y, half, 20,
-                I18n.format("uky.restart.quit", new Object[0]), MenuButton.Style.PRIMARY);
+                I18n.get("uky.restart.quit", new Object[0]), MenuButton.Style.PRIMARY);
         quit.entrance(0.05F);
         this.buttonList.add(quit);
         MenuButton later = new MenuButton(ID_LATER, x + half + 4, y, half, 20,
-                I18n.format("uky.restart.later", new Object[0]), MenuButton.Style.NORMAL);
+                I18n.get("uky.restart.later", new Object[0]), MenuButton.Style.NORMAL);
         later.entrance(0.08F);
         this.buttonList.add(later);
     }
@@ -65,12 +65,12 @@ public class GuiRestartPrompt extends MenuScreen {
 
         int x = panelX1 + 14;
         int width = panelX2 - 14 - x;
-        this.fontRendererObj.drawString(I18n.format("uky.restart.title",
+        this.fontRendererObj.drawString(I18n.get("uky.restart.title",
                 new Object[] {GuiSettingsScreen.modeName(PackLook.chosen())}), x, panelY1 + 14,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
         @SuppressWarnings("unchecked")
         java.util.List<String> lines = this.fontRendererObj.listFormattedStringToWidth(
-                I18n.format("uky.restart.body", new Object[0]), Math.max(20, width));
+                I18n.get("uky.restart.body", new Object[0]), Math.max(20, width));
         for (int i = 0; i < lines.size() && i < 3; i++) {
             this.fontRendererObj.drawString(lines.get(i), x, panelY1 + 32 + i * 10,
                     Draw.withAlpha(Theme.textDim, 0.8F * this.fadeAlpha));
@@ -80,7 +80,7 @@ public class GuiRestartPrompt extends MenuScreen {
     @Override
     protected void onAction(GuiButton button) {
         if (button.id == ID_QUIT) {
-            this.mc.shutdown();
+            this.mc.stop();
         } else if (button.id == ID_LATER) {
             switchBack();
         }

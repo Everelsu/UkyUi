@@ -5,9 +5,9 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.world.WorldEntryFade;
 import com.console.uky.client.world.WorldPreviews;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.util.ResourceLocation;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Shown while a world comes up, in place of vanilla's flat "Loading terrain".
@@ -21,7 +21,7 @@ import net.minecraft.util.ResourceLocation;
  */
 public class GuiWorldLoadingScreen extends GuiScreen {
 
-    private final GuiScreen delegate;
+    private final net.minecraft.client.gui.screens.Screen delegate;
     private final ResourceLocation preview;
     /** Size the delegate was set up at; -1 until it has been. */
     private int delegateWidth = -1;
@@ -34,7 +34,7 @@ public class GuiWorldLoadingScreen extends GuiScreen {
      * @param delegate the screen this replaces; its {@code updateScreen} still runs
      *                 so the world keeps loading exactly as it otherwise would
      */
-    public GuiWorldLoadingScreen(GuiScreen delegate) {
+    public GuiWorldLoadingScreen(net.minecraft.client.gui.screens.Screen delegate) {
         this.delegate = delegate;
         String folder = WorldPreviews.getEnteringWorld();
         this.preview = folder == null ? null : WorldPreviews.texture(folder);
@@ -59,8 +59,7 @@ public class GuiWorldLoadingScreen extends GuiScreen {
         }
         this.delegateWidth = this.width;
         this.delegateHeight = this.height;
-        this.delegate.mc = this.mc;
-        this.delegate.setWorldAndResolution(this.mc, this.width, this.height);
+        this.delegate.init(this.mc, this.width, this.height);
     }
 
     @Override
@@ -68,7 +67,7 @@ public class GuiWorldLoadingScreen extends GuiScreen {
         // The delegate is what actually watches for the world becoming ready and
         // hands control back to the game; skipping it would hang here forever.
         prepareDelegate();
-        this.delegate.updateScreen();
+        this.delegate.tick();
     }
 
     /** Slow push-in, so a long load never looks like a frozen still. */
@@ -85,7 +84,10 @@ public class GuiWorldLoadingScreen extends GuiScreen {
      */
     @Override
     public void onGuiClosed() {
-        WorldEntryFade.begin(this.preview, zoom());
+        if (this.mc.level != null) {
+            // Into a world, not out of one: the picture dissolves into it.
+            WorldEntryFade.begin(this.preview, zoom());
+        }
         super.onGuiClosed();
     }
 
@@ -119,7 +121,11 @@ public class GuiWorldLoadingScreen extends GuiScreen {
         // phases of loading read as one continuous shot. Fading in here would make the
         // caption dip out and return at the handover between them, which is a seam where
         // there had not been one.
-        String message = I18n.format("multiplayer.downloadingTerrain", new Object[0]);
+        // Saving and preparing say so in their own title; loading terrain has none.
+        String message = this.delegate.getTitle().getString();
+        if (message.isEmpty()) {
+            message = I18n.get("multiplayer.downloadingTerrain");
+        }
         this.drawCenteredString(this.fontRendererObj, message,
                 this.width / 2, this.height - 40, Draw.withAlpha(Theme.text, 0.9F));
 

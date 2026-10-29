@@ -2,16 +2,16 @@ package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.death.DeathScene;
 import com.console.uky.client.death.DeathTheme;
-import com.console.uky.client.mods.CorpsesLink;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
-import net.minecraft.client.gui.GuiGameOver;
-import net.minecraft.client.multiplayer.WorldClient;
-import net.minecraft.client.resources.I18n;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.Game;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.resources.language.I18n;
+import com.console.uky.compat.GL11;
 
 import java.util.Random;
 
@@ -30,7 +30,7 @@ import java.util.Random;
  * clock, the cause, the sounds — is in {@link DeathScene}, because the screen is
  * torn down and rebuilt while the respawn is in flight.
  */
-public class GuiDeathScreen extends GuiGameOver {
+public class GuiDeathScreen extends GuiScreen {
 
     /** Seconds the picture takes to go out completely. */
     private static final float BLACKOUT = 0.30F;
@@ -89,8 +89,8 @@ public class GuiDeathScreen extends GuiGameOver {
         DeathScene.begin();
 
         this.buttonList.clear();
-        this.hardcore = this.mc.theWorld != null
-                && this.mc.theWorld.getWorldInfo().isHardcoreModeEnabled();
+        this.hardcore = this.mc.level != null
+                && this.mc.level.getLevelData().isHardcore();
 
         // Rebuilt while the respawn is in flight: the picture has already switched
         // off, so this instance opens on the last frame of that rather than playing
@@ -122,7 +122,7 @@ public class GuiDeathScreen extends GuiGameOver {
      * On the tick rather than the frame: a minimised window stops drawing, and a
      * respawn that only happens while someone is looking is not a respawn.
      *
-     * <p>Also replaces {@code GuiGameOver}'s twenty-tick button lockout, which has
+     * <p>Also replaces vanilla's one-second button lockout, which has
      * nothing left to unlock.
      */
     @Override
@@ -343,8 +343,8 @@ public class GuiDeathScreen extends GuiGameOver {
         }
 
         String title = this.hardcore
-                ? I18n.format("deathScreen.title.hardcore")
-                : I18n.format("deathScreen.title");
+                ? I18n.get("deathScreen.title.hardcore")
+                : I18n.get("deathScreen.title");
 
         // Corruption is for the arrival and for the way out, and it is over well
         // before the title has finished resolving — this is the one thing on the
@@ -446,16 +446,8 @@ public class GuiDeathScreen extends GuiGameOver {
         if (this.hardcore) {
             y += 16;
             this.drawCenteredString(this.fontRendererObj,
-                    I18n.format("deathScreen.hardcoreInfo"), centerX, y,
+                    I18n.get("deathScreen.hardcoreInfo"), centerX, y,
                     Draw.withAlpha(DeathScene.theme().chromaRed, 0.85F * in));
-        }
-        // The box's packet lands a tick before this screen opens, hence the slack.
-        long sceneStart = System.currentTimeMillis() - (long) (DeathScene.elapsed() * 1000.0F);
-        int[] corpse = CorpsesLink.corpseSince(sceneStart - 10_000L);
-        if (corpse != null) {
-            this.drawCenteredString(this.fontRendererObj,
-                    I18n.format("uky.death.corpse", corpse[0], corpse[1], corpse[2]), centerX, y + 16,
-                    Draw.withAlpha(Theme.accent, 0.80F * in));
         }
     }
 
@@ -472,7 +464,7 @@ public class GuiDeathScreen extends GuiGameOver {
             return;
         }
         float breathe = 0.62F + 0.30F * (float) Math.sin(t * 2.0F);
-        String prompt = I18n.format(this.hardcore ? "uky.death.promptLeave" : "uky.death.prompt");
+        String prompt = I18n.get(this.hardcore ? "uky.death.promptLeave" : "uky.death.prompt");
         this.drawCenteredString(this.fontRendererObj, prompt, this.width / 2,
                 (int) (this.height * 0.78F),
                 Draw.withAlpha(Theme.textDim, breathe * in));
@@ -511,17 +503,13 @@ public class GuiDeathScreen extends GuiGameOver {
         }
         DeathScene.requestReturn();
 
-        if (!this.hardcore && this.mc.thePlayer != null) {
-            this.mc.thePlayer.respawnPlayer();
-            this.mc.displayGuiScreen(null);
+        if (!this.hardcore && this.mc.player != null) {
+            this.mc.player.respawn();
+            this.mc.setScreen(null);
             return;
         }
 
         DeathScene.end();
-        if (this.mc.theWorld != null) {
-            this.mc.theWorld.sendQuittingDisconnectingPacket();
-        }
-        this.mc.loadWorld((WorldClient) null);
-        this.mc.displayGuiScreen(null);
+        Game.disconnect(new TitleScreen());
     }
 }

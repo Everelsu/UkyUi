@@ -3,8 +3,7 @@ package com.console.uky.client.render;
 import com.console.uky.UkyUI;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -50,7 +49,7 @@ public final class LinkIcons {
 
     /** The folder pack icons are read from, created if it is not there yet. */
     public static File folder() {
-        File dir = new File(Minecraft.getMinecraft().mcDataDir, UiConfig.linkIconFolder);
+        File dir = new File(Minecraft.getInstance().gameDirectory, UiConfig.linkIconFolder);
         if (!dir.exists()) {
             // Made eagerly and on purpose: a folder that exists is documentation, and
             // "put your PNGs here" is much easier to act on when the here is visible.
@@ -87,9 +86,7 @@ public final class LinkIcons {
             if (file.isFile() && file.getParentFile().equals(folder())) {
                 BufferedImage image = ImageIO.read(file);
                 if (image != null) {
-                    DynamicTexture texture = new DynamicTexture(image);
-                    location = Minecraft.getMinecraft().getTextureManager()
-                            .getDynamicTextureLocation("uky_link_" + fileName, texture);
+                    location = com.console.uky.compat.Images.register("uky_link_" + fileName, image);
                 }
             }
             if (location == null) {

@@ -44,7 +44,7 @@ public final class PackLook {
     }
 
     private static File gameDir() {
-        return Minecraft.getMinecraft().mcDataDir;
+        return Minecraft.getInstance().gameDirectory;
     }
 
     private static void ensure() {

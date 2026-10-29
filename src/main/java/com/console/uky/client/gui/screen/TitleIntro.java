@@ -7,7 +7,7 @@ import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
-import net.minecraft.client.audio.ISound;
+import net.minecraft.client.resources.sounds.SoundInstance;
 
 /**
  * The one-shot opening of the title screen: the second half of a star dying.
@@ -71,7 +71,7 @@ public final class TitleIntro {
     private boolean started;
     private boolean active;
     private boolean impactFired;
-    private ISound riser;
+    private SoundInstance riser;
 
     public static void resetForTesting() {
         playedThisSession = false;

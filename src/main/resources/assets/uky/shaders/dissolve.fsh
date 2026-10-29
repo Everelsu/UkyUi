@@ -1,4 +1,4 @@
-#version 120
+#version 150
 
 // Crossfade between two traces of the hole.
 //
@@ -12,7 +12,8 @@
 // Mixing premultiplied colour and alpha together, in one pass, is the interpolation
 // the two-quad version was only approximating.
 
-varying vec2 vUv;
+in vec2 vUv;
+out vec4 fragColor;
 
 uniform sampler2D uPrevious;
 uniform sampler2D uCurrent;
@@ -45,7 +46,7 @@ float luma(vec4 c) {
  * colour stays consistent with its alpha.
  */
 vec4 widenThinHighlights(sampler2D tex, vec2 uv) {
-    vec4 centre = texture2D(tex, uv);
+    vec4 centre = texture(tex, uv);
     if (uRingLift <= 0.0) {
         return centre;
     }
@@ -66,10 +67,10 @@ vec4 widenThinHighlights(sampler2D tex, vec2 uv) {
         vec2 d = uTap * (float(i) * 0.5);
         float falloff = 1.0 - float(i) * 0.25;
 
-        vec4 e = texture2D(tex, uv + vec2(d.x, 0.0)) * falloff;
-        vec4 w = texture2D(tex, uv - vec2(d.x, 0.0)) * falloff;
-        vec4 n = texture2D(tex, uv + vec2(0.0, d.y)) * falloff;
-        vec4 s = texture2D(tex, uv - vec2(0.0, d.y)) * falloff;
+        vec4 e = texture(tex, uv + vec2(d.x, 0.0)) * falloff;
+        vec4 w = texture(tex, uv - vec2(d.x, 0.0)) * falloff;
+        vec4 n = texture(tex, uv + vec2(0.0, d.y)) * falloff;
+        vec4 s = texture(tex, uv - vec2(0.0, d.y)) * falloff;
 
         float le = luma(e); if (le > bestLuma) { bestLuma = le; best = e; }
         float lw = luma(w); if (lw > bestLuma) { bestLuma = lw; best = w; }
@@ -90,5 +91,5 @@ void main() {
     vec4 previous = (pv.x < 0.0 || pv.y < 0.0 || pv.x > uPrevMax.x || pv.y > uPrevMax.y)
             ? current
             : widenThinHighlights(uPrevious, pv);
-    gl_FragColor = mix(previous, current, uMix) * uIntensity;
+    fragColor = mix(previous, current, uMix) * uIntensity;
 }

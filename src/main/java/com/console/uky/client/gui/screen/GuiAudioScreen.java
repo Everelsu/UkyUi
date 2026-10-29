@@ -8,11 +8,12 @@ import com.console.uky.client.gui.widget.SoundSlider;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.audio.SoundCategory;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.client.settings.GameSettings;
+import net.minecraft.sounds.SoundSource;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.client.OptionInstance;
+import net.minecraft.client.Options;
 
 /**
  * Sound levels and chat options.
@@ -35,24 +36,28 @@ public class GuiAudioScreen extends MenuScreen {
     private static final String[] TABS = {"options.sounds", "options.chat.title"};
 
     /** Everything except MASTER, which gets its own row above these. */
-    private static final SoundCategory[] CATEGORIES = {
-        SoundCategory.MUSIC, SoundCategory.RECORDS, SoundCategory.WEATHER,
-        SoundCategory.BLOCKS, SoundCategory.MOBS, SoundCategory.ANIMALS,
-        SoundCategory.PLAYERS,
+    private static final SoundSource[] CATEGORIES = {
+        SoundSource.MUSIC, SoundSource.RECORDS, SoundSource.WEATHER,
+        SoundSource.BLOCKS, SoundSource.HOSTILE, SoundSource.NEUTRAL,
+        SoundSource.PLAYERS, SoundSource.AMBIENT, SoundSource.VOICE,
     };
 
-    private static final GameSettings.Options[] CHAT_OPTIONS = {
-        GameSettings.Options.CHAT_VISIBILITY, GameSettings.Options.CHAT_COLOR,
-        GameSettings.Options.CHAT_LINKS, GameSettings.Options.CHAT_LINKS_PROMPT,
-        GameSettings.Options.CHAT_OPACITY, GameSettings.Options.CHAT_SCALE,
-        GameSettings.Options.CHAT_HEIGHT_FOCUSED, GameSettings.Options.CHAT_HEIGHT_UNFOCUSED,
-        GameSettings.Options.CHAT_WIDTH,
-    };
+    private OptionInstance<?>[] chatOptions() {
+        Options o = this.settings;
+        return new OptionInstance<?>[] {
+            o.chatVisibility(), o.chatColors(),
+            o.chatLinks(), o.chatLinksPrompt(),
+            o.chatOpacity(), o.chatScale(),
+            o.chatHeightFocused(), o.chatHeightUnfocused(),
+            o.chatWidth(), o.textBackgroundOpacity(),
+            o.chatLineSpacing(), o.chatDelay(),
+        };
+    }
 
     private static final int PADDING = 20;
     private static final int COLUMN_GAP = 22;
 
-    private final GameSettings settings;
+    private final Options settings;
     private static int activeTab = TAB_SOUND;
 
     private int panelX1;
@@ -69,12 +74,12 @@ public class GuiAudioScreen extends MenuScreen {
     private final int[] tabX = new int[TABS.length];
     private final int[] tabWidth = new int[TABS.length];
 
-    public GuiAudioScreen(GuiScreen parent, GameSettings settings) {
+    public GuiAudioScreen(net.minecraft.client.gui.screens.Screen parent, Options settings) {
         super(parent);
         this.settings = settings;
     }
 
-    public GuiAudioScreen(GuiScreen parent, GameSettings settings, int tab) {
+    public GuiAudioScreen(net.minecraft.client.gui.screens.Screen parent, Options settings, int tab) {
         this(parent, settings);
         activeTab = Math.max(0, Math.min(tab, TABS.length - 1));
     }
@@ -111,7 +116,7 @@ public class GuiAudioScreen extends MenuScreen {
         int contentTop = this.panelY1 + 76;
         int rows = activeTab == TAB_SOUND
                 ? 1 + (CATEGORIES.length + 1) / 2
-                : (CHAT_OPTIONS.length + 1) / 2;
+                : (chatOptions().length + 1) / 2;
         int slot = Math.max(17, (this.footerRuleY - (cramped ? 8 : 12) - contentTop) / rows);
         this.rowHeight = clamp(slot * 3 / 5, 14, 26);
         this.rowGap = clamp(slot - this.rowHeight, 3, 20);
@@ -126,7 +131,7 @@ public class GuiAudioScreen extends MenuScreen {
 
         MenuButton done = new MenuButton(ID_DONE, this.leftColumn, doneY,
                 this.panelX2 - PADDING - this.leftColumn, doneHeight,
-                I18n.format("gui.done", new Object[0]), MenuButton.Style.PRIMARY);
+                I18n.get("gui.done", new Object[0]), MenuButton.Style.PRIMARY);
         done.entrance(0.05F);
         this.buttonList.add(done);
     }
@@ -140,7 +145,7 @@ public class GuiAudioScreen extends MenuScreen {
         int labelPad = 12;
         int x = this.panelX1 + PADDING;
         for (int i = 0; i < TABS.length; i++) {
-            String label = I18n.format(TABS[i], new Object[0]);
+            String label = I18n.get(TABS[i], new Object[0]);
             this.tabWidth[i] = this.fontRendererObj.getStringWidth(label) + label.length()
                     + labelPad * 2;
             this.tabX[i] = x;
@@ -162,7 +167,7 @@ public class GuiAudioScreen extends MenuScreen {
         // as the thing they all hang off rather than one of them.
         SoundSlider master = new SoundSlider(500, this.leftColumn, y,
                 this.panelX2 - PADDING - this.leftColumn, this.rowHeight,
-                SoundCategory.MASTER, this.settings);
+                SoundSource.MASTER, this.settings);
         master.entrance(0.06F);
         this.buttonList.add(master);
         y += this.rowHeight + this.rowGap + 4;
@@ -180,13 +185,14 @@ public class GuiAudioScreen extends MenuScreen {
     }
 
     private void buildChatRows(int y) {
-        for (int i = 0; i < CHAT_OPTIONS.length; i++) {
-            GameSettings.Options option = CHAT_OPTIONS[i];
+        OptionInstance<?>[] options = chatOptions();
+        for (int i = 0; i < options.length; i++) {
+            OptionInstance<?> option = options[i];
             int x = (i % 2 == 0) ? this.leftColumn : this.rightColumn;
-            MenuButton widget = option.getEnumFloat()
-                    ? new MenuSlider(option.returnEnumOrdinal(), x, y,
+            MenuButton widget = option.values() instanceof OptionInstance.SliderableValueSet
+                    ? new MenuSlider(600 + i, x, y,
                             this.columnWidth, this.rowHeight, option)
-                    : new MenuOptionButton(option.returnEnumOrdinal(), x, y,
+                    : new MenuOptionButton(600 + i, x, y,
                             this.columnWidth, this.rowHeight, option);
             widget.entrance(0.06F + i * 0.02F);
             this.buttonList.add(widget);
@@ -245,7 +251,7 @@ public class GuiAudioScreen extends MenuScreen {
                 Draw.withAlpha(Theme.background, 0.0F));
 
         this.fontRendererObj.drawString(
-                I18n.format("options.sounds.title", new Object[0]),
+                I18n.get("options.sounds.title", new Object[0]),
                 this.panelX1 + PADDING, this.panelY1 + 14,
                 Draw.withAlpha(Theme.text, a));
 
@@ -275,7 +281,7 @@ public class GuiAudioScreen extends MenuScreen {
             return;
         }
         if (button.id == ID_DONE) {
-            this.settings.saveOptions();
+            this.settings.save();
             switchBack();
         }
     }
@@ -283,7 +289,7 @@ public class GuiAudioScreen extends MenuScreen {
     @Override
     protected void keyTyped(char typedChar, int keyCode) {
         if (keyCode == 1) {
-            this.settings.saveOptions();
+            this.settings.save();
             switchBack();
             return;
         }

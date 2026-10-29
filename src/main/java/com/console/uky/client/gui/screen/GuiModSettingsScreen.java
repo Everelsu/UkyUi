@@ -8,10 +8,10 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiTextField;
-import net.minecraft.client.resources.I18n;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import com.console.uky.compat.GuiTextField;
+import net.minecraft.client.resources.language.I18n;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,7 +46,7 @@ public class GuiModSettingsScreen extends MenuScreen {
     private int panelX2;
     private int panelY2;
 
-    public GuiModSettingsScreen(GuiScreen parent) {
+    public GuiModSettingsScreen(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
     }
 
@@ -83,7 +83,7 @@ public class GuiModSettingsScreen extends MenuScreen {
         rebuildRows();
 
         MenuButton done = new MenuButton(ID_DONE, this.panelX1 + 15, buttonY,
-                panelWidth - 30, buttonHeight, I18n.format("gui.done", new Object[0]),
+                panelWidth - 30, buttonHeight, I18n.get("gui.done", new Object[0]),
                 MenuButton.Style.PRIMARY);
         done.entrance(0.05F);
         this.buttonList.add(done);
@@ -141,7 +141,7 @@ public class GuiModSettingsScreen extends MenuScreen {
         Draw.gradientH(this.panelX1, this.panelY1, this.panelX1 + 2, this.panelY2,
                 Draw.withAlpha(Theme.accent, 0.6F * a), Draw.withAlpha(Theme.accent, 0.0F));
 
-        drawFitted(I18n.format("uky.modSettings.title", new Object[0]).toUpperCase(),
+        drawFitted(I18n.get("uky.modSettings.title", new Object[0]).toUpperCase(),
                 this.panelX1 + 15, this.panelY1 + 14, this.panelX2 - this.panelX1 - 30,
                 Draw.withAlpha(Theme.text, a));
 
@@ -151,7 +151,7 @@ public class GuiModSettingsScreen extends MenuScreen {
         this.list.draw(mouseX, mouseY, a);
 
         if (this.shown.isEmpty()) {
-            String note = I18n.format(ModConfigCatalog.entries().isEmpty()
+            String note = I18n.get(ModConfigCatalog.entries().isEmpty()
                     ? "uky.modSettings.none" : "uky.modSettings.noMatch", new Object[0]);
             drawFittedCentred(note, (this.panelX1 + this.panelX2) / 2, this.panelY1 + 100,
                     this.panelX2 - this.panelX1 - 30, Draw.withAlpha(Theme.textDim, 0.7F * a));
@@ -165,7 +165,7 @@ public class GuiModSettingsScreen extends MenuScreen {
                 Draw.fade(Theme.separator, a));
 
         if (this.search.getText().isEmpty()) {
-            drawFitted(I18n.format("uky.modSettings.search", new Object[0]),
+            drawFitted(I18n.get("uky.modSettings.search", new Object[0]),
                     this.panelX1 + 15, y + 6, this.panelX2 - this.panelX1 - 30,
                     Draw.withAlpha(Theme.textDim, 0.55F * a));
         }
@@ -209,7 +209,7 @@ public class GuiModSettingsScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0) {
             this.list.mouseWheel(wheel > 0 ? 1 : -1);
         }
@@ -220,12 +220,9 @@ public class GuiModSettingsScreen extends MenuScreen {
      * in its own screen where it did not.
      */
     private void open(ModConfigCatalog.Entry entry) {
-        GuiScreen screen = GuiModConfigScreen.forEntry(entry, this);
-        if (screen == null) {
-            screen = ModConfigCatalog.instantiate(entry, this);
-        }
+        net.minecraft.client.gui.screens.Screen screen = ModConfigCatalog.instantiate(entry, this);
         if (screen != null) {
-            this.mc.displayGuiScreen(screen);
+            this.mc.setScreen(screen);
         }
     }
 

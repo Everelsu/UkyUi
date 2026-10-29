@@ -3,10 +3,10 @@ package com.console.uky.client.gui.screen;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.util.IChatComponent;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
@@ -25,9 +25,9 @@ public class GuiDisconnectedScreen extends GuiScreen {
 
     private static final int ID_BACK = 0;
 
-    private final GuiScreen parent;
+    private final net.minecraft.client.gui.screens.Screen parent;
     private final String heading;
-    private final IChatComponent reason;
+    private final Component reason;
 
     private List<?> lines;
     private int panelX1;
@@ -45,7 +45,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
     private int mouseX;
     private int mouseY;
 
-    public GuiDisconnectedScreen(GuiScreen parent, String heading, IChatComponent reason) {
+    public GuiDisconnectedScreen(net.minecraft.client.gui.screens.Screen parent, String heading, Component reason) {
         this.parent = parent;
         this.heading = heading == null ? "" : heading;
         this.reason = reason;
@@ -86,7 +86,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
         this.panelX1 = (this.width - panelWidth) / 2;
         this.panelX2 = this.panelX1 + panelWidth;
 
-        String text = this.reason == null ? "" : this.reason.getFormattedText();
+        String text = this.reason == null ? "" : this.reason.getString();
         // Never below a width the wrapper can work with: a tiny window would
         // otherwise ask it to fit text into nothing.
         this.lines = font().listFormattedStringToWidth(text, Math.max(20, panelWidth - 36));
@@ -104,10 +104,10 @@ public class GuiDisconnectedScreen extends GuiScreen {
      * {@code setWorldAndResolution}, and a screen can reach a draw without that
      * having happened in the order it expects.
      */
-    private net.minecraft.client.gui.FontRenderer font() {
+    private com.console.uky.compat.FontRenderer font() {
         return this.fontRendererObj != null
                 ? this.fontRendererObj
-                : net.minecraft.client.Minecraft.getMinecraft().fontRenderer;
+                : com.console.uky.compat.FontRenderer.get();
     }
 
     private int buttonY() {
@@ -168,7 +168,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
         int fill = Draw.mix(Theme.accent, Theme.textHover, this.backHover * 0.2F);
         Draw.rect(x, y, x + width, y + 20,
                 Draw.withAlpha(fill, (0.62F + this.backHover * 0.18F) * this.fade));
-        String label = I18n.format("gui.toMenu", new Object[0]);
+        String label = I18n.get("gui.toMenu", new Object[0]);
         int labelWidth = font().getStringWidth(label);
         font().drawString(label, x + (width - labelWidth) / 2, y + 6,
                 Draw.withAlpha(0x0B0B0E, this.fade));
@@ -195,7 +195,7 @@ public class GuiDisconnectedScreen extends GuiScreen {
     }
 
     private void leave() {
-        this.mc.displayGuiScreen(this.parent);
+        this.mc.setScreen(this.parent);
     }
 
     @Override

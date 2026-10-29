@@ -7,10 +7,10 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiTextField;
-import net.minecraft.client.resources.I18n;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import com.console.uky.compat.GuiTextField;
+import net.minecraft.client.resources.language.I18n;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -105,7 +105,7 @@ public class GuiListEditScreen extends MenuScreen {
     private int mouseX;
     private int mouseY;
 
-    public GuiListEditScreen(GuiScreen parent, String heading, Source source) {
+    public GuiListEditScreen(net.minecraft.client.gui.screens.Screen parent, String heading, Source source) {
         super(parent);
         this.heading = heading;
         this.source = source;
@@ -157,21 +157,21 @@ public class GuiListEditScreen extends MenuScreen {
 
         if (addable) {
             MenuButton add = new MenuButton(ID_ADD, x, buttonY, slot, buttonHeight,
-                    I18n.format("uky.list.add", new Object[0]), MenuButton.Style.NORMAL);
+                    I18n.get("uky.list.add", new Object[0]), MenuButton.Style.NORMAL);
             add.entrance(0.05F);
             this.buttonList.add(add);
             x += slot + gap;
         }
         if (resettable) {
             MenuButton reset = new MenuButton(ID_RESET, x, buttonY, slot, buttonHeight,
-                    I18n.format("uky.list.reset", new Object[0]), MenuButton.Style.NORMAL);
+                    I18n.get("uky.list.reset", new Object[0]), MenuButton.Style.NORMAL);
             reset.entrance(0.06F);
             this.buttonList.add(reset);
             x += slot + gap;
         }
         MenuButton done = new MenuButton(ID_DONE, x, buttonY,
                 this.panelX2 - this.padding - x, buttonHeight,
-                I18n.format("gui.done", new Object[0]), MenuButton.Style.PRIMARY);
+                I18n.get("gui.done", new Object[0]), MenuButton.Style.PRIMARY);
         done.entrance(0.06F);
         this.buttonList.add(done);
     }
@@ -206,7 +206,7 @@ public class GuiListEditScreen extends MenuScreen {
     /** Over a world this sits on the world, like every other screen reached in play. */
     @Override
     protected void drawBackdrop() {
-        if (this.mc.theWorld == null) {
+        if (this.mc.level == null) {
             super.drawBackdrop();
             return;
         }
@@ -220,7 +220,7 @@ public class GuiListEditScreen extends MenuScreen {
         this.mouseY = mouseY;
         this.list.update(this.delta);
 
-        GuiShaderPacksScreen.drawPanel(this.panelX1, this.panelY1, this.panelX2,
+        drawPanel(this.panelX1, this.panelY1, this.panelX2,
                 this.panelY2, this.fadeAlpha);
 
         this.fontRendererObj.drawString(
@@ -240,7 +240,7 @@ public class GuiListEditScreen extends MenuScreen {
         this.list.draw(mouseX, mouseY, this.fadeAlpha);
 
         if (this.entries.isEmpty()) {
-            String empty = I18n.format("uky.list.empty", new Object[0]);
+            String empty = I18n.get("uky.list.empty", new Object[0]);
             this.fontRendererObj.drawString(empty, this.panelX1 + this.padding + 10,
                     this.listTop + 12,
                     Draw.withAlpha(Theme.textDisabled, 0.85F * this.fadeAlpha));
@@ -281,7 +281,7 @@ public class GuiListEditScreen extends MenuScreen {
             if (!beingEdited) {
                 String text = GuiListEditScreen.this.entries.get(index);
                 if (text.isEmpty()) {
-                    text = I18n.format("uky.list.blank", new Object[0]);
+                    text = I18n.get("uky.list.blank", new Object[0]);
                 }
                 GuiListEditScreen.this.fontRendererObj.drawString(
                         GuiListEditScreen.this.fit(text, rowWidth - 54), rowX + 10,
@@ -427,7 +427,7 @@ public class GuiListEditScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0 && this.editor == null) {
             this.list.mouseWheel(wheel > 0 ? 1 : -1);
         }

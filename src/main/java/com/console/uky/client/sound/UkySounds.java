@@ -1,11 +1,12 @@
 package com.console.uky.client.sound;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.audio.ISound;
-import net.minecraft.client.audio.PositionedSound;
-import net.minecraft.client.audio.SoundHandler;
-import net.minecraft.client.audio.SoundManager;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.client.resources.sounds.AbstractSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.SoundEngine;
+import net.minecraft.client.sounds.SoundManager;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundSource;
 
 import java.lang.reflect.Field;
 
@@ -17,19 +18,19 @@ import java.lang.reflect.Field;
  */
 public final class UkySounds {
 
-    public static final ResourceLocation INTRO_IMPACT = new ResourceLocation("uky", "intro_impact");
+    public static final ResourceLocation INTRO_IMPACT = ResourceLocation.fromNamespaceAndPath("uky", "intro_impact");
     /** The build-up under the intro's gather; ends in silence right where the impact lands. */
-    public static final ResourceLocation INTRO_RISER = new ResourceLocation("uky", "intro_riser");
-    public static final ResourceLocation MENU_MUSIC = new ResourceLocation("uky", "menu_music");
-    public static final ResourceLocation BUTTON = new ResourceLocation("uky", "button");
-    public static final ResourceLocation DELETE_HOLD = new ResourceLocation("uky", "delete_hold");
-    public static final ResourceLocation DELETE_BREAK = new ResourceLocation("uky", "delete_break");
+    public static final ResourceLocation INTRO_RISER = ResourceLocation.fromNamespaceAndPath("uky", "intro_riser");
+    public static final ResourceLocation MENU_MUSIC = ResourceLocation.fromNamespaceAndPath("uky", "menu_music");
+    public static final ResourceLocation BUTTON = ResourceLocation.fromNamespaceAndPath("uky", "button");
+    public static final ResourceLocation DELETE_HOLD = ResourceLocation.fromNamespaceAndPath("uky", "delete_hold");
+    public static final ResourceLocation DELETE_BREAK = ResourceLocation.fromNamespaceAndPath("uky", "delete_break");
     /**
      * The toast's own hit. Named after the file, typo included: renaming the ogg
      * would be a resource-pack-breaking change for the sake of one letter nobody
      * reads, and the sound event above it is what the rest of the mod refers to.
      */
-    public static final ResourceLocation ACHIEVEMENT = new ResourceLocation("uky", "achievement");
+    public static final ResourceLocation ACHIEVEMENT = ResourceLocation.fromNamespaceAndPath("uky", "achievement");
 
     /**
      * Length of {@code delete_hold.ogg}, in seconds.
@@ -60,7 +61,7 @@ public final class UkySounds {
     /**
      * Fires a one-shot UI sound. Safe to call before a world exists.
      *
-     * Deliberately not a {@link PositionedSoundRecord}: its public constructor
+     * Deliberately not a {@code SimpleSoundInstance}: its public constructor
      * forces linear attenuation, and a UI sound has nowhere sensible to be. At (0,
      * 0, 0) that worked by accident until the player had been in a world — the sound
      * engine's listener stays wherever they last stood, so afterwards every click
@@ -68,20 +69,20 @@ public final class UkySounds {
      * whole reason the button sounds went quiet after entering and leaving a world.
      * Attenuation NONE plays it at the listener, wherever that happens to be.
      */
-    public static ISound play(ResourceLocation sound, float volume, float pitch) {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.getSoundHandler() == null) {
+    public static SoundInstance play(ResourceLocation sound, float volume, float pitch) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getSoundManager() == null) {
             return null;
         }
-        ISound handle = new UiSound(sound, volume, pitch);
-        mc.getSoundHandler().playSound(handle);
+        SoundInstance handle = new UiSound(sound, volume, pitch);
+        mc.getSoundManager().play(handle);
         return handle;
     }
 
-    public static void stop(ISound sound) {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (sound != null && mc.getSoundHandler() != null) {
-            mc.getSoundHandler().stopSound(sound);
+    public static void stop(SoundInstance sound) {
+        Minecraft mc = Minecraft.getInstance();
+        if (sound != null && mc.getSoundManager() != null) {
+            mc.getSoundManager().stop(sound);
         }
     }
 
@@ -99,8 +100,8 @@ public final class UkySounds {
      * wait, never a sound.
      */
     public static boolean isReady() {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.getSoundHandler() == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getSoundManager() == null) {
             return false;
         }
         if (readinessUnknown) {
@@ -108,10 +109,10 @@ public final class UkySounds {
         }
         try {
             if (managerField == null) {
-                managerField = field(SoundHandler.class, "sndManager", "field_147694_f");
-                loadedField = field(SoundManager.class, "loaded", "field_148617_f");
+                managerField = field(SoundManager.class, "soundEngine");
+                loadedField = field(SoundEngine.class, "loaded");
             }
-            Object manager = managerField.get(mc.getSoundHandler());
+            Object manager = managerField.get(mc.getSoundManager());
             return manager != null && loadedField.getBoolean(manager);
         } catch (Throwable t) {
             readinessUnknown = true;
@@ -119,14 +120,9 @@ public final class UkySounds {
         }
     }
 
-    /** Dev runs see MCP names, released jars see SRG names. */
-    private static Field field(Class<?> owner, String mcp, String srg) throws NoSuchFieldException {
-        Field f;
-        try {
-            f = owner.getDeclaredField(mcp);
-        } catch (NoSuchFieldException e) {
-            f = owner.getDeclaredField(srg);
-        }
+    /** NeoForge runs on Mojang's names in production too, so one name is enough. */
+    private static Field field(Class<?> owner, String name) throws NoSuchFieldException {
+        Field f = owner.getDeclaredField(name);
         f.setAccessible(true);
         return f;
     }
@@ -146,11 +142,11 @@ public final class UkySounds {
      * sound never manages to start at all.
      */
     public static void startMusic(float volume) {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.getSoundHandler() == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getSoundManager() == null) {
             return;
         }
-        if (music != null && mc.getSoundHandler().isSoundPlaying(music)) {
+        if (music != null && mc.getSoundManager().isActive(music)) {
             return;
         }
         long now = System.currentTimeMillis();
@@ -160,15 +156,15 @@ public final class UkySounds {
         nextRestartAttempt = now + RESTART_INTERVAL_MS;
 
         music = new LoopingSound(MENU_MUSIC, volume);
-        mc.getSoundHandler().playSound(music);
+        mc.getSoundManager().play(music);
     }
 
     public static void stopMusic() {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (music == null || mc.getSoundHandler() == null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (music == null || mc.getSoundManager() == null) {
             return;
         }
-        mc.getSoundHandler().stopSound(music);
+        mc.getSoundManager().stop(music);
         music = null;
     }
 
@@ -181,12 +177,12 @@ public final class UkySounds {
      * the caller should not have to keep.
      */
     public static void startDeleteHold() {
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.getSoundHandler() == null || deleteHold != null) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getSoundManager() == null || deleteHold != null) {
             return;
         }
         deleteHold = new UiSound(DELETE_HOLD, 1.0F, 1.0F);
-        mc.getSoundHandler().playSound(deleteHold);
+        mc.getSoundManager().play(deleteHold);
     }
 
     /**
@@ -197,12 +193,12 @@ public final class UkySounds {
      * different sound and should not have the tail of this one under it.
      */
     public static void stopDeleteHold() {
-        Minecraft mc = Minecraft.getMinecraft();
+        Minecraft mc = Minecraft.getInstance();
         if (deleteHold == null) {
             return;
         }
-        if (mc.getSoundHandler() != null) {
-            mc.getSoundHandler().stopSound(deleteHold);
+        if (mc.getSoundManager() != null) {
+            mc.getSoundManager().stop(deleteHold);
         }
         deleteHold = null;
     }
@@ -218,24 +214,30 @@ public final class UkySounds {
         nextRestartAttempt = 0L;
     }
 
-    /** Non-attenuated one-shot; {@link PositionedSound}'s fields are protected. */
-    private static final class UiSound extends PositionedSound {
+    /**
+     * Non-attenuated one-shot; {@link AbstractSoundInstance}'s fields are protected.
+     * Relative to the listener, at its own position, so it is heard there in or out of
+     * a world.
+     */
+    private static final class UiSound extends AbstractSoundInstance {
         private UiSound(ResourceLocation location, float volume, float pitch) {
-            super(location);
+            super(location, SoundSource.MASTER, SoundInstance.createUnseededRandom());
             this.volume = volume;
-            this.field_147663_c = pitch;
-            this.field_147666_i = ISound.AttenuationType.NONE;
+            this.pitch = pitch;
+            this.attenuation = SoundInstance.Attenuation.NONE;
+            this.relative = true;
         }
     }
 
     /** Non-attenuated looping sound, for the menu track. */
-    private static final class LoopingSound extends PositionedSound {
+    private static final class LoopingSound extends AbstractSoundInstance {
         private LoopingSound(ResourceLocation location, float volume) {
-            super(location);
+            super(location, SoundSource.MUSIC, SoundInstance.createUnseededRandom());
             this.volume = volume;
-            this.repeat = true;
-            this.field_147665_h = 0;
-            this.field_147666_i = ISound.AttenuationType.NONE;
+            this.looping = true;
+            this.delay = 0;
+            this.attenuation = SoundInstance.Attenuation.NONE;
+            this.relative = true;
         }
     }
 }

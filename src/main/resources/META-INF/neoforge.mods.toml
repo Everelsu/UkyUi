@@ -1,0 +1,35 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="All Rights Reserved"
+issueTrackerURL="https://github.com/Everelsu/UkyUi/issues"
+
+[[mods]]
+modId="uky"
+version="${modVersion}"
+displayName="UltraKill Yourself UI"
+displayURL="https://github.com/Everelsu/UkyUi"
+logoFile="uky_logo.png"
+authors="Relsev, REDEMAX"
+description='''
+Replaces the client interface: title screen, world list with a per-world screenshot on every card, settings, key bindings, resource packs, and the world loading screens. Client only, and it touches no world data: adding or removing it is safe on an existing save.
+'''
+
+[[mixins]]
+config="uky.mixins.json"
+
+[[accessTransformers]]
+file="META-INF/accesstransformer.cfg"
+
+[[dependencies.uky]]
+    modId="neoforge"
+    type="required"
+    versionRange="[${neoVersion},)"
+    ordering="NONE"
+    side="CLIENT"
+
+[[dependencies.uky]]
+    modId="minecraft"
+    type="required"
+    versionRange="[${mcVersion}]"
+    ordering="NONE"
+    side="CLIENT"

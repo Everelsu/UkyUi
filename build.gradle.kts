@@ -2,7 +2,7 @@ import net.darkhax.curseforgegradle.TaskPublishCurseForge
 
 plugins {
     id("java-library")
-    id("com.gtnewhorizons.retrofuturagradle") version "2.0.2"
+    id("net.neoforged.moddev") version "2.0.148"
     // Publishing. Neither plugin does anything until its task is asked for by name;
     // see the release section at the bottom of this file.
     id("com.modrinth.minotaur") version "2.8.7"
@@ -11,211 +11,84 @@ plugins {
 
 // ---- Project coordinates ----
 //
-// Keep `version` and UkyUI.VERSION together. Forge reads the version from the @Mod
-// annotation, which needs a compile-time constant and so cannot be given this one;
-// mcmod.info gets it from here through the processResources filter below. If the two
-// disagree, the mod list and the file name disagree, and it is the mod list people
-// quote in bug reports.
+// Keep `version` and UkyUI.VERSION together: checkModVersion below fails a release
+// whose two disagree, and it is the mod list people quote in bug reports.
 group = "com.console.uky"
 version = "0.6.1"
 
-// Java 8 toolchain is mandatory for 1.7.10 (both compiling and running)
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(8))
+val mcVersion = "1.21.1"
+val neoVersion = "21.1.265"
+
+base {
+    archivesName.set("ukyui")
+}
+
+// Mojang ships Java 21 with 1.21.1.
+java.toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+
+tasks.withType<JavaCompile>().configureEach {
+    options.encoding = "UTF-8"
+    options.compilerArgs.addAll(listOf("-Xmaxerrs", "100000"))
+}
+
+neoForge {
+    version = neoVersion
+
+    parchment {
+        minecraftVersion = mcVersion
+        mappingsVersion = "2024.11.17"
+    }
+
+    runs {
+        register("client") {
+            client()
+            // Not run/ itself: the 1.7.10 and 1.12.2 branches share this working
+            // directory, and their run/mods would be loaded by this game too.
+            gameDirectory.set(file("run/neoforge"))
+            // The dev client opens at 854x480 by default, which is too small to judge
+            // a menu built around a full-width backdrop.
+            programArguments.addAll("--width", "1280", "--height", "720")
+            systemProperty("uky.debugShots", providers.gradleProperty("ukyDebugShots").getOrElse("false"))
+            systemProperty("uky.glCheck", providers.gradleProperty("ukyGlCheck").getOrElse("false"))
+        }
+    }
+
+    mods {
+        register("uky") {
+            sourceSet(sourceSets.main.get())
+        }
     }
 }
 
-// ---- Stale decompile guard ----
-//
-// RetroFuturaGradle keeps its decompiled and patched Minecraft in build/rfg, and it
-// does not clear that directory when mcVersion changes — it writes the new sources
-// over whatever is already there. This repository has a 1.7.10 branch and a 1.12.2
-// branch sharing one build directory, so checking out the other branch, building, and
-// coming back leaves the previous version's sources sitting in the tree. The Minecraft
-// recompile then fails on a few hundred errors that all look like the mod's fault and
-// none of which are.
-//
-// Two independent tells, because the directory can be caught at any stage of a build:
-// the version is written into the jar names RFG leaves beside the sources, and the two
-// versions put FML in different packages — 1.7.10 in cpw.mods.fml, 1.12.2 in
-// net.minecraftforge.fml — so a tree carrying the other one cannot be ours. Either is
-// unambiguous, so the leftovers are cleared rather than reported: fixing it by hand is
-// one delete and five minutes of decompiling, every single time.
-run {
-    val mcVersion = "1.7.10"
-    val rfg = layout.buildDirectory.dir("rfg").get().asFile
-    val foreignJar = rfg.listFiles { f: File ->
-        f.isFile && f.name.matches(Regex("""(recompiled_minecraft|mclauncher)-(.+)\.jar"""))
-                && !f.name.contains("-$mcVersion.")
-    }?.firstOrNull()
-    // cpw/ is 1.7.10's own FML and belongs here; net/minecraftforge/fml is 1.12.2's.
-    val foreignFml = File(rfg, "minecraft-src/java/net/minecraftforge/fml").isDirectory
-
-    if (foreignJar != null || foreignFml) {
-        val reason = foreignJar?.name ?: "net/minecraftforge/fml in the sources"
-        logger.lifecycle("Clearing non-$mcVersion leftovers from ${rfg.path} ($reason)")
-        rfg.deleteRecursively()
-    }
-}
-
-// ---- RetroFuturaGradle / Minecraft configuration ----
-minecraft {
-    mcVersion.set("1.7.10")
-
-    // Name shown for the dev-environment player
-    username.set("Developer")
-
-    // If you later add Mixin support for stuff like the loading screen ASM hook:
-    // extraTweakClasses.add("org.spongepowered.asm.launch.MixinTweaker")
-}
-
-// Fill mcmod.info's ${modVersion} placeholder with the Gradle project version
+// neoforge.mods.toml gets the version from here.
 tasks.processResources.configure {
-    val projVersion = project.version.toString()
-    inputs.property("version", projVersion)
-    filesMatching("mcmod.info") {
-        expand(mapOf("modVersion" to projVersion))
+    val props = mapOf("modVersion" to project.version.toString(), "mcVersion" to mcVersion,
+        "neoVersion" to neoVersion)
+    inputs.properties(props)
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand(props)
     }
 
-    // The mod's own artwork, at the root of the jar under the two names anything that
-    // shows an icon for a mod knows to look for. Two names because the two readers of
-    // it do not agree:
-    //
-    // "pack.png" is what FML's own mod list draws. It asks the mod's resource pack for
-    // its image first and only falls back to logoFile for a mod that has no pack —
-    // which a jar mod always has, so the fallback never runs and the field alone was
-    // never going to show anything.
-    //
-    // "uky_logo.png" is that logoFile, and it is what the launchers read: they parse
-    // mcmod.info (which is where the name in the launcher's list comes from already)
-    // and pull that path straight out of the zip. Without a file at it they fall back
-    // to a generic cube.
-    //
-    // Copied from art/ rather than kept in the resources tree so the picture exists
-    // once in the repository and the jar is where it gets duplicated.
+    // The mod's own artwork, at the path neoforge.mods.toml's logoFile names. Copied
+    // from art/ rather than kept in the resources tree so the picture exists once in
+    // the repository and the jar is where it gets duplicated.
     val icon = layout.projectDirectory.file("art/title.png").asFile
-    from(icon) { rename { "pack.png" } }
     from(icon) { rename { "uky_logo.png" } }
 
-    // Checked rather than assumed. A `from` pointing at a file that is not there
-    // copies nothing and says nothing, so the whole of the failure is a jar whose
-    // icon is missing — which is exactly what the release workflow shipped while this
-    // picture was still excluded from the repository and only existed on one machine.
+    // Checked rather than assumed: a `from` pointing at a missing file copies nothing
+    // and says nothing, and the release ships a jar with a grey cube for an icon.
     doFirst {
         if (!icon.isFile) {
             throw GradleException("art/title.png is missing, and the jar's icon comes "
-                    + "from it. Restore the file rather than building without it: a jar "
-                    + "with no icon is what a mod list and every launcher show a grey "
-                    + "cube for.")
+                    + "from it. Restore the file rather than building without it.")
         }
     }
 }
 
-repositories {
-    mavenCentral()
-    maven {
-        name = "GTNH Maven"
-        url = uri("https://nexus.gtnewhorizons.com/repository/public/")
-    }
-}
-
-dependencies {
-    // UniMixins bundles SpongePowered Mixin + MixinBooterLegacy for 1.7.10.
-    // The ":dev" (deobfuscated) classifier is used for compiling and the dev run.
-    // In production the pack must also ship UniMixins as a mod.
-    implementation("io.github.legacymoddingmc:unimixins:0.3.1:dev")
-
-    // Add deobfuscated third-party mod jars here later if needed, e.g.:
-    // implementation(rfg.deobf(project.files("libs/somejar.jar")))
-}
-
-// Register our coremod (which provides the mixin config) for the dev run.
-listOf(tasks.named<JavaExec>("runClient"), tasks.named<JavaExec>("runServer")).forEach { t ->
-    t.configure {
-        systemProperty("fml.coreMods.load", "com.console.uky.core.UkyCore")
-    }
-}
-
-// The dev client opens at 854x480 by default, which is too small to judge a menu
-// built around a full-width backdrop.
-tasks.named<JavaExec>("runClient").configure {
-    args("--width", "1280", "--height", "720")
-
-    // ---- Foreign-version mods in run/mods ----
-    //
-    // The same trap as the stale decompile above, one directory over: this repository
-    // has a 1.7.10 branch and a 1.12.2 branch sharing one working directory, and
-    // run/mods is not cleared by checking the other branch out. A jar for the wrong
-    // Minecraft does not fail politely there. FML's own optifine probe is the worst
-    // case — it reads a field off a class named "Config", resolving that field's type
-    // drags in an obfuscated class the other version does not have, and the
-    // NoClassDefFoundError this throws is an Error, which its `catch (Exception)`
-    // does not catch. The game dies in beginMinecraftLoading with "NoClassDefFoundError:
-    // hh" and no hint of which file caused it.
-    //
-    // Only ever a warning. run/ is the developer's own playground, and a build script
-    // that deletes things out of it would be a worse surprise than the one it prevents.
-    doFirst {
-        val mcVersion = minecraft.mcVersion.get()
-
-        // Matched against Minecraft versions that actually shipped, rather than
-        // anything shaped like one. A mod's own version is shaped exactly like one —
-        // "Waila-1.8.14", "angelica-2.1.59" — and a warning that cries wolf on half
-        // the folder is a warning nobody reads the day it is right. Unknown versions
-        // are simply not flagged, which is the safe direction for a hint.
-        val released = setOf(
-            "1.7.10", "1.8.9", "1.9.4", "1.10.2", "1.11.2", "1.12.2",
-            "1.16.5", "1.18.2", "1.19.2", "1.20.1", "1.21.1"
-        )
-        // Delimited, so "1.8" inside "1.8.14" is not read as a version of its own.
-        val version = Regex("""(?<![\d.])1\.\d+(\.\d+)?(?![\d.])""")
-
-        val foreign = project.file("run/mods").listFiles { f: File ->
-            f.isFile && f.name.endsWith(".jar")
-                    && version.findAll(f.name)
-                        .map { it.value }
-                        .any { it in released && it != mcVersion }
-        }?.sortedBy { it.name }.orEmpty()
-
-        if (foreign.isNotEmpty()) {
-            logger.warn("")
-            logger.warn("WARNING: run/mods holds jars built for another Minecraft than $mcVersion:")
-            foreign.forEach { logger.warn("    ${it.name}") }
-            logger.warn("These rarely fail politely. An OptiFine for the wrong version takes the")
-            logger.warn("game down in FML's own start-up with \"NoClassDefFoundError: hh\" and no")
-            logger.warn("mention of the file. Move them out of run/mods.")
-            logger.warn("")
-        }
-    }
-}
-
-// Coremod / mixin metadata for the built (production) jar. It has to go on `jar`
-// rather than on `reobfJar`: the reobfuscation task remaps the jar it is given and
-// writes the result itself, so a manifest configured on it is never used.
-//
-// The archive version is set here too: "ukyui-0.5.0.jar" tells a bug report nothing
-// about which Minecraft it was built for, and this project already lives on two
-// branches of that question. "ukyui-1.7.10-0.5.0.jar" is what actually distinguishes
-// the two, and it is what shows up in a mod list or a download link either way.
-// reobfJar (the file that ships) picks this up on its own: RetroFuturaGradle points
-// its archiveVersion at jar's by convention, which is also why nothing has to be
-// repeated for the "-dev" classifier that stays on the workspace jar alone.
+// "ukyui-1.21.1-0.6.1.jar": the file name says which Minecraft it is for, since this
+// project lives on several branches of that question.
 tasks.named<Jar>("jar").configure {
-    archiveVersion.set(minecraft.mcVersion.map { mc -> "$mc-${project.version}" })
-    manifest {
-        attributes(
-            "FMLCorePlugin" to "com.console.uky.core.UkyCore",
-            "FMLCorePluginContainsFMLMod" to "true",
-            "ForceLoadAsMod" to "true",
-            // Only the config that targets FML. mixins.uky.mods.client.json is
-            // deliberately absent: this attribute is read while core mods load, and a
-            // config registered then resolves its targets before ordinary mod jars are
-            // on the classpath — which permanently poisons LaunchWrapper's lookup for
-            // the class it failed to find. See LateMixins.
-            "MixinConfigs" to "mixins.uky.early.client.json"
-        )
-    }
+    archiveVersion.set("$mcVersion-${project.version}")
 }
 
 // ---- Release: Modrinth and CurseForge ----
@@ -230,14 +103,8 @@ tasks.named<Jar>("jar").configure {
 // in this repository — MODRINTH_TOKEN and CURSEFORGE_TOKEN, which in CI come from the
 // repository secrets of the same name. See RELEASING.md.
 
-/**
- * The jar that ships — reobfuscated to SRG names, not the workspace "-dev" one.
- *
- * Typed as the base `org.gradle.jvm.tasks.Jar` on purpose: RetroFuturaGradle's
- * reobfuscation task extends that rather than the `bundling.Jar` that a bare `Jar`
- * means in the Kotlin DSL, so asking for the latter fails at configuration time.
- */
-val releaseJar = tasks.named<org.gradle.jvm.tasks.Jar>("reobfJar")
+/** The jar that ships. NeoForge runs on Mojang names in production, so there is no reobf step. */
+val releaseJar = tasks.named<Jar>("jar")
 
 /**
  * Project identifiers, from gradle.properties.
@@ -334,12 +201,12 @@ releaseJar.configure {
 modrinth {
     token.set(modrinthToken)
     projectId.set(modrinthProjectId)
-    // "0.5.4+1.7.10" rather than "0.5.4". Both branches of this repository release the
+    // "0.5.4+1.21.1" rather than "0.5.4". Both branches of this repository release the
     // same mod version, and Modrinth wants a version number no other version of the
     // project already has — the second of the two would be rejected. The build metadata
     // suffix is what everybody else's multi-version releases use, and it says the same
     // thing the file name does.
-    versionNumber.set(minecraft.mcVersion.map { mc -> "${project.version}+$mc" })
+    versionNumber.set("${project.version}+$mcVersion")
     // No versionName, for the same reason there is no displayName on the CurseForge
     // side: left unset it falls back to the version number, and the file underneath it
     // says the rest. A sentence there is a heading nobody asked for.
@@ -347,15 +214,9 @@ modrinth {
     // The task itself: Minotaur understands an archive task and takes the file off it,
     // which is one fewer thing to keep in step with where the build writes its jars.
     uploadFile.set(releaseJar)
-    gameVersions.set(listOf("1.7.10"))
-    loaders.set(listOf("forge"))
+    gameVersions.set(listOf(mcVersion))
+    loaders.set(listOf("neoforge"))
     changelog.set(provider { releaseNotes })
-    // ghjoiQAl is UniMixins — the coremod providing the mixin subsystem this mod does
-    // not start without. By id rather than by slug: an owner can change a slug, and
-    // the id is what the API actually resolves.
-    dependencies {
-        required.project("ghjoiQAl")
-    }
     // Pushed by `modrinthSyncBody`, which is a task of its own; publishing a version
     // does not touch the project page.
     syncBodyFrom.set(provider { file("store/modrinth-description.md").readText() })
@@ -383,22 +244,21 @@ tasks.register<TaskPublishCurseForge>("curseforge") {
         val main = upload(curseforgeProjectId, releaseJar.get())
         main.releaseType = "release"
         // No displayName on purpose. Left unset, CurseForge shows the file's own name
-        // — "ukyui-1.7.10-0.5.2.jar" — which already says the mod, the Minecraft
+        // — "ukyui-1.21.1-0.5.2.jar" — which already says the mod, the Minecraft
         // version and the mod version, in the form somebody downloading it is about to
         // see on disk anyway. A sentence in its place reads as a heading over a
         // download list that does not need one.
         main.changelog = releaseNotes
         main.changelogType = "markdown"
-        main.addGameVersion("1.7.10")
+        main.addGameVersion(mcVersion)
         // CurseForge wants a tag from its "environment" group as well as a game
         // version, and rejects the upload with error 1021 — "you must select at least
         // one version from the environment group" — when there is none. Client,
         // because that is what this mod is: it draws screens and touches no world
         // data, so a server has nothing to do with it.
         main.addEnvironment("Client")
-        main.addModLoader("Forge")
-        main.addJavaVersion("Java 8")
-        main.addRequirement("unimixins")
+        main.addModLoader("NeoForge")
+        main.addJavaVersion("Java 21")
     }
 }
 
@@ -432,7 +292,7 @@ tasks.register("printVersion") {
 tasks.register("printMcVersion") {
     group = "help"
     description = "Prints the Minecraft version this branch builds for"
-    val value = minecraft.mcVersion.get()
+    val value = mcVersion
     doLast { println(value) }
 }
 

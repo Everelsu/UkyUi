@@ -1,4 +1,4 @@
-#version 120
+#version 150
 
 // Schwarzschild black hole, integrated per pixel.
 //
@@ -15,7 +15,8 @@
 // Doing this per pixel instead of from a baked table is what allows the camera to
 // move: elevation is just a uniform.
 
-varying vec2 vUv;
+in vec2 vUv;
+out vec4 fragColor;
 
 uniform float uAspect;      // quad width / height
 uniform float uFov;         // tan of half the vertical field of view
@@ -296,7 +297,7 @@ void main() {
             missesJets = axisDistance > JET_BOUND;
         }
         if (missesDisk && missesJets) {
-            gl_FragColor = vec4(0.0);
+            fragColor = vec4(0.0);
             return;
         }
     }
@@ -431,5 +432,5 @@ void main() {
     // are in the colour depth rather than in the geometry.
     colour += (dither - 0.5) * (2.0 / 255.0);
 
-    gl_FragColor = vec4(colour * uIntensity * window, alpha * uIntensity * window);
+    fragColor = vec4(colour * uIntensity * window, alpha * uIntensity * window);
 }

@@ -7,12 +7,12 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiTextField;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.client.resources.Language;
-import net.minecraft.client.resources.LanguageManager;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import com.console.uky.compat.GuiTextField;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.client.resources.language.LanguageInfo;
+import net.minecraft.client.resources.language.LanguageManager;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,15 +46,15 @@ public class GuiLanguageScreen extends MenuScreen {
     /** Smoothed highlight for the row being applied, so selection is not a hard cut. */
     private float applyFlash;
 
-    public GuiLanguageScreen(GuiScreen parent) {
+    public GuiLanguageScreen(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
-        this.languageManager = net.minecraft.client.Minecraft.getMinecraft().getLanguageManager();
+        this.languageManager = net.minecraft.client.Minecraft.getInstance().getLanguageManager();
     }
 
     @Override
     protected void buildLayout() {
         this.all.clear();
-        this.all.addAll(this.languageManager.getLanguages());
+        this.languageManager.getLanguages().forEach((code, info) -> this.all.add(new Language(code, info)));
 
         int panelWidth = Math.min((int) (this.width * 0.52F), 300);
         this.panelX1 = Math.max(10, (int) (this.width * 0.07F));
@@ -79,7 +79,7 @@ public class GuiLanguageScreen extends MenuScreen {
         applyFilter();
 
         MenuButton done = new MenuButton(ID_DONE, this.panelX1 + 14, this.panelY2 - 30,
-                panelWidth - 28, 20, I18n.format("gui.done", new Object[0]),
+                panelWidth - 28, 20, I18n.get("gui.done", new Object[0]),
                 MenuButton.Style.PRIMARY);
         done.entrance(0.05F);
         this.buttonList.add(done);
@@ -106,7 +106,7 @@ public class GuiLanguageScreen extends MenuScreen {
      */
     private void applyFilter() {
         String query = this.search.getText().trim().toLowerCase();
-        Language current = this.languageManager.getCurrentLanguage();
+        Language current = current();
         boolean pin = query.isEmpty() && current != null;
 
         this.filtered.clear();
@@ -133,6 +133,50 @@ public class GuiLanguageScreen extends MenuScreen {
         this.list.setSelected(this.filtered.indexOf(current));
         if (this.list.getSelected() >= 0) {
             this.list.scrollTo(this.list.getSelected());
+        }
+    }
+
+    /** The language that is selected now, out of {@link #all}. */
+    private Language current() {
+        String code = this.languageManager.getSelected();
+        for (Language language : this.all) {
+            if (language.getLanguageCode().equals(code)) {
+                return language;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * One language, as 1.7.10 described it: a code, and a "Name (Region)" string.
+     * Equal by code, which is what "the same language" means everywhere it is asked.
+     */
+    private static final class Language {
+        private final String code;
+        private final LanguageInfo info;
+
+        Language(String code, LanguageInfo info) {
+            this.code = code;
+            this.info = info;
+        }
+
+        String getLanguageCode() {
+            return this.code;
+        }
+
+        @Override
+        public String toString() {
+            return this.info.name() + " (" + this.info.region() + ")";
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Language && ((Language) other).code.equals(this.code);
+        }
+
+        @Override
+        public int hashCode() {
+            return this.code.hashCode();
         }
     }
 
@@ -209,14 +253,14 @@ public class GuiLanguageScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, 0.55F * this.fadeAlpha),
                 Draw.withAlpha(Theme.accent, 0.0F));
 
-        this.fontRendererObj.drawString(I18n.format("options.language", new Object[0]),
+        this.fontRendererObj.drawString(I18n.get("options.language", new Object[0]),
                 panelX1 + 14, panelY1 + 12, Draw.withAlpha(Theme.text, this.fadeAlpha));
 
         drawSearchBox();
         this.list.draw(mouseX, mouseY, this.fadeAlpha);
 
         // Vanilla's own warning, kept because it is genuinely useful.
-        String notice = I18n.format("options.languageWarning", new Object[0]);
+        String notice = I18n.get("options.languageWarning", new Object[0]);
         this.fontRendererObj.drawString(notice, panelX1 + 14, panelY2 - 44,
                 Draw.withAlpha(Theme.textDim, 0.6F * this.fadeAlpha));
     }
@@ -239,7 +283,7 @@ public class GuiLanguageScreen extends MenuScreen {
         if (this.search.getText().isEmpty()) {
             // Same baseline the field itself draws at, so the caption sits exactly
             // where the first typed character will appear.
-            this.fontRendererObj.drawString(I18n.format("uky.language.search", new Object[0]),
+            this.fontRendererObj.drawString(I18n.get("uky.language.search", new Object[0]),
                     this.search.xPosition, this.search.yPosition,
                     Draw.withAlpha(Theme.textDim, 0.5F * this.fadeAlpha));
         }
@@ -257,7 +301,7 @@ public class GuiLanguageScreen extends MenuScreen {
                                boolean isHovered, boolean isSelected, float alpha) {
             Language language = GuiLanguageScreen.this.filtered.get(index);
             boolean active = language.equals(
-                    GuiLanguageScreen.this.languageManager.getCurrentLanguage());
+                    GuiLanguageScreen.this.current());
 
             if (active) {
                 Draw.rect(rowX, rowY, rowX + rowWidth, rowY + rowHeight,
@@ -307,20 +351,17 @@ public class GuiLanguageScreen extends MenuScreen {
             return;
         }
         Language language = this.filtered.get(index);
-        if (language.equals(this.languageManager.getCurrentLanguage())) {
+        if (language.equals(current())) {
             return;
         }
-        this.languageManager.setCurrentLanguage(language);
-        this.mc.gameSettings.language = language.getLanguageCode();
-        this.mc.refreshResources();
-        this.fontRendererObj.setUnicodeFlag(this.languageManager.isCurrentLocaleUnicode()
-                || this.mc.gameSettings.forceUnicodeFont);
-        this.fontRendererObj.setBidiFlag(this.languageManager.isCurrentLanguageBidirectional());
-        this.mc.gameSettings.saveOptions();
+        this.languageManager.setSelected(language.getLanguageCode());
+        this.mc.options.languageCode = language.getLanguageCode();
+        this.mc.options.save();
         this.applyFlash = 1.0F;
-        // Labels changed language, so the controls have to be rebuilt — but not the
-        // entrance animation, which would blink the screen through black.
-        relayout();
+        // Labels changed language, so the controls have to be rebuilt once the reload
+        // is through — but not the entrance animation, which would blink the screen
+        // through black.
+        this.mc.reloadResourcePacks().thenRun(() -> this.mc.execute(this::relayout));
     }
 
     // ----------------------------------------------------------------- input --
@@ -349,7 +390,7 @@ public class GuiLanguageScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0) {
             this.list.mouseWheel(wheel > 0 ? 1 : -1);
         }

@@ -2,12 +2,10 @@ package com.console.uky.client.world;
 
 import com.console.uky.UkyUI;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.OpenGlHelper;
-import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.client.shader.Framebuffer;
-import net.minecraft.util.ResourceLocation;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import net.minecraft.resources.ResourceLocation;
 import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.GL11;
 import org.lwjgl.opengl.GL12;
 
 import javax.imageio.ImageIO;
@@ -68,7 +66,7 @@ public final class WorldPreviews {
     // ------------------------------------------------------------------ paths --
 
     public static File savesDir() {
-        return new File(Minecraft.getMinecraft().mcDataDir, "saves");
+        return new File(Minecraft.getInstance().gameDirectory, "saves");
     }
 
     public static File previewFile(String folderName) {
@@ -111,9 +109,9 @@ public final class WorldPreviews {
                 MISSING.add(folderName);
                 return null;
             }
-            ResourceLocation location = new ResourceLocation("uky", texturePath(folderName));
-            Minecraft.getMinecraft().getTextureManager()
-                    .loadTexture(location, new DynamicTexture(image));
+            ResourceLocation location = ResourceLocation.fromNamespaceAndPath("uky", texturePath(folderName));
+            Minecraft.getInstance().getTextureManager()
+                    .register(location, com.console.uky.compat.Images.texture(image));
             TEXTURES.put(folderName, location);
             return location;
         } catch (Throwable t) {
@@ -204,7 +202,7 @@ public final class WorldPreviews {
         ResourceLocation location = TEXTURES.remove(folderName);
         MISSING.remove(folderName);
         if (location != null) {
-            Minecraft.getMinecraft().getTextureManager().deleteTexture(location);
+            Minecraft.getInstance().getTextureManager().release(location);
         }
     }
 
@@ -238,32 +236,21 @@ public final class WorldPreviews {
     /**
      * Reads the framebuffer back into an image.
      *
-     * Two paths because Minecraft may or may not be rendering into an FBO: with one
-     * the finished frame is in a texture, without one it is in the front buffer.
-     * Both come out bottom-up, hence the flip.
+     * The finished frame is in the main render target's colour texture, and GL
+     * rows come out bottom-up, hence the flip.
      */
     private static BufferedImage readFrame() {
-        Minecraft mc = Minecraft.getMinecraft();
+        Minecraft mc = Minecraft.getInstance();
         int width;
         int height;
 
-        if (OpenGlHelper.isFramebufferEnabled()) {
-            Framebuffer fb = mc.getFramebuffer();
-            width = fb.framebufferTextureWidth;
-            height = fb.framebufferTextureHeight;
-            int size = width * height;
-            ensureBuffer(size);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, fb.framebufferTexture);
-            GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL12.GL_BGRA,
-                    GL12.GL_UNSIGNED_INT_8_8_8_8_REV, pixelBuffer);
-        } else {
-            width = mc.displayWidth;
-            height = mc.displayHeight;
-            ensureBuffer(width * height);
-            GL11.glReadBuffer(GL11.GL_FRONT);
-            GL11.glReadPixels(0, 0, width, height, GL12.GL_BGRA,
-                    GL12.GL_UNSIGNED_INT_8_8_8_8_REV, pixelBuffer);
-        }
+        RenderTarget fb = mc.getMainRenderTarget();
+        width = fb.width;
+        height = fb.height;
+        ensureBuffer(width * height);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, fb.getColorTextureId());
+        GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL12.GL_BGRA,
+                GL12.GL_UNSIGNED_INT_8_8_8_8_REV, pixelBuffer);
 
         if (width <= 0 || height <= 0) {
             return null;

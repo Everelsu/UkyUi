@@ -4,7 +4,7 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LinkIcons;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.Minecraft;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * One entry in the title screen's link row: a mark, a label, and a URL.
@@ -51,7 +51,7 @@ public class LinkButton extends MenuButton {
     }
 
     /** Width this link needs for its mark, its label and the spacing between. */
-    public static int widthFor(net.minecraft.client.gui.FontRenderer font, String label,
+    public static int widthFor(com.console.uky.compat.FontRenderer font, String label,
                                int height) {
         return height + 5 + font.getStringWidth(label);
     }
@@ -103,7 +103,7 @@ public class LinkButton extends MenuButton {
 
         int textColour = Draw.fade(Draw.mix(Theme.textDim, Theme.textHover, h), alpha);
         float textX = x1 + box + 5.0F;
-        drawFitting(mc.fontRenderer, this.displayString, textX,
+        drawFitting(com.console.uky.compat.FontRenderer.get(), this.displayString, textX,
                 y1 + (this.height - 8) / 2.0F, x2 - textX, textColour);
 
         if (h > 0.01F) {

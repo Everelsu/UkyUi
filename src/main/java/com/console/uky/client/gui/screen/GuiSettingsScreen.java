@@ -1,9 +1,7 @@
 package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.gui.MenuScreen;
-import com.console.uky.client.mods.AngelicaOptions;
 import com.console.uky.client.mods.ModConfigCatalog;
-import com.console.uky.client.mods.VideoSettingsTakeover;
 import com.console.uky.client.gui.widget.MenuButton;
 import com.console.uky.client.gui.widget.MenuOptionButton;
 import com.console.uky.client.gui.widget.MenuSlider;
@@ -14,11 +12,15 @@ import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiSnooper;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.client.settings.GameSettings;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.GuiScreen;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.client.OptionInstance;
+import net.minecraft.client.Options;
+import net.minecraft.client.gui.screens.options.controls.ControlsScreen;
+import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
+import net.minecraft.client.gui.screens.telemetry.TelemetryInfoScreen;
+import net.minecraft.network.chat.Component;
 
 /**
  * The full settings screen, organised into tabs.
@@ -57,7 +59,7 @@ public class GuiSettingsScreen extends MenuScreen {
     /** Rows each tab lays out, used to size the whole grid so it always fits. */
     private static final int[] TAB_ROWS = {5, 7, 7, 9};
 
-    private final GameSettings settings;
+    private final Options settings;
     /** Remembered across openings: coming back to the tab you left is the least surprising. */
     private static int activeTab;
 
@@ -109,15 +111,6 @@ public class GuiSettingsScreen extends MenuScreen {
 
     private final java.util.List<Heading> headings = new java.util.ArrayList<Heading>();
 
-    /**
-     * Angelica's settings, read once for the life of this screen.
-     *
-     * Once, because the options carry the player's pending edits until they are applied
-     * — rebuilding them on a tab switch or a window resize would quietly throw those
-     * away. Null until the Graphics tab is first laid out, so a session that never opens
-     * it never touches Angelica at all.
-     */
-    private java.util.List<AngelicaOptions.Section> angelica;
 
     /**
      * Renderer sections the player has opened, by name.
@@ -132,8 +125,6 @@ public class GuiSettingsScreen extends MenuScreen {
      */
     private static final java.util.Set<String> expanded = new java.util.HashSet<String>();
 
-    /** Every renderer option's name, for spotting the vanilla rows it duplicates. */
-    private java.util.Set<String> rendererLabels;
 
     /**
      * Columns the current tab lays its rows out in.
@@ -167,7 +158,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private int rowHeight;
     private int rowGap;
 
-    public GuiSettingsScreen(GuiScreen parent, GameSettings settings) {
+    public GuiSettingsScreen(net.minecraft.client.gui.screens.Screen parent, Options settings) {
         super(parent);
         this.settings = settings;
     }
@@ -179,7 +170,7 @@ public class GuiSettingsScreen extends MenuScreen {
      * was last used, and on a first run there is no such tab — landing on General
      * would put the one setting worth showing somebody two clicks away.
      */
-    public static GuiSettingsScreen onVideoTab(GuiScreen parent, GameSettings settings) {
+    public static GuiSettingsScreen onVideoTab(net.minecraft.client.gui.screens.Screen parent, Options settings) {
         activeTab = 1;
         return new GuiSettingsScreen(parent, settings);
     }
@@ -233,7 +224,7 @@ public class GuiSettingsScreen extends MenuScreen {
         // outside the reading path entirely and simply went unnoticed.
         MenuButton done = new MenuButton(ID_DONE, this.leftColumn, doneY,
                 this.panelX2 - PADDING - this.leftColumn, doneHeight,
-                I18n.format("gui.done", new Object[0]), MenuButton.Style.PRIMARY);
+                I18n.get("gui.done", new Object[0]), MenuButton.Style.PRIMARY);
         done.entrance(0.05F);
         this.buttonList.add(done);
     }
@@ -272,7 +263,7 @@ public class GuiSettingsScreen extends MenuScreen {
 
         int total = 0;
         for (int i = 0; i < TABS.length; i++) {
-            String label = I18n.format(TABS[i], new Object[0]);
+            String label = I18n.get(TABS[i], new Object[0]);
             // The ghost style letter-spaces its label by a pixel a glyph, so the
             // plain string width is an under-measure.
             this.tabWidth[i] = this.fontRendererObj.getStringWidth(label) + label.length()
@@ -299,7 +290,7 @@ public class GuiSettingsScreen extends MenuScreen {
             this.tabX[i] = x;
             MenuButton tab = new MenuButton(ID_TAB_BASE + i, x, this.panelY1 + 26,
                     this.tabWidth[i], 18,
-                    I18n.format(TABS[i], new Object[0]), MenuButton.Style.GHOST);
+                    I18n.get(TABS[i], new Object[0]), MenuButton.Style.GHOST);
             // The rule below the row and the marker on it already say which tab is
             // active; the ghost style's own connector and underline only added
             // clutter to every single one.
@@ -316,9 +307,10 @@ public class GuiSettingsScreen extends MenuScreen {
     private void buildContent() {
         int y = this.contentTop;
         this.rowIndex = 0;
+        this.nextOptionId = 0;
         // One column wherever the renderer's settings are in play; its labels are
         // sentences, not words, and half a panel truncated most of them.
-        this.columns = activeTab == 1 && !angelica().isEmpty() ? 1 : 2;
+        this.columns = 2;
 
         switch (activeTab) {
             case 0:
@@ -326,10 +318,10 @@ public class GuiSettingsScreen extends MenuScreen {
                 // vanilla screens — these menus lay themselves out independently of
                 // it. See MenuScreen.setWorldAndResolution.
                 y = flow(y,
-                        GameSettings.Options.FOV, GameSettings.Options.DIFFICULTY,
-                        GameSettings.Options.SENSITIVITY, GameSettings.Options.GUI_SCALE,
-                        GameSettings.Options.INVERT_MOUSE, GameSettings.Options.VIEW_BOBBING,
-                        GameSettings.Options.TOUCHSCREEN, GameSettings.Options.SHOW_CAPE);
+                        this.settings.fov(), this.settings.simulationDistance(),
+                        this.settings.sensitivity(), this.settings.guiScale(),
+                        this.settings.invertYMouse(), this.settings.bobView(),
+                        this.settings.touchscreen(), this.settings.autoJump());
                 addLink(ID_CONTROLS, this.leftColumn, y, "options.controls");
                 addLink(ID_LANGUAGE, this.rightColumn, y, "options.language");
                 break;
@@ -337,16 +329,16 @@ public class GuiSettingsScreen extends MenuScreen {
                 // First on the tab, above the game's own. It is the setting somebody
                 // opens this tab to find when the menu itself is what runs badly, and
                 // below fifty vanilla and renderer rows it would never be found at all.
-                y = heading(I18n.format("uky.settings.effects", new Object[0]), y, false, false);
+                y = heading(I18n.get("uky.settings.effects", new Object[0]), y, false, false);
                 addGraphicsPreset(this.leftColumn, y);
                 y += this.rowHeight + this.rowGap;
                 y = flow(y,
-                        GameSettings.Options.GRAPHICS, GameSettings.Options.RENDER_DISTANCE,
-                        GameSettings.Options.FRAMERATE_LIMIT, GameSettings.Options.AMBIENT_OCCLUSION,
-                        GameSettings.Options.RENDER_CLOUDS, GameSettings.Options.PARTICLES,
-                        GameSettings.Options.USE_FULLSCREEN, GameSettings.Options.ENABLE_VSYNC,
-                        GameSettings.Options.GAMMA, GameSettings.Options.MIPMAP_LEVELS,
-                        GameSettings.Options.ANISOTROPIC_FILTERING);
+                        this.settings.graphicsMode(), this.settings.renderDistance(),
+                        this.settings.framerateLimit(), this.settings.ambientOcclusion(),
+                        this.settings.cloudStatus(), this.settings.particles(),
+                        this.settings.fullscreen(), this.settings.enableVsync(),
+                        this.settings.gamma(), this.settings.mipmapLevels(),
+                        this.settings.entityDistanceScaling());
                 // FBO_ENABLE is deliberately absent. Everything this mod draws goes
                 // through the framebuffer — the menus, the loading screen, the world
                 // preview that is read back out of it — so turning it off does not read
@@ -354,21 +346,20 @@ public class GuiSettingsScreen extends MenuScreen {
                 // breaking. A player would find the setting, try it, and reasonably
                 // conclude the UI was at fault. It is still reachable in options.txt
                 // for anyone who genuinely needs it.
-                buildRendererContent(y);
                 break;
             case 2:
                 addLink(ID_SOUNDS, this.leftColumn, y, "options.sounds");
                 addLink(ID_CHAT, this.rightColumn, y, "options.chat.title");
                 y += this.rowHeight + this.rowGap;
                 y = flow(y,
-                        GameSettings.Options.CHAT_SCALE, GameSettings.Options.CHAT_OPACITY,
-                        GameSettings.Options.CHAT_VISIBILITY, GameSettings.Options.CHAT_COLOR,
-                        GameSettings.Options.CHAT_LINKS, GameSettings.Options.CHAT_WIDTH);
+                        this.settings.chatScale(), this.settings.chatOpacity(),
+                        this.settings.chatVisibility(), this.settings.chatColors(),
+                        this.settings.chatLinks(), this.settings.chatWidth());
                 buildUkyChatContent(y);
                 break;
             default:
                 addLink(ID_RESOURCE_PACKS, this.leftColumn, y, "options.resourcepack");
-                addLink(ID_SNOOPER, this.rightColumn, y, "options.snooper.view");
+                addLink(ID_SNOOPER, this.rightColumn, y, "options.telemetry");
                 y += this.rowHeight + this.rowGap;
                 addLink(ID_MODS, this.leftColumn, y, "uky.menu.mods");
                 // Only offered when something in the pack actually has settings, which
@@ -377,12 +368,12 @@ public class GuiSettingsScreen extends MenuScreen {
                     addLink(ID_MOD_SETTINGS, this.rightColumn, y, "uky.modSettings.title");
                 }
                 y += this.rowHeight + this.rowGap;
-                y = flow(y, GameSettings.Options.FORCE_UNICODE_FONT,
-                        GameSettings.Options.SNOOPER_ENABLED);
+                y = flow(y, this.settings.forceUnicodeFont(),
+                        this.settings.narrator());
                 // The tooltip switch lives here rather than beside the chat ones: it
                 // is neither chat nor graphics, and this is the tab for everything
                 // that is neither.
-                y = heading(I18n.format("uky.settings.tooltips", new Object[0]), y, false, false);
+                y = heading(I18n.get("uky.settings.tooltips", new Object[0]), y, false, false);
                 addFlag(ID_TOOLTIPS, this.leftColumn, y, "uky.settings.restyleTooltips",
                         new Flag() {
                             @Override
@@ -399,7 +390,7 @@ public class GuiSettingsScreen extends MenuScreen {
                 // is a list in the config — a registry name is not something anyone is
                 // going to type on this screen — so what is offered here is the switch
                 // over that list and nothing else.
-                if (cpw.mods.fml.common.Loader.isModLoaded("waila")) {
+                if (false) {
                     addFlag(ID_WAILA_HIDE, this.rightColumn, y, "uky.settings.wailaHide",
                             new Flag() {
                                 @Override
@@ -429,10 +420,10 @@ public class GuiSettingsScreen extends MenuScreen {
      * renderer already offers is not drawn twice, and with pairs its partner would have
      * been left sitting beside a hole.
      */
-    private int flow(int y, GameSettings.Options... options) {
+    private int flow(int y, OptionInstance<?>... options) {
         int column = 0;
-        for (GameSettings.Options option : options) {
-            if (isRendererOwned(option)) {
+        for (OptionInstance<?> option : options) {
+            if (option == null) {
                 continue;
             }
             addOption(option, columnX(column), y);
@@ -455,59 +446,8 @@ public class GuiSettingsScreen extends MenuScreen {
                 : this.columnWidth;
     }
 
-    /**
-     * Whether the renderer already offers this vanilla option, and so we should not.
-     *
-     * Most of Sodium's settings are its own, but a dozen of them read and write
-     * vanilla's — render distance, brightness, v-sync — and it names those with
-     * vanilla's own translation key. So the two labels are the same string in every
-     * language, and matching on the label is enough to spot the pair. That is
-     * deliberately not a list of which options Angelica happens to cover: such a list
-     * is a second thing to keep in step with somebody else's mod, and when it fell
-     * behind it would hide a setting that no longer exists anywhere. Matching can only
-     * fail the other way, leaving a visible duplicate, which is the harmless direction.
-     */
-    private boolean isRendererOwned(GameSettings.Options option) {
-        if (option == null) {
-            return true;
-        }
-        if (angelica().isEmpty()) {
-            return false;
-        }
-        // The one exception, and the reason it needs one: Sodium gives anisotropic
-        // filtering a key of its own rather than vanilla's, so outside English the two
-        // labels are different strings for the same setting and nothing above can see it.
-        if (option == GameSettings.Options.ANISOTROPIC_FILTERING) {
-            return true;
-        }
-        if (this.rendererLabels == null) {
-            this.rendererLabels = new java.util.HashSet<String>();
-            for (AngelicaOptions.Section section : angelica()) {
-                for (AngelicaOptions.Entry entry : section.options()) {
-                    this.rendererLabels.add(normalise(entry.name()));
-                }
-            }
-        }
-        return this.rendererLabels.contains(
-                normalise(I18n.format(option.getEnumString(), new Object[0])));
-    }
-
-    /** Case and punctuation carry no meaning here and the two mods differ on both. */
-    private static String normalise(String text) {
-        StringBuilder out = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = Character.toLowerCase(text.charAt(i));
-            if (Character.isLetterOrDigit(c)) {
-                out.append(c);
-            }
-        }
-        return out.toString();
-    }
-
     private static final int ID_MODS = 107;
     private static final int ID_MOD_SETTINGS = 108;
-    private static final int ID_VIDEO = 109;
-    private static final int ID_SHADER_PACKS = 110;
     private static final int ID_GRAPHICS_PRESET = 111;
     // These three act on their own source and want nothing from the switch in
     // onAction — the cycling branch above it handles every MenuOptionButton — but
@@ -527,68 +467,7 @@ public class GuiSettingsScreen extends MenuScreen {
      * drag and wants nothing from the switch at all. Numbering them would mean carrying
      * a parallel list solely to look up what a number meant.
      */
-    private static final int ID_RENDERER_OPTION = 400;
-
-    /**
-     * The renderer's own settings, below the vanilla ones they belong with.
-     *
-     * Angelica replaces most of what the video settings mean, and it describes its
-     * options rather than only drawing them — so its pages become headed sections of
-     * this list instead of a second settings screen in a second style. See
-     * {@link AngelicaOptions}.
-     */
-    private void buildRendererContent(int y) {
-        java.util.List<AngelicaOptions.Section> sections = angelica();
-
-        if (!sections.isEmpty() && AngelicaOptions.hasShaderPacks()) {
-            // First, above the sections. Shader packs are the one thing here that
-            // changes how the game looks all at once, and it is what anyone opening
-            // this part of the settings is most often after; behind seven folded
-            // sections it was the last thing they would find. It is also the one part
-            // that is a screen and not a model — Sodium itself lists it as a page with
-            // no options, purely to have somewhere to put the link — so it stays a link
-            // to the one its author wrote.
-            y = heading(shaderPacksLabel(), y, false, false);
-            addLink(ID_SHADER_PACKS, this.leftColumn, y, "uky.settings.shaderPacks.open");
-            y += this.rowHeight + this.rowGap;
-        }
-
-        for (AngelicaOptions.Section section : sections) {
-            boolean open = expanded.contains(section.name());
-            y = heading(section.name(), y, true, !open);
-            if (!open) {
-                continue;
-            }
-            // One to a row, in the order the mod lists them, so a player who knows
-            // Angelica's own screen finds its settings where they left them.
-            for (AngelicaOptions.Entry entry : section.options()) {
-                addRendererOption(entry, this.leftColumn, y);
-                y += this.rowHeight + this.rowGap;
-            }
-        }
-
-        if (!sections.isEmpty()) {
-            return;
-        }
-
-        // Nothing was read, yet something out there owns the video settings. Rather than
-        // leave the player with no way at all to reach the renderer's options — which is
-        // the state this whole section exists to fix — hand back the door to its own
-        // screen. Covers Angelica changing shape under us, and equally a claimant that
-        // was never one of Sodium's to begin with.
-        if (VideoSettingsTakeover.isClaimed()) {
-            y = heading(I18n.format("uky.settings.renderer", new Object[0]), y, false, false);
-            addLink(ID_VIDEO, this.leftColumn, y, "uky.settings.videoTakeover");
-        }
-    }
-
-    /** Iris names this section itself; our own wording is only the fallback. */
-    private static String shaderPacksLabel() {
-        String translated = I18n.format("options.iris.shaderPackSelection", new Object[0]);
-        return "options.iris.shaderPackSelection".equals(translated)
-                ? I18n.format("uky.settings.shaderPacks", new Object[0])
-                : translated;
-    }
+    private static final int ID_OPTION_BASE = 400;
 
     /**
      * Places a section heading and returns the y the rows under it start at.
@@ -603,72 +482,6 @@ public class GuiSettingsScreen extends MenuScreen {
                 : y + this.rowGap * 2;
         this.headings.add(new Heading(label, top, collapsible, folded));
         return top + HEADING_HEIGHT + this.rowGap;
-    }
-
-    private void addRendererOption(final AngelicaOptions.Entry entry, int x, int y) {
-        MenuButton widget;
-        if (entry.kind() == AngelicaOptions.Kind.SLIDER) {
-            widget = new MenuSlider(ID_RENDERER_OPTION, x, y, rowWidth(), this.rowHeight,
-                    new MenuSlider.Source() {
-                        @Override
-                        public String caption() {
-                            // The game captions its own sliders this way, and these sit
-                            // in the same column as those.
-                            return entry.name() + ": " + entry.formattedValue();
-                        }
-
-                        @Override
-                        public float normalized() {
-                            return entry.normalized();
-                        }
-
-                        @Override
-                        public void setNormalized(float t) {
-                            entry.setNormalized(t);
-                        }
-
-                        @Override
-                        public boolean available() {
-                            return entry.isEnabled();
-                        }
-                    });
-        } else {
-            widget = new MenuOptionButton(ID_RENDERER_OPTION, x, y, rowWidth(),
-                    this.rowHeight, new MenuOptionButton.Source() {
-                        @Override
-                        public String label() {
-                            return entry.name();
-                        }
-
-                        @Override
-                        public String value() {
-                            return entry.valueLabel();
-                        }
-
-                        @Override
-                        public boolean toggle() {
-                            return entry.kind() == AngelicaOptions.Kind.TOGGLE;
-                        }
-
-                        @Override
-                        public boolean on() {
-                            return entry.isOn();
-                        }
-
-                        @Override
-                        public void cycle() {
-                            entry.cycle();
-                        }
-
-                        @Override
-                        public boolean available() {
-                            return entry.isEnabled();
-                        }
-                    });
-        }
-        widget.entrance(stagger());
-        this.buttonList.add(widget);
-        this.contentRows.add(widget);
     }
 
     /**
@@ -691,7 +504,7 @@ public class GuiSettingsScreen extends MenuScreen {
      * config file two menus away.
      */
     private void buildUkyChatContent(int y) {
-        y = heading(I18n.format("uky.settings.chat", new Object[0]), y, false, false);
+        y = heading(I18n.get("uky.settings.chat", new Object[0]), y, false, false);
 
         addFlag(ID_CHAT_REDESIGN, this.leftColumn, y, "uky.settings.redesignChat",
                 new Flag() {
@@ -744,21 +557,21 @@ public class GuiSettingsScreen extends MenuScreen {
         if (!com.console.uky.client.gui.PackLook.available()) {
             return;
         }
-        y = heading(I18n.format("uky.settings.pack", new Object[0]), y, false, false);
+        y = heading(I18n.get("uky.settings.pack", new Object[0]), y, false, false);
         int width = this.panelX2 - PADDING - this.leftColumn;
         final MenuButton[] self = new MenuButton[1];
         MenuButton widget = new MenuOptionButton(ID_PACK_MODE, this.leftColumn, y, width,
                 this.rowHeight, new MenuOptionButton.Source() {
                     @Override
                     public String label() {
-                        return I18n.format("uky.settings.packMode", new Object[0]);
+                        return I18n.get("uky.settings.packMode", new Object[0]);
                     }
 
                     @Override
                     public String value() {
                         String name = modeName(com.console.uky.client.gui.PackLook.chosen());
                         return com.console.uky.client.gui.PackLook.restartPending()
-                                ? I18n.format("uky.settings.packMode.pending", new Object[] {name})
+                                ? I18n.get("uky.settings.packMode.pending", new Object[] {name})
                                 : name;
                     }
 
@@ -795,7 +608,7 @@ public class GuiSettingsScreen extends MenuScreen {
     }
 
     static String modeName(String mode) {
-        return I18n.format(com.console.uky.core.PackMode.EASY.equals(mode)
+        return I18n.get(com.console.uky.core.PackMode.EASY.equals(mode)
                 ? "uky.settings.packMode.easy" : "uky.settings.packMode.standard", new Object[0]);
     }
 
@@ -812,7 +625,7 @@ public class GuiSettingsScreen extends MenuScreen {
                 new MenuOptionButton.Source() {
                     @Override
                     public String label() {
-                        return I18n.format(labelKey, new Object[0]);
+                        return I18n.get(labelKey, new Object[0]);
                     }
 
                     @Override
@@ -866,12 +679,12 @@ public class GuiSettingsScreen extends MenuScreen {
                 this.rowHeight, new MenuOptionButton.Source() {
                     @Override
                     public String label() {
-                        return I18n.format("uky.settings.graphics", new Object[0]);
+                        return I18n.get("uky.settings.graphics", new Object[0]);
                     }
 
                     @Override
                     public String value() {
-                        return I18n.format(Quality.label(), new Object[0]);
+                        return I18n.get(Quality.label(), new Object[0]);
                     }
 
                     @Override
@@ -899,27 +712,22 @@ public class GuiSettingsScreen extends MenuScreen {
         this.contentRows.add(widget);
     }
 
-    private void addOption(GameSettings.Options option, int x, int y) {
+    /**
+     * Options are numbered by where they appear, which is stable per tab and is all the
+     * base screen needs an id for: keeping keyboard focus on the same row across a
+     * relayout.
+     */
+    private int nextOptionId;
+
+    private void addOption(OptionInstance<?> option, int x, int y) {
         int width = rowWidth();
-        MenuButton widget = option.getEnumFloat()
-                ? new MenuSlider(option.returnEnumOrdinal(), x, y, width, this.rowHeight, option)
-                : new MenuOptionButton(option.returnEnumOrdinal(), x, y, width, this.rowHeight, option);
+        int id = ID_OPTION_BASE + this.nextOptionId++;
+        MenuButton widget = option.values() instanceof OptionInstance.SliderableValueSet
+                ? new MenuSlider(id, x, y, width, this.rowHeight, option)
+                : new MenuOptionButton(id, x, y, width, this.rowHeight, option);
         widget.entrance(stagger());
         this.buttonList.add(widget);
         this.contentRows.add(widget);
-    }
-
-    /**
-     * Angelica's pages, read on the first layout of this screen and kept after.
-     *
-     * Read whichever tab is open, not only the Graphics one, because the General tab
-     * has to know what the renderer already offers in order not to offer it twice.
-     */
-    private java.util.List<AngelicaOptions.Section> angelica() {
-        if (this.angelica == null) {
-            this.angelica = AngelicaOptions.read();
-        }
-        return this.angelica;
     }
 
     /**
@@ -1071,7 +879,7 @@ public class GuiSettingsScreen extends MenuScreen {
 
     private void addLink(int id, int x, int y, String langKey) {
         MenuButton link = new MenuButton(id, x, y, rowWidth(), this.rowHeight,
-                I18n.format(langKey, new Object[0]), MenuButton.Style.NORMAL);
+                I18n.get(langKey, new Object[0]), MenuButton.Style.NORMAL);
         // Left-aligned like every option row. Centred, they broke the line the
         // accent rails set up down the column.
         link.align(MenuButton.Align.LEFT);
@@ -1138,7 +946,7 @@ public class GuiSettingsScreen extends MenuScreen {
         drawGlassPanel();
         applyScroll();
 
-        this.fontRendererObj.drawString(I18n.format("options.title", new Object[0]),
+        this.fontRendererObj.drawString(I18n.get("options.title", new Object[0]),
                 panelX1 + PADDING, panelY1 + 14, Draw.withAlpha(Theme.text, this.fadeAlpha));
 
         // Rule under the tab row, with the active tab's span picked out on it.
@@ -1306,7 +1114,7 @@ public class GuiSettingsScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0 && maxScroll() > 0.0F) {
             this.scrollTarget -= (wheel > 0 ? 1 : -1) * (this.rowHeight + this.rowGap) * 1.5F;
             this.scrollTarget = Math.max(0.0F, Math.min(maxScroll(), this.scrollTarget));
@@ -1329,7 +1137,7 @@ public class GuiSettingsScreen extends MenuScreen {
 
         switch (button.id) {
             case ID_CONTROLS:
-                openSub(new GuiControlsScreen(this, this.settings));
+                openSub(new ControlsScreen(this, this.settings));
                 break;
             case ID_SOUNDS:
                 openSub(new GuiAudioScreen(this, this.settings, GuiAudioScreen.soundTab()));
@@ -1341,32 +1149,22 @@ public class GuiSettingsScreen extends MenuScreen {
                 openSub(new GuiLanguageScreen(this));
                 break;
             case ID_RESOURCE_PACKS:
-                openSub(new GuiResourcePacksScreen(this));
+                openSub(new PackSelectionScreen(this.mc.getResourcePackRepository(),
+                        repository -> {
+                            this.settings.updateResourcePacks(repository);
+                            this.mc.setScreen(this);
+                        },
+                        this.mc.getResourcePackDirectory(),
+                        Component.translatable("resourcePack.title")));
                 break;
             case ID_SNOOPER:
-                openSub(new GuiSnooper(this, this.settings));
+                openSub(new TelemetryInfoScreen(this, this.settings));
                 break;
             case ID_MODS:
                 openSub(new GuiModsScreen(this));
                 break;
             case ID_MOD_SETTINGS:
                 openSub(new GuiModSettingsScreen(this));
-                break;
-            case ID_VIDEO:
-                openSub(VideoSettingsTakeover.open(this, this.settings));
-                break;
-            case ID_SHADER_PACKS:
-                // Ours where the packs can be read, and the renderer's own screen where
-                // they cannot: a shader list is not worth a second style, but no way at
-                // all to reach the packs is worse than either.
-                if (GuiShaderPacksScreen.available()) {
-                    openSub(new GuiShaderPacksScreen(this));
-                    break;
-                }
-                GuiScreen shaders = AngelicaOptions.shaderPackScreen(this);
-                if (shaders != null) {
-                    openSub(shaders);
-                }
                 break;
             case ID_DONE:
                 save();
@@ -1377,7 +1175,7 @@ public class GuiSettingsScreen extends MenuScreen {
         }
     }
 
-    private void openSub(GuiScreen screen) {
+    private void openSub(net.minecraft.client.gui.screens.Screen screen) {
         // Vanilla saves before every sub-screen; matching that keeps behaviour
         // identical if the player alt-F4s from inside one.
         save();
@@ -1387,7 +1185,7 @@ public class GuiSettingsScreen extends MenuScreen {
             closeWith(new Runnable() {
                 @Override
                 public void run() {
-                    mc.displayGuiScreen(screen);
+                    mc.setScreen(screen);
                 }
             });
         }
@@ -1402,10 +1200,7 @@ public class GuiSettingsScreen extends MenuScreen {
      * moments, so leaving by any route leaves nothing behind.
      */
     private void save() {
-        this.settings.saveOptions();
-        if (this.angelica != null) {
-            AngelicaOptions.apply(this.angelica);
-        }
+        this.settings.save();
     }
 
     @Override

@@ -1,11 +1,12 @@
 package com.console.uky.config;
 
-import net.minecraftforge.common.config.ConfigCategory;
-import net.minecraftforge.common.config.Configuration;
-import net.minecraftforge.common.config.Property;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
-import java.io.File;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -37,19 +38,14 @@ public final class UiConfig {
     private static final String CAT_DEATH = "death";
 
     /**
-     * Where the config lives, relative to the game directory.
+     * Where the config lives, relative to the config directory.
      *
      * In its own folder rather than loose in {@code config/}: the mod already owns
      * {@code config/uky/icons} for link artwork, and having the settings for those
      * icons sit in a different directory from the icons themselves is the kind of
-     * thing nobody finds twice. The splash screen resolves this path directly —
-     * it runs long before FML offers a config file — so it has to be spelled out
-     * here rather than derived from the mod id.
+     * thing nobody finds twice.
      */
-    private static final String CONFIG_PATH = "config/uky/uky.cfg";
-
-
-    private static Configuration config;
+    public static final String FILE_NAME = "uky/uky.toml";
 
     // ---- screens ----
     public static boolean replaceMainMenu = true;
@@ -312,7 +308,7 @@ public final class UiConfig {
      */
     private static final String[] DEFAULT_TIPS = {
         "Loading a few hundred mods. This takes a moment.",
-        "Everything in this menu is configurable — config/uky/uky.cfg.",
+        "Everything in this menu is configurable — config/uky/uky.toml.",
         "F3 + G draws chunk borders.",
         "Sleeping through the night skips the mobs, not the danger.",
         "Do not dig straight down.",
@@ -337,36 +333,6 @@ public final class UiConfig {
     public static int colorBlackHoleCold = 0x8C5A2B;
 
     private UiConfig() {
-    }
-
-    /** Loads the config file, unless something already did (see {@link #loadEarly}). */
-    public static void load(File file) {
-        if (config != null) {
-            return;
-        }
-        migrate(file);
-        config = new Configuration(file);
-        config.load();
-        read();
-        prune();
-        // Written every launch rather than only when a value changed, because the
-        // comments are half of what this file is for. Forge marks the config dirty
-        // when a *value* is added or edited, never when a comment is — so a build
-        // that only reworded an explanation left every existing config still
-        // carrying the old one, which is the version anyone would go and read.
-        // Values are preserved either way; only the prose is refreshed.
-        config.save();
-    }
-
-    /**
-     * Loads the config from its conventional path.
-     *
-     * The splash screen runs long before pre-init, so it cannot wait for FML to
-     * hand over a config file. Resolving the path from the game directory gives
-     * the same file the mod later receives, and {@link #load} then no-ops.
-     */
-    public static void loadEarly(File gameDir) {
-        load(new File(gameDir, CONFIG_PATH));
     }
 
     /**
@@ -455,30 +421,6 @@ public final class UiConfig {
     }
 
     /**
-     * Moves a config left over from when this file lived in {@code config/}.
-     *
-     * Silent and best-effort. A pack that has already been set up should not lose
-     * its palette because the file moved, and if the move cannot be made — the old
-     * file is locked, the folder is read-only — the worst case is a fresh config
-     * with default values, which is what a new install gets anyway.
-     */
-    private static void migrate(File target) {
-        File folder = target.getParentFile();
-        if (target.exists() || folder == null || folder.getParentFile() == null) {
-            return;
-        }
-        // The old file is a sibling of this folder — config/uky.cfg next to
-        // config/uky/ — which holds wherever the game directory happens to be.
-        File legacy = new File(folder.getParentFile(), target.getName());
-        if (!legacy.isFile()) {
-            return;
-        }
-        if ((folder.isDirectory() || folder.mkdirs()) && legacy.renameTo(target)) {
-            System.out.println("[UKY] Config moved to " + target.getPath());
-        }
-    }
-
-    /**
      * A line at the top of each section saying what the section is for.
      *
      * Forge writes these into the file above the block, and they are the first thing
@@ -487,35 +429,35 @@ public final class UiConfig {
      * guess at otherwise.
      */
     private static void describeCategories() {
-        config.setCategoryComment(CAT_SCREENS,
+        category(CAT_SCREENS,
                 "Which vanilla screens this mod takes over. Turn one off and that "
                         + "screen goes back to vanilla; everything else keeps working.");
-        config.setCategoryComment(CAT_HUD,
+        category(CAT_HUD,
                 "What this mod draws over the game rather than instead of it: the "
                         + "achievement popup, the chat line an achievement produces, "
                         + "and the chat itself. Nothing here changes what the game "
                         + "does — only how it is drawn and worded.");
-        config.setCategoryComment(CAT_MODS,
+        category(CAT_MODS,
                 "Interfaces belonging to other mods that this one restyles when they "
                         + "are installed. Each entry does nothing at all when its mod "
                         + "is absent, and none of them change what those mods do — "
                         + "only what they look like.");
-        config.setCategoryComment(CAT_MENU,
+        category(CAT_MENU,
                 "The main menu: wordmark, which entries are shown, the music, and the "
                         + "link buttons underneath. See 'links' for how to add YouTube, "
                         + "Discord, Boosty and anything else, with your own icons.");
-        config.setCategoryComment(CAT_DEATH,
+        category(CAT_DEATH,
                 "The death scene. It has no buttons: the picture cuts out, the scene "
                         + "plays, then any key or click comes back — and if the player "
                         + "does nothing, it comes back on its own.");
-        config.setCategoryComment(CAT_SPLASH,
+        category(CAT_SPLASH,
                 "The mod-loading screen at startup — the one with the progress bar, "
                         + "before the main menu. Not the world-loading screen.");
-        config.setCategoryComment(CAT_EFFECTS,
+        category(CAT_EFFECTS,
                 "The backdrop and everything drawn over it. If the menu runs badly, "
                         + "lower blackHoleResolution first: it costs roughly the square "
                         + "of its value, while blackHoleQuality costs a straight line.");
-        config.setCategoryComment(CAT_THEME,
+        category(CAT_THEME,
                 "The palette, as 0xRRGGBB. Only these are stored; every hover, border "
                         + "and shadow in the interface is derived from them, so changing "
                         + "'accent' alone restyles the whole thing consistently.");
@@ -849,7 +791,7 @@ public final class UiConfig {
         //   |   03 Options                                    |
         //   |   [>] YouTube  [O] Discord                      |  <- links
         //   |                                                 |
-        //   |  Minecraft 1.7.10                               |
+        //   |  Minecraft 1.21.1                               |
         //   |  footer                          footerRight    |
         //   +-------------------------------------------------+
         title = str(CAT_MENU, "title", title,
@@ -862,15 +804,16 @@ public final class UiConfig {
                         + "moves up. Example: tagline=season 3");
         footer = str(CAT_MENU, "footer", footer,
                 "One small line in the bottom-LEFT corner, under the 'Minecraft "
-                        + "1.7.10' line. Empty hides it. Example: footer=build 12");
+                        + "version' line. Empty hides it. Example: footer=build 12");
         footerRight = str(CAT_MENU, "footerRight", footerRight,
                 "One small line in the bottom-RIGHT corner. %version% is replaced "
                         + "with this mod's version. Empty hides it. Put your pack's "
                         + "name and version here. Example: footerRight=My Pack 1.4.2");
 
         customSplash = bool(CAT_SPLASH, "customSplash", customSplash,
-                "Replace FML's mod-loading screen. Turn off if the loading screen misbehaves "
-                        + "on your GPU; the game falls back to Forge's own splash.");
+                "Replace the loading screen — start-up after NeoForge's early window, and "
+                        + "every resource reload after it. Turn off if it misbehaves on "
+                        + "your GPU; the game falls back to NeoForge's own.");
         showPercent = bool(CAT_SPLASH, "showPercent", showPercent,
                 "Show a percentage beside each bar on the mod-loading screen. Bars "
                         + "that report no total have no percentage to show and are "
@@ -901,80 +844,6 @@ public final class UiConfig {
         colorBlackHoleHot = hex(CAT_THEME, "blackHoleHot", colorBlackHoleHot, "Black hole inner disk colour (hot region).");
         colorBlackHoleMid = hex(CAT_THEME, "blackHoleMid", colorBlackHoleMid, "Black hole middle disk colour.");
         colorBlackHoleCold = hex(CAT_THEME, "blackHoleCold", colorBlackHoleCold, "Black hole outer disk colour (cold region).");
-
-    }
-
-    /**
-     * Throws out anything in the file this build no longer has a setting for.
-     *
-     * <p>Forge's {@code Configuration} preserves what it does not recognise, which is
-     * the right default for a loader that cannot know whether a key belongs to a mod
-     * that is merely absent today. For a single mod's own file it is the wrong one, and
-     * it shows: {@code ConfigScreen} builds the in-game editor by walking
-     * {@code getCategoryNames()}, so it lists whatever is in the file rather than
-     * whatever the mod has. A feature that has been removed therefore goes on offering
-     * its settings — with controls that are read by nothing and cannot do anything — for
-     * as long as the file survives.
-     *
-     * <p>{@link #SHIPPED} is the register of what is real. Every read in {@link #read}
-     * passes through it, so once {@code read} has run it holds exactly this build's
-     * settings and nothing else; anything in the file outside it is a leftover. Which
-     * makes this self-maintaining: removing a setting from {@code read} is now the whole
-     * of removing it, and no future cleanup has to remember this method exists.
-     *
-     * <p>Runs after {@code read} for that reason, and before the save in {@link #load},
-     * so the file on disk is rewritten without the leftovers rather than carrying them
-     * to the next launch.
-     */
-    private static void prune() {
-        // Copied first: removing a category while walking the collection its names came
-        // from is a modification of what is being iterated.
-        for (String name : new java.util.ArrayList<String>(config.getCategoryNames())) {
-            ConfigCategory category = config.getCategory(name);
-            if (category == null) {
-                continue;
-            }
-            for (String key : new java.util.ArrayList<String>(category.keySet())) {
-                if (!SHIPPED.containsKey(name + '.' + key)) {
-                    category.remove(key);
-                }
-            }
-            // A category left with nothing in it was a section of its own, and an empty
-            // heading in the editor is no better than a populated stale one.
-            if (category.isEmpty() && category.getChildren().isEmpty()) {
-                config.removeCategory(category);
-            }
-        }
-    }
-
-    /** Re-reads the in-memory config after the in-game editor changed it. */
-    public static void reload() {
-        if (config == null) {
-            return;
-        }
-        read();
-        save();
-    }
-
-    public static void save() {
-        if (config != null && config.hasChanged()) {
-            config.save();
-        }
-    }
-    /**
-     * Writes the graphics preset, from the in-game settings screen.
-     *
-     * Straight to the file rather than only to the field. This is the one setting in
-     * here with a control on a vanilla-style settings screen, and every other control
-     * on that screen persists the moment it is changed — a preset that reverted on the
-     * next launch would read as it not having worked at all.
-     */
-    public static void setGraphics(String value) {
-        graphics = value;
-        if (config != null) {
-            config.get(CAT_EFFECTS, "graphics", value).set(value);
-            config.save();
-        }
     }
 
     /**
@@ -1017,123 +886,140 @@ public final class UiConfig {
         write(CAT_MODS, "wailaHideListed", value);
     }
 
-    private static void write(String cat, String key, boolean value) {
-        if (config != null) {
-            config.get(cat, key, value).set(value);
-            config.save();
-        }
-    }
-
-    /**
-     * Records that the one-off settings screen has been shown.
-     *
-     * Written through to the file straight away rather than at shutdown, so a crash
-     * — or a player who alt-F4s out of the settings screen they were just handed —
-     * does not get shown it again on the next launch.
-     */
-    /**
-     * Records that the quest book has been handed our theme, so it is not handed it again.
-     *
-     * Written through to the file straight away rather than at shutdown, for the reason
-     * the one below is: a crash between selecting the theme and quitting would leave the
-     * switch set, and the next launch would take the book's theme back off whoever had
-     * changed it.
-     */
-    public static void setRestyleQuestBook(boolean value) {
-        if (restyleQuestBook == value) {
-            return;
-        }
-        restyleQuestBook = value;
-        if (config != null) {
-            config.get(CAT_MODS, "restyleQuestBook", value).set(value);
-            config.save();
-        }
-    }
-
-    public static void setShowSettingsOnFirstRun(boolean value) {
-        showSettingsOnFirstRun = value;
-        if (config != null) {
-            config.get(CAT_SCREENS, "showSettingsOnFirstRun", value).set(value);
-            config.save();
-        }
-    }
-
-    public static Configuration raw() {
-        return config;
-    }
 
     // ------------------------------------------------------------- accessors --
+    //
+    // read() runs more than once. The first time, while the class initialises,
+    // BUILDER is set and every helper defines its setting, with the field's own
+    // initialiser as the default — so defaults are declared exactly once, in the
+    // fields. Every later run (ModConfigEvent.Loading / Reloading) reads the value
+    // the spec now holds back into the field. ModConfigSpec corrects out-of-range
+    // and unknown values itself and drops keys it no longer defines, which is the
+    // whole of what the 1.7.10 build's prune() and clamp write-back were for.
 
-    /**
-     * The value each setting had before any config was read, by category and key.
-     *
-     * Defaults are declared exactly once — in the field initialisers at the top of
-     * this class — and every read below passes its own field in as the default.
-     * That works the first time and would quietly rot on the second: {@link #read}
-     * runs again on {@link #reload}, and by then the fields hold whatever the file
-     * said, so a setting the user had changed would become its own default and the
-     * shipped value would be gone. Remembering the first one seen fixes that, and
-     * costs one map lookup per setting per load.
-     */
-    private static final java.util.Map<String, Object> SHIPPED =
-            new java.util.HashMap<String, Object>();
+    private static ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
+    private static final Map<String, ModConfigSpec.ConfigValue<?>> VALUES =
+            new HashMap<String, ModConfigSpec.ConfigValue<?>>();
 
-    /** The default for this setting: whatever it was before the first read. */
-    private static Object shipped(String cat, String key, Object current) {
-        String id = cat + '.' + key;
-        Object known = SHIPPED.get(id);
-        if (known == null) {
-            SHIPPED.put(id, current);
-            return current;
+    public static final ModConfigSpec SPEC;
+
+    static {
+        read();
+        SPEC = BUILDER.build();
+        BUILDER = null;
+    }
+
+    /** Copies the spec's values into the fields. Called on load and on every reload. */
+    public static void reload() {
+        if (SPEC.isLoaded()) {
+            read();
         }
-        return known;
+    }
+
+    private static void category(String cat, String comment) {
+        if (BUILDER != null) {
+            BUILDER.comment(comment).push(cat);
+            BUILDER.pop();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T value(String cat, String key, T def) {
+        if (BUILDER != null) {
+            return def;
+        }
+        return ((ModConfigSpec.ConfigValue<T>) VALUES.get(cat + '.' + key)).get();
     }
 
     private static boolean bool(String cat, String key, boolean def, String comment) {
-        def = ((Boolean) shipped(cat, key, Boolean.valueOf(def))).booleanValue();
-        return config.getBoolean(key, cat, def, comment);
+        if (BUILDER != null) {
+            VALUES.put(cat + '.' + key, BUILDER.comment(comment).define(List.of(cat, key), def));
+        }
+        return value(cat, key, def);
     }
 
     private static String str(String cat, String key, String def, String comment) {
-        def = (String) shipped(cat, key, def);
-        return config.getString(key, cat, def, comment);
+        if (BUILDER != null) {
+            VALUES.put(cat + '.' + key, BUILDER.comment(comment).define(List.of(cat, key), def));
+        }
+        return value(cat, key, def);
     }
 
     private static String[] strList(String cat, String key, String[] def, String comment) {
-        def = (String[]) shipped(cat, key, def);
-        return config.getStringList(key, cat, def, comment);
+        if (BUILDER != null) {
+            VALUES.put(cat + '.' + key, BUILDER.comment(comment).defineListAllowEmpty(
+                    List.of(cat, key), Arrays.asList(def), () -> "", o -> o instanceof String));
+            return def;
+        }
+        List<? extends String> list = value(cat, key, null);
+        return list.toArray(new String[0]);
     }
 
     private static int clampInt(String cat, String key, int def, int min, int max, String comment) {
-        def = ((Integer) shipped(cat, key, Integer.valueOf(def))).intValue();
-        int value = config.getInt(key, cat, def, min, max, comment);
-
-        // getInt clamps what it hands back but leaves the stored property alone, so a
-        // file carrying an out-of-range value goes on displaying it while the game
-        // quietly uses something else. Anyone who then went looking for why the black
-        // hole ignored their setting would find the old number sitting there. Write
-        // the effective value back instead.
-        Property property = config.get(cat, key, def);
-        if (property.getInt(def) != value) {
-            property.set(value);
+        if (BUILDER != null) {
+            VALUES.put(cat + '.' + key, BUILDER.comment(comment).defineInRange(List.of(cat, key), def, min, max));
         }
-        return value;
+        return value(cat, key, def);
     }
 
     private static double dbl(String cat, String key, double def, double min, double max, String comment) {
-        def = ((Double) shipped(cat, key, Double.valueOf(def))).doubleValue();
-        return config.get(cat, key, def, comment, min, max).getDouble(def);
+        if (BUILDER != null) {
+            VALUES.put(cat + '.' + key, BUILDER.comment(comment).defineInRange(List.of(cat, key), def, min, max));
+        }
+        return value(cat, key, def);
     }
 
     private static int hex(String cat, String key, int def, String comment) {
-        def = ((Integer) shipped(cat, key, Integer.valueOf(def))).intValue();
-        String raw = config.getString(key, cat, String.format("0x%06X", def),
-                comment + " Format: 0xRRGGBB.");
+        if (BUILDER != null) {
+            VALUES.put(cat + '.' + key, BUILDER.comment(comment + " Format: 0xRRGGBB.")
+                    .define(List.of(cat, key), String.format("0x%06X", def), o -> o instanceof String));
+            return def;
+        }
+        String raw = value(cat, key, "");
         try {
             return Integer.decode(raw.trim()) & 0xFFFFFF;
         } catch (NumberFormatException e) {
             // A typo in the config should not black out the menu — fall back silently.
             return def;
         }
+    }
+
+    /**
+     * Writes one setting through to the file straight away.
+     *
+     * These sit among vanilla options that persist the moment they are clicked, and
+     * one that reverted on the next launch would read as not having worked.
+     */
+    @SuppressWarnings("unchecked")
+    private static <T> void write(String cat, String key, T value) {
+        ModConfigSpec.ConfigValue<T> v = (ModConfigSpec.ConfigValue<T>) VALUES.get(cat + '.' + key);
+        if (v != null && SPEC.isLoaded()) {
+            v.set(value);
+            v.save();
+        }
+    }
+
+    /** Writes the graphics preset, from the in-game settings screen. */
+    public static void setGraphics(String value) {
+        graphics = value;
+        write(CAT_EFFECTS, "graphics", value);
+    }
+
+    /** Records that the quest book has been handed our theme, so it is not handed it again. */
+    public static void setRestyleQuestBook(boolean value) {
+        if (restyleQuestBook == value) {
+            return;
+        }
+        restyleQuestBook = value;
+        write(CAT_MODS, "restyleQuestBook", value);
+    }
+
+    /**
+     * Records that the one-off settings screen has been shown, straight away, so a
+     * crash — or a player who alt-F4s out of it — does not get shown it again.
+     */
+    public static void setShowSettingsOnFirstRun(boolean value) {
+        showSettingsOnFirstRun = value;
+        write(CAT_SCREENS, "showSettingsOnFirstRun", value);
     }
 }

@@ -2,8 +2,8 @@ package com.console.uky.client.gui.screen;
 
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
-import net.minecraft.client.gui.FontRenderer;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.FontRenderer;
+import com.console.uky.compat.GL11;
 
 import java.util.ArrayList;
 import java.util.List;

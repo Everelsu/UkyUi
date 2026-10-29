@@ -2,12 +2,10 @@ package com.console.uky.client.render;
 
 import com.console.uky.UkyUI;
 import net.minecraft.client.Minecraft;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 import org.apache.commons.io.IOUtils;
-import org.lwjgl.opengl.ARBShaderObjects;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.GL11;
 import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GLContext;
 
 import java.io.InputStream;
 import java.nio.charset.Charset;
@@ -31,32 +29,11 @@ public final class ShaderProgram {
     /** Whether this machine can run shaders at all. Cached: it cannot change. */
     private static Boolean supported;
 
+    /** 1.21 needs OpenGL 3.2 to start at all, so a shader can always be compiled. */
     public static boolean isSupported() {
-        if (supported == null) {
-            try {
-                supported = Boolean.valueOf(GLContext.getCapabilities().OpenGL21
-                        || GLContext.getCapabilities().GL_ARB_shader_objects);
-            } catch (Throwable t) {
-                // Deliberately not cached. The usual way to land here is to ask off the
-                // render thread: LWJGL keeps capabilities per thread, and during mod
-                // loading the thread that owns the GL context is the loading screen's,
-                // so the question has no answer yet rather than the answer "no".
-                // Remembering that as a "no" would send the whole session down the
-                // traced-table path on hardware that runs the shader perfectly well.
-                return false;
-            }
-        }
-        return supported.booleanValue();
+        return true;
     }
 
-    /**
-     * Whether we have actually asked the driver and been told no.
-     *
-     * Distinct from {@code !isSupported()}, which is also false when nobody could ask
-     * yet. Callers deciding whether to spend CPU on a fallback want this one: doing
-     * that work on a maybe is how a menu backdrop ends up costing a minute of the
-     * loading it was supposed to be shown during.
-     */
     public static boolean isKnownUnsupported() {
         return supported != null && !supported.booleanValue();
     }
@@ -76,6 +53,10 @@ public final class ShaderProgram {
             this.program = GL20.glCreateProgram();
             GL20.glAttachShader(this.program, vs);
             GL20.glAttachShader(this.program, fs);
+            // The attribute slots the vertex format puts its elements in; see GL11.
+            GL20.glBindAttribLocation(this.program, 0, "Position");
+            GL20.glBindAttribLocation(this.program, 1, "UV0");
+            GL20.glBindAttribLocation(this.program, 2, "Color");
             GL20.glLinkProgram(this.program);
             if (GL20.glGetProgrami(this.program, GL20.GL_LINK_STATUS) == GL11.GL_FALSE) {
                 UkyUI.LOGGER.error("Black hole shader link failed: "
@@ -119,11 +100,11 @@ public final class ShaderProgram {
     private static String read(ResourceLocation location) throws Exception {
         InputStream stream = null;
         try {
-            stream = Minecraft.getMinecraft().getResourceManager()
-                    .getResource(location).getInputStream();
+            stream = Minecraft.getInstance().getResourceManager()
+                    .getResourceOrThrow(location).open();
         } catch (Exception fromPacks) {
-            String path = "/assets/" + location.getResourceDomain() + "/"
-                    + location.getResourcePath();
+            String path = "/assets/" + location.getNamespace() + "/"
+                    + location.getPath();
             stream = ShaderProgram.class.getResourceAsStream(path);
             if (stream == null) {
                 throw fromPacks;
@@ -154,11 +135,11 @@ public final class ShaderProgram {
     }
 
     public void bind() {
-        GL20.glUseProgram(this.program);
+        GL11.useProgram(this.program);
     }
 
     public static void unbind() {
-        GL20.glUseProgram(0);
+        GL11.useProgram(0);
     }
 
     private int location(String name) {
@@ -195,11 +176,4 @@ public final class ShaderProgram {
         this.usable = false;
     }
 
-    /**
-     * ARB entry points exist on some drivers where the core ones do not; touching
-     * the class here keeps the import meaningful and the dependency explicit.
-     */
-    static void ensureArbLoaded() {
-        ARBShaderObjects.class.getName();
-    }
 }

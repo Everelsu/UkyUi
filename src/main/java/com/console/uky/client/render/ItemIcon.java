@@ -1,11 +1,11 @@
 package com.console.uky.client.render;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.RenderHelper;
-import net.minecraft.client.renderer.entity.RenderItem;
-import net.minecraft.item.ItemStack;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
+import com.console.uky.compat.GuiScreen;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.math.Axis;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * An item stack drawn as an icon, with the GL state a block actually needs.
@@ -36,9 +36,6 @@ public final class ItemIcon {
     /** Vanilla's GUI icon size; every coordinate here is relative to it. */
     public static final int SIZE = 16;
 
-    /** One instance is plenty — it holds no per-call state worth keeping apart. */
-    private static RenderItem renderer;
-
     private ItemIcon() {
     }
 
@@ -57,55 +54,33 @@ public final class ItemIcon {
      */
     public static void draw(ItemStack stack, float centerX, float centerY, float scale,
                             float spin, float brightness) {
-        if (stack == null) {
+        if (stack == null || stack.isEmpty()) {
             return;
         }
-        if (renderer == null) {
-            renderer = new RenderItem();
+        Minecraft mc = Minecraft.getInstance();
+        GuiGraphics g = GuiScreen.graphics();
+        if (g == null) {
+            g = new GuiGraphics(mc, mc.renderBuffers().bufferSource());
         }
-        Minecraft mc = Minecraft.getMinecraft();
-
-        GL11.glPushMatrix();
-
-        // The state a cube needs, in the order RenderItem expects to find it — and the
-        // lighting before the transform below rather than after it.
-        //
-        // `glLight(GL_POSITION)` puts the light where the modelview matrix says, so
-        // setting it up inside the entrance would turn the two lights with the item
-        // and light it from somewhere new on every frame of the spin. Vanilla calls
-        // this at the top of a screen's draw for the same reason.
-        GL11.glEnable(GL11.GL_CULL_FACE);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(true);
-        RenderHelper.enableGUIStandardItemLighting();
-        GL11.glDisable(GL11.GL_LIGHTING);
-        GL11.glEnable(GL12.GL_RESCALE_NORMAL);
-        GL11.glEnable(GL11.GL_COLOR_MATERIAL);
-        GL11.glEnable(GL11.GL_LIGHTING);
-        GL11.glColor4f(brightness, brightness, brightness, 1.0F);
-
-        GL11.glTranslatef(centerX, centerY, 0.0F);
+        g.flush();
+        g.pose().pushPose();
+        g.pose().translate(centerX, centerY, 0.0F);
         if (spin != 0.0F) {
-            GL11.glRotatef(spin, 0.0F, 0.0F, 1.0F);
+            g.pose().mulPose(Axis.ZP.rotationDegrees(spin));
         }
-        // Every axis, including the one pointing into the screen: see the note above.
-        GL11.glScalef(scale, scale, scale);
-
+        // Every axis, including the one pointing into the screen: a block is drawn as
+        // a cube, and squashing only two of its axes skews its lighting.
+        g.pose().scale(scale, scale, scale);
+        RenderSystem.setShaderColor(brightness, brightness, brightness, 1.0F);
         try {
-            renderer.renderItemAndEffectIntoGUI(mc.fontRenderer, mc.getTextureManager(),
-                    stack, -SIZE / 2, -SIZE / 2);
+            g.renderItem(stack, -SIZE / 2, -SIZE / 2);
+            g.flush();
         } catch (Throwable t) {
             // A modded item can carry a renderer that throws. One bad icon must not
             // take the screen — or the frame — with it.
         } finally {
-            GL11.glDisable(GL11.GL_LIGHTING);
-            RenderHelper.disableStandardItemLighting();
-            GL11.glDisable(GL11.GL_DEPTH_TEST);
-            // Culling goes back off, because everything else drawn here is 2D and
-            // half of it is wound the way culling would throw away.
-            GL11.glDisable(GL11.GL_CULL_FACE);
-            GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-            GL11.glPopMatrix();
+            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+            g.pose().popPose();
         }
     }
 }

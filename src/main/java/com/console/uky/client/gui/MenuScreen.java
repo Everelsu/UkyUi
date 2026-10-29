@@ -8,20 +8,19 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
-import com.console.uky.client.render.UkyFontRenderer;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiButton;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.ScaledResolution;
-import net.minecraft.util.MathHelper;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.client.gui.GuiTextField;
-import org.lwjgl.input.Keyboard;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.GuiButton;
+import com.console.uky.compat.FontRenderer;
+import com.console.uky.compat.GuiScreen;
+import com.console.uky.compat.ScaledResolution;
+import com.console.uky.compat.MathHelper;
+import net.minecraft.resources.ResourceLocation;
+import com.console.uky.compat.GuiTextField;
+import com.console.uky.compat.Keyboard;
+import com.console.uky.compat.GL11;
 
 import java.util.List;
 import java.util.Random;
@@ -37,7 +36,7 @@ import java.util.Random;
 public abstract class MenuScreen extends GuiScreen {
 
     protected static final ResourceLocation BACKGROUND =
-            new ResourceLocation("uky", "textures/gui/background.png");
+            ResourceLocation.fromNamespaceAndPath("uky", "textures/gui/background.png");
     /** Native size of {@link #BACKGROUND}; used to letterbox-cover it correctly. */
     protected static final int BACKGROUND_W = 1920;
     protected static final int BACKGROUND_H = 1080;
@@ -125,7 +124,7 @@ public abstract class MenuScreen extends GuiScreen {
         preservedFadeAlpha = this.fadeAlpha;
         holePreserved = true;
         this.pendingClose = null; // cancel any pending close animation
-        this.mc.displayGuiScreen(next);
+        this.mc.setScreen(next);
     }
 
     /**
@@ -137,12 +136,12 @@ public abstract class MenuScreen extends GuiScreen {
             preservedFadeAlpha = this.fadeAlpha;
             holePreserved = true;
             this.pendingClose = null;
-            this.mc.displayGuiScreen(this.parent);
+            this.mc.setScreen(this.parent);
         } else {
             closeWith(new Runnable() {
                 @Override
                 public void run() {
-                    mc.displayGuiScreen(parent);
+                    mc.setScreen(parent);
                 }
             });
         }
@@ -185,9 +184,9 @@ public abstract class MenuScreen extends GuiScreen {
     }
 
     /** Parent to return to; may be null (then Escape closes to the world/main menu). */
-    protected final GuiScreen parent;
+    protected final net.minecraft.client.gui.screens.Screen parent;
 
-    protected MenuScreen(GuiScreen parent) {
+    protected MenuScreen(net.minecraft.client.gui.screens.Screen parent) {
         this.parent = parent;
     }
 
@@ -232,22 +231,31 @@ public abstract class MenuScreen extends GuiScreen {
      * units of width depending on where the slider is, and no single layout is
      * honest across that range. So these menus always use the size Auto would give,
      * which stays within roughly 320-570 by 240-270 on any monitor, and a matching
-     * transform is applied at draw time. Mouse input needs no special handling:
-     * {@code handleMouseInput} derives its coordinates from {@code width} and
-     * {@code height}, which are now ours.
+     * transform is applied at draw time, and mouse events are brought into our units
+     * through {@link #localX}/{@link #localY}.
      */
     @Override
-    public void setWorldAndResolution(Minecraft mc, int width, int height) {
+    protected void adjustSize() {
         // The width and height handed in are deliberately ignored. During a resize
-        // they can still describe the old window while mc.displayWidth already
+        // they can still describe the old window while the framebuffer already
         // describes the new one, and deriving the transform from a mismatched pair
         // drew the whole interface into one corner of the screen with last frame's
         // image left showing around it. Both spaces come off the framebuffer below,
         // which cannot disagree with itself.
-        this.uiScaleFactor = autoScaleFactor(mc);
-        int ownWidth = MathHelper.ceiling_double_int((double) mc.displayWidth / this.uiScaleFactor);
-        int ownHeight = MathHelper.ceiling_double_int((double) mc.displayHeight / this.uiScaleFactor);
-        super.setWorldAndResolution(mc, ownWidth, ownHeight);
+        this.uiScaleFactor = autoScaleFactor(this.mc);
+        this.width = MathHelper.ceiling_double_int((double) this.mc.getWindow().getWidth() / this.uiScaleFactor);
+        this.height = MathHelper.ceiling_double_int((double) this.mc.getWindow().getHeight() / this.uiScaleFactor);
+        syncScale();
+    }
+
+    @Override
+    protected double localX(double x) {
+        return x / this.uiScaleX;
+    }
+
+    @Override
+    protected double localY(double y) {
+        return y / this.uiScaleY;
     }
 
     /**
@@ -261,7 +269,7 @@ public abstract class MenuScreen extends GuiScreen {
     private void syncScale() {
         Minecraft mc = this.mc;
         this.uiScaleFactor = autoScaleFactor(mc);
-        ScaledResolution game = new ScaledResolution(mc, mc.displayWidth, mc.displayHeight);
+        ScaledResolution game = new ScaledResolution(mc, mc.getWindow().getWidth(), mc.getWindow().getHeight());
         this.uiScaleX = this.width <= 0 ? 1.0F : (float) game.getScaledWidth() / this.width;
         this.uiScaleY = this.height <= 0 ? 1.0F : (float) game.getScaledHeight() / this.height;
     }
@@ -283,12 +291,12 @@ public abstract class MenuScreen extends GuiScreen {
      * the same at every size and only the physical pixel size of the text changes.
      */
     private static int autoScaleFactor(Minecraft mc) {
-        int factor = Math.round(mc.displayWidth / (float) TARGET_UNIT_WIDTH);
+        int factor = Math.round(mc.getWindow().getWidth() / (float) TARGET_UNIT_WIDTH);
         factor = Math.max(1, Math.min(MAX_SCALE_FACTOR, factor));
 
         // Short windows get a smaller factor so the taller screens still have room
         // for their content; width is the target, height is the constraint.
-        while (factor > 1 && mc.displayHeight / factor < MIN_UNIT_HEIGHT) {
+        while (factor > 1 && mc.getWindow().getHeight() / factor < MIN_UNIT_HEIGHT) {
             factor--;
         }
         return factor;
@@ -470,8 +478,8 @@ public abstract class MenuScreen extends GuiScreen {
         // game has and what these screens were missing everywhere. Turned on here and off
         // in the finally below, because it changes what the plain drawString means: left
         // set, it would follow the game out of this screen and shadow every string drawn
-        // anywhere afterwards. See UkyFontRenderer.setShadowed.
-        UkyFontRenderer.setShadowed(UiConfig.textShadow);
+        // anywhere afterwards. See FontRenderer.setShadowed.
+        FontRenderer.setShadowed(UiConfig.textShadow);
         try {
             drawBackdrop();
             drawContent(localX, localY);
@@ -503,7 +511,7 @@ public abstract class MenuScreen extends GuiScreen {
             // Cleared here and not at the end of the try: anything thrown out of a draw
             // above would otherwise leave every string in the game shadowed for the rest
             // of the session, from a screen that is no longer even on top.
-            UkyFontRenderer.setShadowed(false);
+            FontRenderer.setShadowed(false);
             GL11.glPopMatrix();
             Draw.clearClipScale();
         }
@@ -774,12 +782,8 @@ public abstract class MenuScreen extends GuiScreen {
 
     protected boolean hasBackgroundImage() {
         if (backgroundImagePresent == null) {
-            try {
-                this.mc.getResourceManager().getResource(BACKGROUND);
-                backgroundImagePresent = Boolean.TRUE;
-            } catch (java.io.IOException e) {
-                backgroundImagePresent = Boolean.FALSE;
-            }
+            backgroundImagePresent = Boolean.valueOf(
+                    this.mc.getResourceManager().getResource(BACKGROUND).isPresent());
         }
         return backgroundImagePresent.booleanValue();
     }
@@ -877,6 +881,16 @@ public abstract class MenuScreen extends GuiScreen {
                 Draw.withAlpha(Theme.accent, 0.8F * this.fadeAlpha), Draw.withAlpha(Theme.accent, 0.0F));
     }
 
+    /** A list panel: dark fill, hairline top, the accent rail down the left. */
+    protected static void drawPanel(int x1, int y1, int x2, int y2, float a) {
+        Draw.gradientV(x1, y1, x2, y2, Draw.withAlpha(Theme.background, 0.58F * a),
+                Draw.withAlpha(Theme.background, 0.38F * a));
+        Draw.rect(x1, y1, x2, y1 + 1, Draw.withAlpha(0xFFFFFF, 0.07F * a));
+        Draw.gradientH(x1, y1, x1 + 2, y2, Draw.withAlpha(Theme.accent, 0.6F * a),
+                Draw.withAlpha(Theme.accent, 0.0F));
+        Draw.border(x1, y1, x2, y2, 1.0F, Draw.withAlpha(Theme.text, 0.08F * a));
+    }
+
     /** Small dim text, left-aligned. */
     protected void drawHint(String text, int x, int y) {
         this.fontRendererObj.drawString(text, x, y, Draw.withAlpha(Theme.textDim, 0.85F * this.fadeAlpha));
@@ -971,7 +985,7 @@ public abstract class MenuScreen extends GuiScreen {
     }
 
     private void press(MenuButton button) {
-        button.func_146113_a(this.mc.getSoundHandler());
+        button.func_146113_a(this.mc.getSoundManager());
         actionPerformed(button);
     }
 

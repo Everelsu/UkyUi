@@ -4,15 +4,17 @@ import com.console.uky.client.death.DeathScene;
 import com.console.uky.client.death.DeathTheme;
 import com.console.uky.client.render.Ease;
 import com.console.uky.config.UiConfig;
-import net.minecraft.client.audio.ISound;
-import net.minecraft.client.audio.MovingSound;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
 
 /**
  * The two loops under the death screen: a heart winding down and breathing that
  * does not settle.
  *
- * A {@link MovingSound} rather than a plain looping one because the sound engine
+ * A {@link AbstractTickableSoundInstance} rather than a plain looping one because the sound engine
  * only re-reads volume and pitch for sounds that tick — and the whole point of
  * these two is that they move. The heart is loud and quick at the moment of the
  * hit and drags to a slow, distant thud; the breathing arrives a beat later, when
@@ -21,10 +23,10 @@ import net.minecraft.util.ResourceLocation;
  * <p>Each instance reads its own position off {@link DeathScene}, so nothing has to
  * push updates at them, and both stop themselves the moment the scene ends.
  */
-public class DeathLoop extends MovingSound {
+public class DeathLoop extends AbstractTickableSoundInstance {
 
-    public static final ResourceLocation HEARTBEAT = new ResourceLocation("uky", "heartbeat");
-    public static final ResourceLocation BREATHING = new ResourceLocation("uky", "breathing");
+    public static final ResourceLocation HEARTBEAT = ResourceLocation.fromNamespaceAndPath("uky", "heartbeat");
+    public static final ResourceLocation BREATHING = ResourceLocation.fromNamespaceAndPath("uky", "breathing");
 
     /** Seconds the heart takes to go from the hit to its resting drag. */
     private static final float HEART_DECAY = 9.0F;
@@ -43,18 +45,20 @@ public class DeathLoop extends MovingSound {
     private final float themeVolume;
 
     private DeathLoop(ResourceLocation sound, boolean heart, float themeVolume) {
-        super(sound);
+        super(SoundEvent.createVariableRangeEvent(sound), SoundSource.MASTER,
+                SoundInstance.createUnseededRandom());
         this.heart = heart;
         this.themeVolume = themeVolume;
-        this.repeat = true;
-        this.field_147665_h = 0;
+        this.looping = true;
+        this.delay = 0;
         // Played at the listener: there is no world position for the inside of
         // someone's chest, and attenuating it would silence it the moment the camera
         // drifts away from where the body fell.
-        this.field_147666_i = ISound.AttenuationType.NONE;
+        this.attenuation = SoundInstance.Attenuation.NONE;
+        this.relative = true;
         this.volume = 0.0F;
-        this.field_147663_c = 1.0F;
-        update();
+        this.pitch = 1.0F;
+        tick();
     }
 
     public static DeathLoop heartbeat(DeathTheme theme) {
@@ -66,9 +70,9 @@ public class DeathLoop extends MovingSound {
     }
 
     @Override
-    public void update() {
+    public void tick() {
         if (!DeathScene.isActive()) {
-            this.donePlaying = true;
+            stop();
             this.volume = 0.0F;
             return;
         }
@@ -81,7 +85,7 @@ public class DeathLoop extends MovingSound {
             // than a sound being faded out.
             float decay = Ease.outCubic(t / HEART_DECAY);
             this.volume = Math.max(MIN_VOLUME, master * (1.00F - 0.55F * decay));
-            this.field_147663_c = 1.08F - 0.30F * decay;
+            this.pitch = 1.08F - 0.30F * decay;
             return;
         }
 
@@ -89,6 +93,6 @@ public class DeathLoop extends MovingSound {
         // after the other rather than as one noise.
         float rise = Ease.outCubic((t - 0.8F) / 1.2F);
         this.volume = Math.max(MIN_VOLUME, master * 0.75F * rise);
-        this.field_147663_c = 0.96F;
+        this.pitch = 0.96F;
     }
 }

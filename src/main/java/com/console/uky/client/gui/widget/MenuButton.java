@@ -6,9 +6,9 @@ import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.audio.SoundHandler;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.sounds.SoundManager;
+import com.console.uky.compat.FontRenderer;
+import com.console.uky.compat.GuiButton;
 
 /**
  * The one button style the whole mod uses. Draws itself entirely from
@@ -233,7 +233,7 @@ public class MenuButton extends GuiButton {
         if (style != Style.GHOST) {
             drawPanel(x1, y1, x2, y2, alpha);
         }
-        drawLabel(mc.fontRenderer, x1, y1, x2, y2, alpha);
+        drawLabel(com.console.uky.compat.FontRenderer.get(), x1, y1, x2, y2, alpha);
     }
 
     /**
@@ -469,7 +469,7 @@ public class MenuButton extends GuiButton {
     }
 
     @Override
-    public void func_146113_a(SoundHandler soundHandler) {
+    public void func_146113_a(SoundManager soundHandler) {
         if (!UiConfig.buttonSounds) {
             return;
         }

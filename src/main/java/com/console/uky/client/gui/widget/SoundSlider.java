@@ -4,45 +4,44 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.audio.SoundCategory;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.client.settings.GameSettings;
+import net.minecraft.sounds.SoundSource;
+import com.console.uky.compat.FontRenderer;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.client.Options;
 
 /**
- * Volume slider for one {@link SoundCategory}.
+ * Volume slider for one {@link SoundSource}.
  *
- * Separate from {@link MenuSlider} because sound levels are not
- * {@code GameSettings.Options} — they live behind {@code getSoundLevel} and
- * {@code setSoundLevel} and are keyed by category, so none of the option
+ * Separate from {@link MenuSlider} because sound levels are
+ * keyed by category rather than reached as one option each, so none of the option
  * normalise/denormalise machinery applies. The drawing deliberately matches
  * MenuSlider so the two read as the same control.
  */
 public class SoundSlider extends MenuButton {
 
-    private final SoundCategory category;
-    private final GameSettings settings;
+    private final SoundSource category;
+    private final Options settings;
     private boolean dragging;
     private float knobScale;
 
     public SoundSlider(int id, int x, int y, int width, int height,
-                       SoundCategory category, GameSettings settings) {
+                       SoundSource category, Options settings) {
         super(id, x, y, width, height, "", Style.NORMAL);
         this.category = category;
         this.settings = settings;
     }
 
     private float level() {
-        return this.settings.getSoundLevel(this.category);
+        return this.settings.getSoundSourceVolume(this.category);
     }
 
     /** "Music: 70%", or "Music: OFF" at zero, which is what the value means there. */
     private String label() {
-        String name = I18n.format("soundCategory." + this.category.getCategoryName(),
+        String name = I18n.get("soundCategory." + this.category.getName(),
                 new Object[0]);
         float value = level();
         String shown = value <= 0.0F
-                ? I18n.format("options.off", new Object[0])
+                ? I18n.get("options.off", new Object[0])
                 : ((int) (value * 100.0F) + "%");
         return name + ": " + shown;
     }
@@ -88,7 +87,7 @@ public class SoundSlider extends MenuButton {
         float trackH = 2.0F;
         float trackY = y2 - (tight ? 3.0F : 6.0F);
 
-        FontRenderer font = mc.fontRenderer;
+        FontRenderer font = com.console.uky.compat.FontRenderer.get();
         int labelColor = Draw.fade(Draw.mix(Theme.text, Theme.textHover, this.hover), alpha);
         float labelY = Math.max(y1 + 1.0F, trackY - 10.0F);
         font.drawString(font.trimStringToWidth(label(), this.width - 20),
@@ -111,7 +110,7 @@ public class SoundSlider extends MenuButton {
 
     private void updateFromMouse(int mouseX) {
         float raw = (float) (mouseX - (this.xPosition + 10)) / (float) (this.width - 20);
-        this.settings.setSoundLevel(this.category, Ease.clamp01(raw));
+        this.settings.getSoundSourceOptionInstance(this.category).set((double) Ease.clamp01(raw));
     }
 
     @Override
@@ -137,6 +136,6 @@ public class SoundSlider extends MenuButton {
 
     /** Dragging would fire the click sound every frame. */
     @Override
-    public void func_146113_a(net.minecraft.client.audio.SoundHandler soundHandler) {
+    public void func_146113_a(net.minecraft.client.sounds.SoundManager soundHandler) {
     }
 }

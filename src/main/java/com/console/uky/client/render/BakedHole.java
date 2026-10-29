@@ -1,7 +1,7 @@
 package com.console.uky.client.render;
 
 import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.GL11;
 import org.lwjgl.opengl.GL12;
 
 import java.nio.IntBuffer;

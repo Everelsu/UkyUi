@@ -1,12 +1,10 @@
 package com.console.uky.client.death;
 
-import com.console.uky.client.mods.CorpsesLink;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
-import net.minecraft.block.material.Material;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.minecraft.client.Minecraft;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraftforge.client.event.sound.PlaySoundEvent17;
+import net.minecraft.world.entity.player.Player;
+import net.neoforged.neoforge.client.event.sound.PlaySoundEvent;
 
 /**
  * Works out what killed the player, from the client's side of the wire.
@@ -34,7 +32,6 @@ public class DeathTracker {
     /** Blocks from the player an explosion has to be to have plausibly hit them. */
     private static final double BLAST_RANGE = 12.0D;
     /** How old ukycorpses' word on the death may be: its death camera runs first. */
-    private static final long TOLD_WITHIN = 60_000L;
 
     private static int now;
     private static int burning = Integer.MIN_VALUE;
@@ -45,13 +42,10 @@ public class DeathTracker {
     private static int struck = Integer.MIN_VALUE;
 
     @SubscribeEvent
-    public void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) {
-            return;
-        }
-        Minecraft mc = Minecraft.getMinecraft();
-        EntityPlayer player = mc.thePlayer;
-        if (player == null || mc.theWorld == null) {
+    public void onClientTick(ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        Player player = mc.player;
+        if (player == null || mc.level == null) {
             DeathScene.end();
             reset();
             return;
@@ -66,17 +60,17 @@ public class DeathTracker {
     }
 
     /** Notes anything true this tick that could still be the cause a second later. */
-    private static void sample(EntityPlayer player) {
-        if (player.isBurning() || player.isInsideOfMaterial(Material.lava)) {
+    private static void sample(Player player) {
+        if (player.isOnFire() || player.isInLava()) {
             burning = now;
         }
-        if (player.getAir() <= 0) {
+        if (player.getAirSupply() <= 0) {
             drowning = now;
         }
         if (player.fallDistance > FALL_THRESHOLD) {
             falling = now;
         }
-        if (player.posY < 1.0D) {
+        if (player.getY() < player.level().getMinBuildHeight() + 1.0D) {
             voiding = now;
         }
         if (player.hurtTime > 0) {
@@ -91,17 +85,18 @@ public class DeathTracker {
      * tells the client to make the noise and the particles. The noise will do.
      */
     @SubscribeEvent
-    public void onSound(PlaySoundEvent17 event) {
-        if (event.sound == null || !"random.explode".equals(event.name)) {
+    public void onSound(PlaySoundEvent event) {
+        if (event.getSound() == null
+                || !"minecraft:entity.generic.explode".equals(event.getSound().getLocation().toString())) {
             return;
         }
-        EntityPlayer player = Minecraft.getMinecraft().thePlayer;
+        Player player = Minecraft.getInstance().player;
         if (player == null) {
             return;
         }
-        double dx = event.sound.getXPosF() - player.posX;
-        double dy = event.sound.getYPosF() - player.posY;
-        double dz = event.sound.getZPosF() - player.posZ;
+        double dx = event.getSound().getX() - player.getX();
+        double dy = event.getSound().getY() - player.getY();
+        double dz = event.getSound().getZ() - player.getZ();
         if (dx * dx + dy * dy + dz * dz <= BLAST_RANGE * BLAST_RANGE) {
             blast = now;
         }
@@ -116,7 +111,7 @@ public class DeathTracker {
      * the one that says something.
      */
     public static DeathTheme detect() {
-        DeathTheme told = fromMessage(CorpsesLink.causeSince(System.currentTimeMillis() - TOLD_WITHIN));
+        DeathTheme told = fromMessage(toldKey);
         if (told != null) {
             return told;
         }
@@ -177,7 +172,21 @@ public class DeathTracker {
     }
 
     /** Forgets everything. Called when there is no player left to have killed. */
+    /**
+     * The translation key of the death message the server sent, if it sent one.
+     *
+     * 1.7.10's client was never told what killed it, which is why everything above
+     * guesses. 1.21 sends the message with the death itself, and vanilla's death
+     * screen carries it; whatever it says beats any guess.
+     */
+    private static String toldKey;
+
+    public static void told(String key) {
+        toldKey = key;
+    }
+
     public static void reset() {
+        toldKey = null;
         burning = Integer.MIN_VALUE;
         drowning = Integer.MIN_VALUE;
         falling = Integer.MIN_VALUE;

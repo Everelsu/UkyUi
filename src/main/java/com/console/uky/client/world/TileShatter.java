@@ -1,7 +1,7 @@
 package com.console.uky.client.world;
 
 import com.console.uky.client.render.Draw;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.Random;
 

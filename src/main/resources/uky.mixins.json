@@ -1,0 +1,10 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_21",
+  "package": "com.console.uky.mixins",
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -4,16 +4,18 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.client.settings.GameSettings;
+import com.console.uky.compat.FontRenderer;
+import net.minecraft.client.resources.language.I18n;
+import net.minecraft.client.OptionInstance;
+
+import java.util.List;
 
 /**
  * Themed replacement for {@code GuiOptionButton}. Cycles an option on click;
  * boolean options additionally render an animated pill switch instead of the
  * "ON"/"OFF" word, which reads much faster in a long options list.
  *
- * <p>What it is cycling is behind {@link Source}. Vanilla's {@link GameSettings}
+ * <p>What it is cycling is behind {@link Source}. Vanilla's {@link OptionInstance}
  * options are one implementation and the one this was written for, but a settings
  * screen that gathers other mods' options into itself has to drive values it cannot
  * name at compile time — see {@code AngelicaOptions} — and those are the same control
@@ -55,8 +57,8 @@ public class MenuOptionButton extends MenuButton {
     private final boolean isToggle;
     private float switchPos;
 
-    public MenuOptionButton(int id, int x, int y, int width, int height, GameSettings.Options option) {
-        this(id, x, y, width, height, new VanillaSource(option));
+    public MenuOptionButton(int id, int x, int y, int width, int height, OptionInstance<?> option) {
+        this(id, x, y, width, height, new VanillaSource<>(option));
     }
 
     public MenuOptionButton(int id, int x, int y, int width, int height, Source source) {
@@ -124,7 +126,7 @@ public class MenuOptionButton extends MenuButton {
 
         drawPanel(x1, y1, x2, y2, alpha);
 
-        FontRenderer font = mc.fontRenderer;
+        FontRenderer font = com.console.uky.compat.FontRenderer.get();
         int labelColor = Draw.fade(this.enabled
                 ? Draw.mix(Theme.text, Theme.textHover, this.hover)
                 : Theme.textDisabled, alpha);
@@ -149,28 +151,28 @@ public class MenuOptionButton extends MenuButton {
     }
 
     /**
-     * A vanilla {@link GameSettings} option.
+     * A vanilla option.
      *
-     * The game hands out its caption as one "Label: Value" string, so the two are split
-     * back apart here — the widget aligns them at opposite ends of the row and cannot
-     * do that with them stuck together.
+     * The game hands out its caption as one "Label: Value" component, so the two are
+     * split back apart here — the widget aligns them at opposite ends of the row and
+     * cannot do that with them stuck together.
      */
-    private static final class VanillaSource implements Source {
+    private static final class VanillaSource<T> implements Source {
 
-        private final GameSettings.Options option;
+        private final OptionInstance<T> option;
 
-        VanillaSource(GameSettings.Options option) {
+        VanillaSource(OptionInstance<T> option) {
             this.option = option;
         }
 
         @Override
         public String label() {
-            return I18n.format(this.option.getEnumString(), new Object[0]);
+            return this.option.caption.getString();
         }
 
         @Override
         public String value() {
-            String full = Minecraft.getMinecraft().gameSettings.getKeyBinding(this.option);
+            String full = this.option.toString.apply(this.option.get()).getString();
             String label = label();
             String remainder = full.startsWith(label) ? full.substring(label.length()) : full;
             if (remainder.startsWith(":")) {
@@ -181,17 +183,28 @@ public class MenuOptionButton extends MenuButton {
 
         @Override
         public boolean toggle() {
-            return this.option.getEnumBoolean();
+            return this.option.get() instanceof Boolean;
         }
 
         @Override
         public boolean on() {
-            return Minecraft.getMinecraft().gameSettings.getOptionOrdinalValue(this.option);
+            return Boolean.TRUE.equals(this.option.get());
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public void cycle() {
-            Minecraft.getMinecraft().gameSettings.setOptionValue(this.option, 1);
+            if (!(this.option.values() instanceof OptionInstance.CycleableValueSet)) {
+                return;
+            }
+            List<T> values = ((OptionInstance.CycleableValueSet<T>) this.option.values())
+                    .valueListSupplier().getSelectedList();
+            if (values.isEmpty()) {
+                return;
+            }
+            int at = values.indexOf(this.option.get());
+            this.option.set(values.get((at + 1) % values.size()));
+            Minecraft.getInstance().options.save();
         }
 
         /** Vanilla has no notion of an option being temporarily unavailable. */

@@ -4,7 +4,7 @@ import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
-import org.lwjgl.opengl.GL11;
+import com.console.uky.compat.GL11;
 
 /**
  * What the hole does when it has been fed the whole title: it lights up as a quasar.
