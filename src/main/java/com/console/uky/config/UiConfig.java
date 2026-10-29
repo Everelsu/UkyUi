@@ -928,7 +928,65 @@ public final class UiConfig {
         if (BUILDER != null) {
             return def;
         }
+        if (!SPEC.isLoaded()) {
+            return early(cat, key, def);
+        }
         return ((ModConfigSpec.ConfigValue<T>) VALUES.get(cat + '.' + key)).get();
+    }
+
+    /**
+     * The file as read before NeoForge loads it; see {@link #loadEarly}. Null until then,
+     * and after it every value comes from the spec.
+     */
+    private static com.electronwill.nightconfig.core.Config earlyFile;
+
+    /**
+     * Reads the file straight off disk, for the loading screen.
+     *
+     * That screen is up from the moment the game window is, which is before any mod is
+     * constructed and so before NeoForge has loaded this config — but it is also the one
+     * place a pack's title and tips are first seen. A missing or broken file simply
+     * leaves the defaults.
+     */
+    public static void loadEarly() {
+        if (SPEC.isLoaded() || earlyFile != null) {
+            return;
+        }
+        java.nio.file.Path file = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve(FILE_NAME);
+        if (!java.nio.file.Files.isRegularFile(file)) {
+            return;
+        }
+        try (com.electronwill.nightconfig.core.file.CommentedFileConfig config =
+                     com.electronwill.nightconfig.core.file.CommentedFileConfig.of(file)) {
+            config.load();
+            earlyFile = config;
+            read();
+        } catch (Throwable t) {
+            earlyFile = null;
+            System.err.println("[UKY] could not read " + file + " early: " + t);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T early(String cat, String key, T def) {
+        if (earlyFile == null) {
+            return def;
+        }
+        Object raw = earlyFile.get(List.of(cat, key));
+        if (raw == null) {
+            return def;
+        }
+        // TOML hands numbers back as whatever width it parsed; the fields want theirs.
+        if (def instanceof Integer && raw instanceof Number) {
+            return (T) Integer.valueOf(((Number) raw).intValue());
+        }
+        if (def instanceof Double && raw instanceof Number) {
+            return (T) Double.valueOf(((Number) raw).doubleValue());
+        }
+        if (def == null || def.getClass().isInstance(raw) || raw instanceof List) {
+            return (T) raw;
+        }
+        return def;
     }
 
     private static boolean bool(String cat, String key, boolean def, String comment) {
@@ -951,8 +1009,15 @@ public final class UiConfig {
                     List.of(cat, key), Arrays.asList(def), () -> "", o -> o instanceof String));
             return def;
         }
-        List<? extends String> list = value(cat, key, null);
-        return list.toArray(new String[0]);
+        List<?> list = value(cat, key, null);
+        if (list == null) {
+            return def;
+        }
+        String[] out = new String[list.size()];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = String.valueOf(list.get(i));
+        }
+        return out;
     }
 
     private static int clampInt(String cat, String key, int def, int min, int max, String comment) {

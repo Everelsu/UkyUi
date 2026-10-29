@@ -931,7 +931,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
                 diveTo(new GuiWorldsScreen(this));
                 break;
             case ID_MULTIPLAYER:
-                diveTo(new net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen(this));
+                diveTo(new GuiServersScreen(this));
                 break;
             case ID_OPTIONS:
                 switchTo(new GuiSettingsScreen(GuiTitleScreen.this, mc.options));

@@ -142,5 +142,7 @@
   "uky.share.portFree": "free",
   "uky.share.portBusy": "in use",
   "uky.share.portRange": "1024 to 65535",
-  "uky.share.portAuto": "any free one"
+  "uky.share.portAuto": "any free one",
+  "uky.settings.accessibility": "Accessibility",
+  "uky.settings.effects.screen": "Screen effects"
 }

@@ -39,6 +39,8 @@ public class GuiServerEditScreen extends MenuScreen {
 
     private final Mode mode;
     private final ServerData draft;
+    /** The list this edits for; it is told the outcome, as 1.7.10 told a parent screen. */
+    private final GuiServersScreen owner;
 
     private GuiTextField nameField;
     private GuiTextField addressField;
@@ -58,8 +60,9 @@ public class GuiServerEditScreen extends MenuScreen {
 
     private boolean done;
 
-    public GuiServerEditScreen(GuiScreen parent, Mode mode, ServerData draft) {
+    public GuiServerEditScreen(GuiServersScreen parent, Mode mode, ServerData draft) {
         super(parent);
+        this.owner = parent;
         this.mode = mode;
         this.draft = draft;
     }
@@ -73,12 +76,12 @@ public class GuiServerEditScreen extends MenuScreen {
     @Override
     public void initGui() {
         super.initGui();
-        org.lwjgl.input.Keyboard.enableRepeatEvents(true);
+        com.console.uky.compat.Keyboard.enableRepeatEvents(true);
     }
 
     @Override
     public void onGuiClosed() {
-        org.lwjgl.input.Keyboard.enableRepeatEvents(false);
+        com.console.uky.compat.Keyboard.enableRepeatEvents(false);
         super.onGuiClosed();
     }
 
@@ -104,7 +107,7 @@ public class GuiServerEditScreen extends MenuScreen {
                     this.panelX1 + 18, y, fieldWidth, 16);
             this.nameField.setMaxStringLength(64);
             this.nameField.setEnableBackgroundDrawing(false);
-            this.nameField.setText(this.draft.serverName == null ? "" : this.draft.serverName);
+            this.nameField.setText(this.draft.name == null ? "" : this.draft.name);
             y += 40;
         }
 
@@ -112,7 +115,7 @@ public class GuiServerEditScreen extends MenuScreen {
                 this.panelX1 + 18, y, fieldWidth, 16);
         this.addressField.setMaxStringLength(128);
         this.addressField.setEnableBackgroundDrawing(false);
-        this.addressField.setText(this.draft.serverIP == null ? "" : this.draft.serverIP);
+        this.addressField.setText(this.draft.ip == null ? "" : this.draft.ip);
 
         // The address is the one field that must be filled, so it starts focused when
         // there is nothing else to type.
@@ -235,7 +238,7 @@ public class GuiServerEditScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, (0.7F + this.resourceHover * 0.3F) * this.fadeAlpha));
 
         // The enum carries its own translated label, so there is no key to rebuild.
-        String value = this.draft.func_152586_b().func_152589_a().getUnformattedText();
+        String value = this.draft.getResourcePackStatus().getName().getString();
         // Value first: it is the part that changes, so it keeps the width it needs
         // and the caption beside it takes whatever is left.
         int valueWidth = drawFittedRight(value, x2 - 8, y + 5, (x2 - x1) / 2,
@@ -352,9 +355,9 @@ public class GuiServerEditScreen extends MenuScreen {
     }
 
     private void cycleResourceMode() {
-        ServerData.ServerResourceMode[] modes = ServerData.ServerResourceMode.values();
-        int next = (this.draft.func_152586_b().ordinal() + 1) % modes.length;
-        this.draft.func_152584_a(modes[next]);
+        ServerData.ServerPackStatus[] modes = ServerData.ServerPackStatus.values();
+        int next = (this.draft.getResourcePackStatus().ordinal() + 1) % modes.length;
+        this.draft.setResourcePackStatus(modes[next]);
     }
 
     @Override
@@ -401,10 +404,10 @@ public class GuiServerEditScreen extends MenuScreen {
         }
         this.done = true;
         if (hasName()) {
-            this.draft.serverName = this.nameField.getText().trim();
+            this.draft.name = this.nameField.getText().trim();
         }
-        this.draft.serverIP = this.addressField.getText().trim();
-        this.parent.confirmClicked(true, 0);
+        this.draft.ip = this.addressField.getText().trim();
+        this.owner.confirmClicked(true, 0);
     }
 
     private void cancel() {
@@ -412,7 +415,7 @@ public class GuiServerEditScreen extends MenuScreen {
             return;
         }
         this.done = true;
-        this.parent.confirmClicked(false, 0);
+        this.owner.confirmClicked(false, 0);
     }
 
     @Override

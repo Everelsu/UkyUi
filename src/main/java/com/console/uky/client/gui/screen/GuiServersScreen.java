@@ -1,6 +1,5 @@
 package com.console.uky.client.gui.screen;
 
-import cpw.mods.fml.client.FMLClientHandler;
 import com.console.uky.UkyUI;
 import com.console.uky.client.gui.MenuScreen;
 import com.console.uky.client.gui.Transitions;
@@ -13,15 +12,20 @@ import com.console.uky.client.world.TileCracks;
 import com.console.uky.client.world.TileShatter;
 import com.console.uky.compat.GuiButton;
 import com.console.uky.compat.GuiScreen;
-import net.minecraft.client.gui.GuiYesNoCallback;
+import com.console.uky.compat.GuiYesNoCallback;
+import com.console.uky.compat.Images;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
-import net.minecraft.client.network.LanServerDetector;
-import net.minecraft.client.network.OldServerPinger;
+import net.minecraft.SharedConstants;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.multiplayer.ServerStatusPinger;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.client.server.LanServer;
+import net.minecraft.client.server.LanServerDetection;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.resources.ResourceLocation;
-import org.apache.commons.codec.binary.Base64;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -63,13 +67,13 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private static final float TILE_ASPECT = 16.0F / 9.0F;
 
     private ServerList servers;
-    private OldServerPinger pinger;
+    private ServerStatusPinger pinger;
 
     /** What the LAN listener has heard; kept across the editor screens, its thread is not. */
-    private final LanServerDetector.LanServerList lanList = new LanServerDetector.LanServerList();
-    private LanServerDetector.ThreadLanServerFind lanFinder;
+    private final LanServerDetection.LanServerList lanList = new LanServerDetection.LanServerList();
+    private LanServerDetection.LanServerDetector lanFinder;
     /** The LAN games as of the last frame the listener had news; after the saved servers. */
-    private List<LanServerDetector.LanServer> lan = Collections.emptyList();
+    private List<LanServer> lan = Collections.emptyList();
     private float[] lanHover = new float[0];
 
     /** Decoded server icons, keyed by address. */
@@ -116,7 +120,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     /** Plays after the entry is gone; holds nothing but pixels. */
     private TileShatter shatter;
 
-    public GuiServersScreen(GuiScreen parent) {
+    public GuiServersScreen(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
     }
 
@@ -148,11 +152,9 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             // completed and every server eventually read as not answering, and
             // connectToServer reads the other, so joining one died on an NPE that
             // named this screen.
-            FMLClientHandler.instance().setupServerList();
-
             this.servers = new ServerList(this.mc);
-            this.servers.loadServerList();
-            this.pinger = new OldServerPinger();
+            this.servers.load();
+            this.pinger = new ServerStatusPinger();
             pingAll();
         }
         listenLan();
@@ -177,7 +179,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
         this.tileHeight = (int) (this.tileWidth / TILE_ASPECT);
 
-        this.hoverAmount = new float[this.servers.countServers()];
+        this.hoverAmount = new float[this.servers.size()];
         clampScroll();
     }
 
@@ -250,10 +252,10 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
     /** Kicks off a ping for every entry; results land asynchronously. */
     private void pingAll() {
-        int count = this.servers.countServers();
+        int count = this.servers.size();
         Probe[] fresh = new Probe[count];
         for (int i = 0; i < count; i++) {
-            fresh[i] = ping(this.servers.getServerData(i));
+            fresh[i] = ping(this.servers.get(i));
         }
         this.probes = fresh;
     }
@@ -271,22 +273,28 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private Probe ping(final ServerData data) {
         final Probe probe = new Probe();
 
-        data.pingToServer = -2L;
-        data.serverMOTD = "";
-        data.populationInfo = "";
+        data.ping = -2L;
+        data.motd = net.minecraft.network.chat.Component.empty();
+        data.status = net.minecraft.network.chat.Component.empty();
+        data.setState(ServerData.State.PINGING);
 
         PINGERS.execute(new Runnable() {
             @Override
             public void run() {
                 probe.startedAt = System.currentTimeMillis();
                 try {
-                    GuiServersScreen.this.pinger.func_147224_a(data);
+                    GuiServersScreen.this.pinger.pingServer(data, () -> { }, () -> {
+                        data.setState(data.protocol == SharedConstants.getCurrentVersion().getProtocolVersion()
+                                ? ServerData.State.SUCCESSFUL : ServerData.State.INCOMPATIBLE);
+                        // An answer at all is online, even from a version this client cannot join.
+                        probe.state = PING_ONLINE;
+                    });
                 } catch (java.net.UnknownHostException e) {
                     probe.state = PING_UNRESOLVED;
-                    data.populationInfo = "";
+                    data.setState(ServerData.State.UNREACHABLE);
                 } catch (Exception e) {
                     probe.state = PING_UNREACHABLE;
-                    data.populationInfo = "";
+                    data.setState(ServerData.State.UNREACHABLE);
                 }
             }
         });
@@ -327,7 +335,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
     /** The plus, the saved servers, the LAN games. */
     private int cardCount() {
-        return 1 + this.servers.countServers() + this.lan.size();
+        return 1 + this.servers.size() + this.lan.size();
     }
 
     // ------------------------------------------------------------------- lan --
@@ -345,7 +353,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             return;
         }
         try {
-            this.lanFinder = new LanServerDetector.ThreadLanServerFind(this.lanList);
+            this.lanFinder = new LanServerDetection.LanServerDetector(this.lanList);
             this.lanFinder.start();
         } catch (Exception e) {
             // No multicast on this machine: no LAN games, the rest of the screen is fine.
@@ -356,16 +364,14 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     /** Takes what the listener heard since the last frame, if anything. */
     @SuppressWarnings("unchecked")
     private void pollLan() {
-        List<LanServerDetector.LanServer> found;
+        List<LanServer> found;
         // The list hands out a view of what its thread keeps adding to; copied under
         // the same lock that thread takes.
-        synchronized (this.lanList) {
-            if (!this.lanList.getWasUpdated()) {
-                return;
-            }
-            found = new ArrayList<LanServerDetector.LanServer>(this.lanList.getLanServers());
-            this.lanList.setWasNotUpdated();
+        List<LanServer> dirty = this.lanList.takeDirtyServers();
+        if (dirty == null) {
+            return;
         }
+        found = new ArrayList<LanServer>(dirty);
         this.lan = found;
         if (this.lanHover.length != found.size()) {
             float[] grown = new float[found.size()];
@@ -395,7 +401,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     protected void drawContent(int mouseX, int mouseY) {
         this.scroll = Ease.approach(this.scroll, this.scrollTarget, 0.05F, this.delta);
         try {
-            this.pinger.func_147223_a();
+            this.pinger.tick();
         } catch (Exception e) {
             // A failed ping tick is not worth a broken screen.
         }
@@ -407,7 +413,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
         Draw.beginClip(this.gridX, this.gridY, this.gridWidth, this.gridHeight);
         drawAddCard(0);
-        int saved = this.servers.countServers();
+        int saved = this.servers.size();
         for (int i = 0; i < saved; i++) {
             drawServerCard(i, i + 1);
         }
@@ -499,7 +505,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                 if (mouseX >= x && mouseX < x + this.tileWidth
                         && mouseY >= y && mouseY < y + this.tileHeight) {
                     this.hoveredCard = slot - 1;
-                    if (this.hoveredCard >= 0 && this.hoveredCard < this.servers.countServers()) {
+                    if (this.hoveredCard >= 0 && this.hoveredCard < this.servers.size()) {
                         this.hoveredAction = hitTestActions(mouseX, mouseY, x, y);
                     }
                     break;
@@ -513,7 +519,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             this.hoverAmount[i] = Ease.approach(this.hoverAmount[i],
                     this.hoveredCard == i ? 1.0F : 0.0F, 0.05F, this.delta);
         }
-        int saved = this.servers.countServers();
+        int saved = this.servers.size();
         for (int i = 0; i < this.lanHover.length; i++) {
             this.lanHover[i] = Ease.approach(this.lanHover[i],
                     this.hoveredCard == saved + i ? 1.0F : 0.0F, 0.05F, this.delta);
@@ -571,7 +577,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             return;
         }
 
-        ServerData data = this.servers.getServerData(index);
+        ServerData data = this.servers.get(index);
         // The hover array is sized by the layout; a server added since then is drawn
         // unhighlighted rather than taking the screen down on an index.
         float hover = index < this.hoverAmount.length ? this.hoverAmount[index] : 0.0F;
@@ -593,7 +599,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         Draw.gradientV(x, y2 - 34, x2, y2,
                 Draw.withAlpha(0x000000, 0.0F), Draw.withAlpha(0x000000, 0.88F * alpha));
 
-        String name = fit(data.serverName, this.tileWidth - 12);
+        String name = fit(data.name, this.tileWidth - 12);
         this.fontRendererObj.drawString(name, x + 6, (int) (y2 - 28),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
 
@@ -601,7 +607,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         // own untranslated "Pinging..." into the MOTD the moment a probe starts, and
         // that is the status line's job to say, in the player's language.
         String motd = stateOf(data, index) == PING_ONLINE
-                ? strip(data.serverMOTD).replace('\n', ' ')
+                ? strip(data.motd.getString()).replace('\n', ' ')
                 : "";
         this.fontRendererObj.drawString(
                 fit(motd, this.tileWidth - 12),
@@ -635,7 +641,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         if (index >= this.lan.size() || y + this.tileHeight < this.gridY || y > this.gridY + this.gridHeight) {
             return;
         }
-        LanServerDetector.LanServer game = this.lan.get(index);
+        LanServer game = this.lan.get(index);
         float hover = index < this.lanHover.length ? this.lanHover[index] : 0.0F;
         float alpha = this.fadeAlpha;
         float x2 = x + this.tileWidth;
@@ -647,10 +653,10 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                 Draw.withAlpha(Theme.accent, 0.0F));
         Draw.border(x, y, x2, y2, 1.0F, Draw.withAlpha(Theme.separator, alpha));
 
-        this.fontRendererObj.drawString(fit(strip(game.getServerMotd()), this.tileWidth - 12),
+        this.fontRendererObj.drawString(fit(strip(game.getMotd()), this.tileWidth - 12),
                 x + 6, (int) (y2 - 28),
                 Draw.withAlpha(hover > 0.5F ? Theme.textHover : Theme.text, alpha));
-        this.fontRendererObj.drawString(fit(game.getServerIpPort(), this.tileWidth - 12),
+        this.fontRendererObj.drawString(fit(game.getAddress(), this.tileWidth - 12),
                 x + 6, (int) (y2 - 18), Draw.withAlpha(Theme.textDim, 0.85F * alpha));
         Draw.rect(x + 6, y2 - 8, x + 9, y2 - 5, Draw.withAlpha(0xFF6ECB63, alpha));
         this.fontRendererObj.drawString(
@@ -658,7 +664,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                 x + 13, (int) (y2 - 9), Draw.withAlpha(Theme.textDim, 0.8F * alpha));
 
         if (hover > 0.02F) {
-            drawJoin(x, y, this.hoveredCard == this.servers.countServers() + index, hover * alpha);
+            drawJoin(x, y, this.hoveredCard == this.servers.size() + index, hover * alpha);
             Draw.border(x, y, x2, y2, 1.0F, Draw.withAlpha(Theme.accent, hover * alpha));
             Draw.glow(x, y, x2, y2, 5.0F, Draw.withAlpha(Theme.accent, 0.25F * hover * alpha), 4);
         }
@@ -694,13 +700,17 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
         switch (state) {
             case PING_ONLINE:
-                text = data.pingToServer + " ms";
-                String population = strip(data.populationInfo);
+                text = data.ping + " ms";
+                if (data.state() == ServerData.State.INCOMPATIBLE) {
+                    text = data.version.getString();
+                }
+                String population = strip(data.status.getString());
                 if (!population.isEmpty()) {
                     text = text + "   " + population;
                 }
-                dot = data.pingToServer < 150L ? 0xFF6ECB63
-                        : (data.pingToServer < 400L ? Theme.accent : Theme.danger);
+                dot = data.state() == ServerData.State.INCOMPATIBLE ? Theme.danger
+                        : (data.ping < 150L ? 0xFF6ECB63
+                        : (data.ping < 400L ? Theme.accent : Theme.danger));
                 break;
             case PING_UNRESOLVED:
                 text = I18n.get("uky.server.status.unresolved", new Object[0]);
@@ -733,7 +743,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
      * {@code OldServerPinger}, which has no idea this screen exists.
      */
     private int stateOf(ServerData data, int index) {
-        if (data.pingToServer >= 0L) {
+        if (data.state() == ServerData.State.SUCCESSFUL || data.state() == ServerData.State.INCOMPATIBLE) {
             return PING_ONLINE;
         }
         Probe probe = probeFor(index);
@@ -798,7 +808,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
      * natural cancel.
      */
     private void updateHold() {
-        boolean down = org.lwjgl.input.Mouse.isButtonDown(0);
+        boolean down = com.console.uky.compat.Mouse.isButtonDown(0);
         if (!down) {
             this.holdSuppressed = false;
         }
@@ -808,7 +818,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                 && !isShiftKeyDown()
                 && this.hoveredAction == HIT_DELETE
                 && this.hoveredCard >= 0
-                && this.hoveredCard < this.servers.countServers()
+                && this.hoveredCard < this.servers.size()
                 && (this.holdCard == -1 || this.holdCard == this.hoveredCard);
 
         if (holding) {
@@ -858,18 +868,18 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
      * received to solve a bookkeeping problem.
      */
     private void destroyServer(int index) {
-        if (index < 0 || index >= this.servers.countServers()) {
+        if (index < 0 || index >= this.servers.size()) {
             return;
         }
         UkySounds.play(UkySounds.DELETE_BREAK);
 
-        ServerData data = this.servers.getServerData(index);
+        ServerData data = this.servers.get(index);
         ResourceLocation icon = iconFor(data);
         float x = slotX(index + 1);
         float y = slotY(index + 1);
 
-        this.servers.removeServerData(index);
-        this.servers.saveServerList();
+        this.servers.remove(data);
+        this.servers.save();
 
         this.probes = removeAt(this.probes, index);
         this.hoverAmount = removeAt(this.hoverAmount, index);
@@ -939,11 +949,11 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
     /** Decodes and uploads a server's base64 icon once, then reuses it. */
     private ResourceLocation iconFor(ServerData data) {
-        String encoded = data.getBase64EncodedIconData();
-        if (encoded == null || encoded.isEmpty()) {
+        byte[] bytes = data.getIconBytes();
+        if (bytes == null || bytes.length == 0) {
             return null;
         }
-        String key = data.serverIP + '|' + encoded.hashCode();
+        String key = data.ip + '|' + java.util.Arrays.hashCode(bytes);
         // containsKey, not a null check: a failed decode is cached as null on purpose,
         // and asking again would re-run ImageIO and re-log the warning every frame for
         // as long as the screen is open.
@@ -951,19 +961,14 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             return this.icons.get(key);
         }
         try {
-            byte[] bytes = Base64.decodeBase64(encoded.getBytes("UTF-8"));
-            BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
-            if (image == null) {
-                this.icons.put(key, null);
-                return null;
-            }
+            NativeImage image = NativeImage.read(bytes);
             ResourceLocation location = ResourceLocation.fromNamespaceAndPath("uky",
                     "servericon/" + Math.abs(key.hashCode()));
-            this.mc.getTextureManager().loadTexture(location, new DynamicTexture(image));
+            this.mc.getTextureManager().register(location, new DynamicTexture(image));
             this.icons.put(key, location);
             return location;
         } catch (Exception e) {
-            UkyUI.LOGGER.warn("Could not decode the icon for " + data.serverIP, e);
+            UkyUI.LOGGER.warn("Could not decode the icon for " + data.ip, e);
             this.icons.put(key, null);
             return null;
         }
@@ -992,8 +997,8 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             beginAddServer();
             return;
         }
-        if (this.hoveredCard >= 0 && this.hoveredCard < this.servers.countServers()) {
-            ServerData data = this.servers.getServerData(this.hoveredCard);
+        if (this.hoveredCard >= 0 && this.hoveredCard < this.servers.size()) {
+            ServerData data = this.servers.get(this.hoveredCard);
             switch (this.hoveredAction) {
                 case HIT_EDIT:
                     beginEditServer(this.hoveredCard, data);
@@ -1017,11 +1022,11 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     return;
             }
         }
-        int lanIndex = this.hoveredCard - this.servers.countServers();
+        int lanIndex = this.hoveredCard - this.servers.size();
         if (this.hoveredCard >= 0 && lanIndex >= 0 && lanIndex < this.lan.size()) {
             // What vanilla joins a LAN game with: its name for the entry, its address.
-            LanServerDetector.LanServer game = this.lan.get(lanIndex);
-            join(new ServerData(game.getServerMotd(), game.getServerIpPort()));
+            LanServer game = this.lan.get(lanIndex);
+            join(new ServerData(game.getMotd(), game.getAddress(), ServerData.Type.LAN));
             return;
         }
         super.mouseClicked(mouseX, mouseY, button);
@@ -1030,7 +1035,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0) {
             this.scrollTarget -= (wheel > 0 ? 1 : -1) * (this.tileHeight + TILE_GAP) * 0.6F;
             clampScroll();
@@ -1054,7 +1059,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
      * there is nothing left for this method to do but hand over.
      */
     private void join(ServerData data) {
-        FMLClientHandler.instance().connectToServer(this, data);
+        ConnectScreen.startConnecting(this, this.mc, ServerAddress.parseString(data.ip), data, false, null);
     }
 
     // ---- adding, editing, connecting ----------------------------------------
@@ -1078,7 +1083,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private void beginAddServer() {
         this.mode = MODE_ADD;
         this.draft = new ServerData(
-                I18n.get("selectServer.defaultName", new Object[0]), "");
+                I18n.get("selectServer.defaultName", new Object[0]), "", ServerData.Type.OTHER);
         this.mc.setScreen(new GuiServerEditScreen(
                 this, GuiServerEditScreen.Mode.ADD, this.draft));
     }
@@ -1092,15 +1097,15 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private void beginEditServer(int index, ServerData existing) {
         this.mode = MODE_EDIT;
         this.editIndex = index;
-        this.draft = new ServerData(existing.serverName, existing.serverIP);
-        this.draft.func_152584_a(existing.func_152586_b());
+        this.draft = new ServerData(existing.name, existing.ip, ServerData.Type.OTHER);
+        this.draft.setResourcePackStatus(existing.getResourcePackStatus());
         this.mc.setScreen(new GuiServerEditScreen(this, GuiServerEditScreen.Mode.EDIT, this.draft));
     }
 
     private void beginDirectConnect() {
         this.mode = MODE_DIRECT;
         this.draft = new ServerData(
-                I18n.get("selectServer.defaultName", new Object[0]), "");
+                I18n.get("selectServer.defaultName", new Object[0]), "", ServerData.Type.OTHER);
         this.mc.setScreen(new GuiServerEditScreen(this, GuiServerEditScreen.Mode.DIRECT, this.draft));
     }
 
@@ -1118,20 +1123,20 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
 
         switch (finished) {
             case MODE_ADD:
-                this.servers.addServerData(this.draft);
-                this.servers.saveServerList();
+                this.servers.add(this.draft, false);
+                this.servers.save();
                 // Asked for on its own rather than by re-pinging the list: appending
                 // keeps every answer already received, and the entry goes on the end,
                 // so its index is the one past what the array currently holds.
-                setProbe(this.servers.countServers() - 1, ping(this.draft));
+                setProbe(this.servers.size() - 1, ping(this.draft));
                 break;
             case MODE_EDIT:
-                if (this.editIndex >= 0 && this.editIndex < this.servers.countServers()) {
-                    ServerData live = this.servers.getServerData(this.editIndex);
-                    live.serverName = this.draft.serverName;
-                    live.serverIP = this.draft.serverIP;
-                    live.func_152584_a(this.draft.func_152586_b());
-                    this.servers.saveServerList();
+                if (this.editIndex >= 0 && this.editIndex < this.servers.size()) {
+                    ServerData live = this.servers.get(this.editIndex);
+                    live.name = this.draft.name;
+                    live.ip = this.draft.ip;
+                    live.setResourcePackStatus(this.draft.getResourcePackStatus());
+                    this.servers.save();
                     // The address may be the thing that was edited, which makes the
                     // answer on the card an answer about somewhere else.
                     setProbe(this.editIndex, ping(live));
@@ -1169,7 +1174,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         UkySounds.stopDeleteHold();
         super.onGuiClosed();
         if (this.pinger != null) {
-            this.pinger.func_147226_b();
+            this.pinger.removeAll();
         }
         if (this.lanFinder != null) {
             this.lanFinder.interrupt();

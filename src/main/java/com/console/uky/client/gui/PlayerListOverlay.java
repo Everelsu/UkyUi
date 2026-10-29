@@ -4,12 +4,13 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Theme;
 import net.minecraft.client.Minecraft;
 import com.console.uky.compat.FontRenderer;
-import net.minecraft.client.gui.GuiPlayerInfo;
-import com.console.uky.compat.ScaledResolution;
-import net.minecraft.client.network.NetHandlerPlayClient;
-import net.minecraft.scoreboard.Score;
-import net.minecraft.scoreboard.ScoreObjective;
-import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.world.scores.DisplaySlot;
+import net.minecraft.world.scores.ReadOnlyScoreInfo;
+import net.minecraft.world.scores.ScoreHolder;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.Scoreboard;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,6 +46,25 @@ public final class PlayerListOverlay {
     private PlayerListOverlay() {
     }
 
+    /** Takes the Tab list's turn in the HUD; registered on NeoForge's bus. */
+    public static final class Handler {
+        @net.neoforged.bus.api.SubscribeEvent
+        public void onLayer(net.neoforged.neoforge.client.event.RenderGuiLayerEvent.Pre event) {
+            if (!event.getName().equals(net.neoforged.neoforge.client.gui.VanillaGuiLayers.TAB_LIST)
+                    || !com.console.uky.config.UiConfig.replacePlayerList) {
+                return;
+            }
+            Minecraft mc = Minecraft.getInstance();
+            // Drawn only while the key is held, as vanilla's is.
+            if (!mc.options.keyPlayerList.isDown() || !shouldDraw(mc)) {
+                return;
+            }
+            event.setCanceled(true);
+            event.getGuiGraphics().flush();
+            draw(mc, event.getGuiGraphics().guiWidth(), event.getGuiGraphics().guiHeight());
+        }
+    }
+
     /**
      * Whether this should draw at all, matching vanilla's own condition: a single
      * player on their own world has nothing to look at.
@@ -53,29 +73,29 @@ public final class PlayerListOverlay {
         if (mc.player == null || mc.level == null) {
             return false;
         }
-        return !mc.isIntegratedServerRunning()
-                || mc.player.sendQueue.playerInfoList.size() > 1
+        return !mc.isLocalServer()
+                || mc.player.connection.getListedOnlinePlayers().size() > 1
                 || objective(mc) != null;
     }
 
     /** The objective a server puts in the list, or null when there is none. */
-    private static ScoreObjective objective(Minecraft mc) {
+    private static Objective objective(Minecraft mc) {
         Scoreboard scoreboard = mc.level.getScoreboard();
-        return scoreboard == null ? null : scoreboard.func_96539_a(0);
+        return scoreboard == null ? null : scoreboard.getDisplayObjective(DisplaySlot.LIST);
     }
 
     @SuppressWarnings("unchecked")
-    public static void draw(Minecraft mc, ScaledResolution resolution) {
-        NetHandlerPlayClient connection = mc.player.sendQueue;
-        List<GuiPlayerInfo> players =
-                new ArrayList<GuiPlayerInfo>(connection.playerInfoList);
+    public static void draw(Minecraft mc, int screenWidth, int screenHeight) {
+        ClientPacketListener connection = mc.player.connection;
+        List<PlayerInfo> players =
+                new ArrayList<PlayerInfo>(connection.getListedOnlinePlayers());
         if (players.isEmpty()) {
             return;
         }
         Collections.sort(players, BY_NAME);
 
         FontRenderer font = com.console.uky.compat.FontRenderer.get();
-        ScoreObjective objective = objective(mc);
+        Objective objective = objective(mc);
 
         int rows = Math.min(players.size(), MAX_ROWS);
         int columns = (players.size() + MAX_ROWS - 1) / MAX_ROWS;
@@ -84,8 +104,8 @@ public final class PlayerListOverlay {
         // read as a broken layout rather than as a deliberate one.
         int columnWidth = 0;
         for (int i = 0; i < players.size(); i++) {
-            GuiPlayerInfo info = players.get(i);
-            int width = font.getStringWidth(info.name) + PING_GAP
+            PlayerInfo info = players.get(i);
+            int width = font.getStringWidth(nameOf(info)) + PING_GAP
                     + font.getStringWidth(pingText(info));
             String score = scoreText(mc, objective, info);
             if (!score.isEmpty()) {
@@ -95,13 +115,13 @@ public final class PlayerListOverlay {
         }
         columnWidth = Math.max(columnWidth, 96);
 
-        String heading = heading(players.size(), connection.currentServerMaxPlayers);
+        String heading = heading(players.size(), -1);
         int bodyWidth = columnWidth * columns + COLUMN_GAP * (columns - 1);
         int panelWidth = Math.max(bodyWidth, font.getStringWidth(heading)) + PADDING * 2;
         int panelHeight = HEADER + rows * ROW_HEIGHT + PADDING;
 
-        int x = (resolution.getScaledWidth() - panelWidth) / 2;
-        int y = Math.max(4, resolution.getScaledHeight() / 8);
+        int x = (screenWidth - panelWidth) / 2;
+        int y = Math.max(4, screenHeight / 8);
 
         drawPanel(x, y, panelWidth, panelHeight);
 
@@ -127,10 +147,10 @@ public final class PlayerListOverlay {
                 Draw.withAlpha(Theme.accent, 0.75F), Draw.withAlpha(Theme.accent, 0.0F));
     }
 
-    private static void drawRow(Minecraft mc, FontRenderer font, GuiPlayerInfo info,
-                                ScoreObjective objective, int x, int y, int width) {
+    private static void drawRow(Minecraft mc, FontRenderer font, PlayerInfo info,
+                                Objective objective, int x, int y, int width) {
         boolean self = mc.player != null
-                && info.name.equals(mc.player.getCommandSenderName());
+                && info.getProfile().getId().equals(mc.player.getUUID());
 
         if (self) {
             // You, marked. In a list of twenty names finding your own row otherwise
@@ -139,13 +159,13 @@ public final class PlayerListOverlay {
                     Draw.withAlpha(Theme.accent, 0.10F));
         }
 
-        font.drawString(info.name, x, y,
+        font.drawString(nameOf(info), x, y,
                 Draw.withAlpha(self ? Theme.textHover : Theme.text, 0.92F));
 
         String ping = pingText(info);
         int pingWidth = font.getStringWidth(ping);
         font.drawString(ping, x + width - pingWidth, y,
-                Draw.withAlpha(pingColour(info.responseTime), 0.9F));
+                Draw.withAlpha(pingColour(info.getLatency()), 0.9F));
 
         String score = scoreText(mc, objective, info);
         if (!score.isEmpty()) {
@@ -161,8 +181,8 @@ public final class PlayerListOverlay {
      * A negative response time is what the server sends for a player it has not timed
      * yet, which is not the same as a bad connection and should not be drawn as one.
      */
-    private static String pingText(GuiPlayerInfo info) {
-        return info.responseTime < 0 ? "--" : info.responseTime + "ms";
+    private static String pingText(PlayerInfo info) {
+        return info.getLatency() < 0 ? "--" : info.getLatency() + "ms";
     }
 
     private static int pingColour(int responseTime) {
@@ -176,27 +196,34 @@ public final class PlayerListOverlay {
     }
 
     /** The player's score in the list objective, or empty when the server sets none. */
-    private static String scoreText(Minecraft mc, ScoreObjective objective, GuiPlayerInfo info) {
+    private static String scoreText(Minecraft mc, Objective objective, PlayerInfo info) {
         if (objective == null) {
             return "";
         }
         try {
-            Score score = mc.level.getScoreboard().func_96529_a(info.name, objective);
-            return String.valueOf(score.getScorePoints());
+            ReadOnlyScoreInfo score = mc.level.getScoreboard().getPlayerScoreInfo(
+                    ScoreHolder.forNameOnly(info.getProfile().getName()), objective);
+            return score == null ? "" : String.valueOf(score.value());
         } catch (Throwable t) {
             // A scoreboard is server-authored data; a malformed one is not worth the HUD.
             return "";
         }
     }
 
+    /** The name the server shows in the list, which may be styled; the account name otherwise. */
+    private static String nameOf(PlayerInfo info) {
+        return info.getTabListDisplayName() != null
+                ? info.getTabListDisplayName().getString() : info.getProfile().getName();
+    }
+
     private static String heading(int online, int max) {
         return max > 0 ? online + " / " + max : String.valueOf(online);
     }
 
-    private static final Comparator<GuiPlayerInfo> BY_NAME = new Comparator<GuiPlayerInfo>() {
+    private static final Comparator<PlayerInfo> BY_NAME = new Comparator<PlayerInfo>() {
         @Override
-        public int compare(GuiPlayerInfo a, GuiPlayerInfo b) {
-            return a.name.compareToIgnoreCase(b.name);
+        public int compare(PlayerInfo a, PlayerInfo b) {
+            return nameOf(a).compareToIgnoreCase(nameOf(b));
         }
     };
 }

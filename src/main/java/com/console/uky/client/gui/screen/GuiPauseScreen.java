@@ -11,7 +11,6 @@ import com.console.uky.compat.GuiButton;
 import com.console.uky.compat.Game;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.client.gui.screens.ShareToLanScreen;
 import net.minecraft.client.resources.language.I18n;
 
 /**
@@ -162,7 +161,7 @@ public class GuiPauseScreen extends MenuScreen {
                 }
                 break;
             case ID_LAN:
-                mc.setScreen(new ShareToLanScreen(GuiPauseScreen.this));
+                switchTo(new GuiShareScreen(GuiPauseScreen.this));
                 break;
             case ID_QUIT:
                 button.enabled = false;

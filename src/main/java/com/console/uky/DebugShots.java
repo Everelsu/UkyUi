@@ -22,14 +22,6 @@ public final class DebugShots {
     public void onTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
         ++this.ticks;
-        // A resource reload early on, shot every second, to catch the loading screen.
-        if (this.ticks == 50) {
-            mc.reloadResourcePacks();
-        }
-        if (this.ticks > 50 && this.ticks <= 170 && this.ticks % 20 == 0) {
-            Screenshot.grab(mc.gameDirectory, "uky_reload_" + this.ticks + ".png",
-                    mc.getMainRenderTarget(), msg -> { });
-        }
         if (this.ticks % 60 != 0) {
             return;
         }
@@ -40,35 +32,25 @@ public final class DebugShots {
 
         Screen title = mc.screen instanceof GuiTitleScreen ? mc.screen : new GuiTitleScreen();
         switch (shot) {
-            case 3: mc.setScreen(new GuiSettingsScreen(title, mc.options)); break;
-            case 4: mc.setScreen(new GuiAudioScreen(title, mc.options)); break;
-            case 5: mc.setScreen(new GuiWorldsScreen(new GuiTitleScreen())); break;
-            case 6: com.console.uky.compat.Saves.create(mc.screen); break;
-            case 8:
+            case 2: com.console.uky.compat.Saves.create(title); break;
+            case 4:
                 if (mc.screen != null) {
                     mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, 0, 0);
                 }
                 break;
-            case 16:
-                if (mc.level != null) {
-                    mc.setScreen(new com.console.uky.client.gui.screen.GuiPauseScreen());
+            case 12:
+            case 13:
+                if (mc.level != null && mc.player != null) {
+                    net.minecraft.advancements.AdvancementHolder root = mc.player.connection.getAdvancements()
+                            .get(net.minecraft.resources.ResourceLocation.withDefaultNamespace("story/root"));
+                    if (root != null) {
+                        com.console.uky.client.gui.AchievementToast.show(root);
+                    }
                 }
                 break;
-            case 18:
+            case 15:
                 if (mc.level != null) {
-                    mc.setScreen(new com.console.uky.client.gui.screen.GuiProgressScreen(null,
-                            com.console.uky.client.gui.screen.GuiProgressScreen.achievementsTab()));
-                }
-                break;
-            case 19:
-                if (mc.level != null) {
-                    mc.setScreen(new com.console.uky.client.gui.screen.GuiProgressScreen(null,
-                            com.console.uky.client.gui.screen.GuiProgressScreen.statsTab()));
-                }
-                break;
-            case 21:
-                if (mc.level != null) {
-                    com.console.uky.compat.Game.disconnect(new GuiTitleScreen());
+                    mc.setScreen(new com.console.uky.client.gui.screen.GuiShareScreen(null));
                 }
                 break;
             default: break;

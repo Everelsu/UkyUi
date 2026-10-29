@@ -142,5 +142,7 @@
   "uky.share.portFree": "свободен",
   "uky.share.portBusy": "занят",
   "uky.share.portRange": "от 1024 до 65535",
-  "uky.share.portAuto": "любой свободный"
+  "uky.share.portAuto": "любой свободный",
+  "uky.settings.accessibility": "Доступность",
+  "uky.settings.effects.screen": "Эффекты экрана"
 }

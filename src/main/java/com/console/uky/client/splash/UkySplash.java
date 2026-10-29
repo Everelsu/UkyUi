@@ -12,10 +12,8 @@ import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.client.gui.screens.Overlay;
 import net.minecraft.server.packs.resources.ReloadInstance;
 import net.minecraft.util.Mth;
-import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.loading.progress.ProgressMeter;
 import net.neoforged.fml.loading.progress.StartupNotificationManager;
-import net.neoforged.neoforge.client.event.RenderFrameEvent;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -44,6 +42,8 @@ public final class UkySplash extends Overlay {
     private static final SplashFont FONT = new SplashFont();
 
     private final Minecraft mc = Minecraft.getInstance();
+    private static final boolean DEBUG_SHOTS = Boolean.getBoolean("uky.debugShots");
+    private int debugFrames;
     private final LoadingOverlay original;
     private final ReloadInstance reload;
     private final Consumer<Optional<Throwable>> onFinish;
@@ -68,15 +68,27 @@ public final class UkySplash extends Overlay {
         return finishedAtNanos;
     }
 
-    /** Swaps itself in for whatever loading overlay the game has just put up. */
-    public static final class Installer {
-        @SubscribeEvent
-        public void onFrame(RenderFrameEvent.Pre event) {
-            Minecraft mc = Minecraft.getInstance();
-            Overlay overlay = mc.getOverlay();
-            if (UiConfig.customSplash && overlay instanceof LoadingOverlay) {
-                mc.setOverlay(new UkySplash((LoadingOverlay) overlay));
+    /**
+     * This screen in place of a loading overlay, or the overlay as it was.
+     *
+     * Called for every overlay the game puts up (see MixinMinecraftOverlay), the first
+     * of them before this mod is even constructed — so the config is read off disk here
+     * if NeoForge has not loaded it yet, and the palette built from it.
+     */
+    public static Overlay wrap(Overlay overlay) {
+        if (!(overlay instanceof LoadingOverlay)) {
+            return overlay;
+        }
+        try {
+            UiConfig.loadEarly();
+            if (Theme.background == 0) {
+                Theme.rebuild();
             }
+            return UiConfig.customSplash ? new UkySplash((LoadingOverlay) overlay) : overlay;
+        } catch (Throwable t) {
+            // The loading screen is the one place a failure must not take the game down.
+            UkyUI.LOGGER.error("Loading screen unavailable; keeping the game's own", t);
+            return overlay;
         }
     }
 
@@ -113,6 +125,10 @@ public final class UkySplash extends Overlay {
         drawWordmark(w, h, content);
         drawProgress(w, h, content * (out >= 0.0F ? 1.0F - Mth.clamp(out * 2.0F, 0.0F, 1.0F) : 1.0F));
         drawTip(w, h, content, elapsed);
+        if (DEBUG_SHOTS && ++this.debugFrames % 120 == 0) {
+            net.minecraft.client.Screenshot.grab(this.mc.gameDirectory,
+                    "uky_splash_" + this.debugFrames + ".png", this.mc.getMainRenderTarget(), msg -> { });
+        }
 
         if (out >= 1.0F) {
             this.mc.setOverlay(null);

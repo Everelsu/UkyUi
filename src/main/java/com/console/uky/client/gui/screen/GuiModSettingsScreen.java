@@ -220,7 +220,10 @@ public class GuiModSettingsScreen extends MenuScreen {
      * in its own screen where it did not.
      */
     private void open(ModConfigCatalog.Entry entry) {
-        net.minecraft.client.gui.screens.Screen screen = ModConfigCatalog.instantiate(entry, this);
+        net.minecraft.client.gui.screens.Screen screen = GuiModConfigScreen.forEntry(entry, this);
+        if (screen == null) {
+            screen = ModConfigCatalog.instantiate(entry, this);
+        }
         if (screen != null) {
             this.mc.setScreen(screen);
         }

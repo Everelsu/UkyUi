@@ -300,6 +300,12 @@ public class GuiModsScreen extends MenuScreen {
             return;
         }
 
+        MenuScreen ours = GuiModConfigScreen.forEntry(entry, this);
+        if (ours != null) {
+            switchTo(ours);
+            return;
+        }
+
         final net.minecraft.client.gui.screens.Screen theirs = ModConfigCatalog.instantiate(entry, this);
         if (theirs != null) {
             closeWith(new Runnable() {

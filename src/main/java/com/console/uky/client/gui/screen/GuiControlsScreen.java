@@ -12,8 +12,9 @@ import com.console.uky.compat.GuiButton;
 import com.console.uky.compat.GuiScreen;
 import com.console.uky.compat.GuiTextField;
 import net.minecraft.client.resources.language.I18n;
-import net.minecraft.client.settings.GameSettings;
-import net.minecraft.client.settings.KeyBinding;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Options;
 import com.console.uky.compat.Keyboard;
 
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ public class GuiControlsScreen extends MenuScreen {
     private static final int ID_DONE = 200;
     private static final int ID_RESET_ALL = 201;
 
-    private final GameSettings settings;
+    private final Options settings;
 
     /**
      * Flattened list of rows: category headers and bindings interleaved, because a
@@ -47,13 +48,13 @@ public class GuiControlsScreen extends MenuScreen {
      */
     private final List<Object> rows = new ArrayList<Object>();
     /** Key codes bound more than once, so both sides of a clash can be marked. */
-    private final List<Integer> clashing = new ArrayList<Integer>();
+    private final List<String> clashing = new ArrayList<String>();
 
     private GuiTextField search;
     private BindingList list;
 
     /** Binding awaiting a key press, or null when not rebinding. */
-    private KeyBinding capturing;
+    private KeyMapping capturing;
 
     private int panelX1;
     private int panelY1;
@@ -73,7 +74,7 @@ public class GuiControlsScreen extends MenuScreen {
         }
     }
 
-    public GuiControlsScreen(GuiScreen parent, GameSettings settings) {
+    public GuiControlsScreen(net.minecraft.client.gui.screens.Screen parent, Options settings) {
         super(parent);
         this.settings = settings;
     }
@@ -83,12 +84,12 @@ public class GuiControlsScreen extends MenuScreen {
     @Override
     public void initGui() {
         super.initGui();
-        org.lwjgl.input.Keyboard.enableRepeatEvents(true);
+        com.console.uky.compat.Keyboard.enableRepeatEvents(true);
     }
 
     @Override
     public void onGuiClosed() {
-        org.lwjgl.input.Keyboard.enableRepeatEvents(false);
+        com.console.uky.compat.Keyboard.enableRepeatEvents(false);
         this.settings.save();
         super.onGuiClosed();
     }
@@ -148,18 +149,18 @@ public class GuiControlsScreen extends MenuScreen {
         this.rows.clear();
         this.clashing.clear();
 
-        KeyBinding[] all = this.settings.keyBindings;
+        KeyMapping[] all = this.settings.keyMappings;
 
         // A key is in conflict if two *different* bindings hold it. Unbound (0) does
         // not count: any number of actions may be left unbound.
         for (int i = 0; i < all.length; i++) {
-            int code = all[i].getKeyCode();
-            if (code == 0 || this.clashing.contains(Integer.valueOf(code))) {
+            String code = code(all[i]);
+            if (code.isEmpty() || this.clashing.contains(code)) {
                 continue;
             }
             for (int j = i + 1; j < all.length; j++) {
-                if (all[j].getKeyCode() == code) {
-                    this.clashing.add(Integer.valueOf(code));
+                if (code(all[j]).equals(code)) {
+                    this.clashing.add(code);
                     break;
                 }
             }
@@ -167,49 +168,53 @@ public class GuiControlsScreen extends MenuScreen {
 
         // Grouped in the order the categories first appear, which is the order the
         // game registered them — mods after vanilla, which is what people expect.
-        Map<String, List<KeyBinding>> grouped = new LinkedHashMap<String, List<KeyBinding>>();
+        Map<String, List<KeyMapping>> grouped = new LinkedHashMap<String, List<KeyMapping>>();
         for (int i = 0; i < all.length; i++) {
-            KeyBinding binding = all[i];
+            KeyMapping binding = all[i];
             if (!matches(binding, query)) {
                 continue;
             }
-            String category = binding.getKeyCategory();
-            List<KeyBinding> bucket = grouped.get(category);
+            String category = binding.getCategory();
+            List<KeyMapping> bucket = grouped.get(category);
             if (bucket == null) {
-                bucket = new ArrayList<KeyBinding>();
+                bucket = new ArrayList<KeyMapping>();
                 grouped.put(category, bucket);
             }
             bucket.add(binding);
         }
 
-        for (Map.Entry<String, List<KeyBinding>> entry : grouped.entrySet()) {
+        for (Map.Entry<String, List<KeyMapping>> entry : grouped.entrySet()) {
             this.rows.add(new Header(I18n.get(entry.getKey(), new Object[0])));
             this.rows.addAll(entry.getValue());
         }
     }
 
-    private boolean matches(KeyBinding binding, String query) {
+    private boolean matches(KeyMapping binding, String query) {
         if (query.isEmpty()) {
             return true;
         }
-        if (I18n.get(binding.getKeyDescription(), new Object[0]).toLowerCase().contains(query)) {
+        if (I18n.get(binding.getName(), new Object[0]).toLowerCase().contains(query)) {
             return true;
         }
         // Searching by the key itself is the fast way to answer "what is on F?".
-        return keyName(binding.getKeyCode()).toLowerCase().contains(query);
+        return keyName(binding).toLowerCase().contains(query);
     }
 
-    /** Display name for a key code, including mouse buttons and "unbound". */
-    private static String keyName(int code) {
-        if (code == 0) {
-            return I18n.get("key.unbound", new Object[0]);
+    /**
+     * What a binding is on, as a comparable string — "" when unbound, which never
+     * clashes: any number of actions may be left unbound. Modifiers count, so Ctrl+Q
+     * and Q are not a clash.
+     */
+    private static String code(KeyMapping binding) {
+        return binding.isUnbound() ? "" : binding.getKeyModifier() + "+" + binding.getKey().getName();
+    }
+
+    /** Display name for a binding, including mouse buttons, modifiers and "unbound". */
+    private static String keyName(KeyMapping binding) {
+        if (binding.isUnbound()) {
+            return I18n.get("key.unbound");
         }
-        if (code < 0) {
-            // Mouse buttons are stored as -100 + button.
-            return I18n.get("key.mouseButton", new Object[]{Integer.valueOf(code + 101)});
-        }
-        String name = Keyboard.getKeyName(code);
-        return name == null ? "?" : name;
+        return binding.getTranslatedKeyMessage().getString();
     }
 
     // --------------------------------------------------------------- drawing --
@@ -316,7 +321,7 @@ public class GuiControlsScreen extends MenuScreen {
             if (row instanceof Header) {
                 drawHeaderRow((Header) row, rowX, rowY, rowWidth, rowHeight, alpha);
             } else {
-                drawBindingRow((KeyBinding) row, rowX, rowY, rowWidth, rowHeight,
+                drawBindingRow((KeyMapping) row, rowX, rowY, rowWidth, rowHeight,
                         isHovered, alpha);
             }
         }
@@ -324,8 +329,8 @@ public class GuiControlsScreen extends MenuScreen {
         @Override
         protected void onRowClicked(int index) {
             Object row = GuiControlsScreen.this.rows.get(index);
-            if (row instanceof KeyBinding) {
-                GuiControlsScreen.this.beginCapture((KeyBinding) row);
+            if (row instanceof KeyMapping) {
+                GuiControlsScreen.this.beginCapture((KeyMapping) row);
             }
         }
     }
@@ -343,12 +348,11 @@ public class GuiControlsScreen extends MenuScreen {
                 Draw.withAlpha(Theme.accent, 0.0F));
     }
 
-    private void drawBindingRow(KeyBinding binding, int rowX, int rowY, int rowWidth,
+    private void drawBindingRow(KeyMapping binding, int rowX, int rowY, int rowWidth,
                                 int rowHeight, boolean isHovered, float alpha) {
         boolean capturingThis = binding == this.capturing;
-        boolean conflict = binding.getKeyCode() != 0
-                && this.clashing.contains(Integer.valueOf(binding.getKeyCode()));
-        boolean changed = binding.getKeyCode() != binding.getKeyCodeDefault();
+        boolean conflict = !binding.isUnbound() && this.clashing.contains(code(binding));
+        boolean changed = !binding.isDefault();
 
         if (isHovered || capturingThis) {
             Draw.rect(rowX, rowY, rowX + rowWidth, rowY + rowHeight,
@@ -356,7 +360,7 @@ public class GuiControlsScreen extends MenuScreen {
                             (capturingThis ? 0.14F : 0.06F) * alpha));
         }
 
-        String label = I18n.get(binding.getKeyDescription(), new Object[0]);
+        String label = I18n.get(binding.getName(), new Object[0]);
         this.fontRendererObj.drawString(
                 fit(label, rowWidth - 108),
                 rowX + 6, rowY + (rowHeight - 8) / 2,
@@ -378,10 +382,10 @@ public class GuiControlsScreen extends MenuScreen {
 
         String key = capturingThis
                 ? "> " + I18n.get("uky.controls.press", new Object[0]) + " <"
-                : keyName(binding.getKeyCode());
+                : keyName(binding);
         key = fit(key, boxWidth - 8);
         int keyColour = capturingThis ? Theme.accent
-                : (conflict ? Theme.danger : (binding.getKeyCode() == 0 ? Theme.textDisabled
+                : (conflict ? Theme.danger : (binding.isUnbound() ? Theme.textDisabled
                         : Theme.text));
         this.fontRendererObj.drawString(key,
                 boxX + (boxWidth - this.fontRendererObj.getStringWidth(key)) / 2,
@@ -396,19 +400,23 @@ public class GuiControlsScreen extends MenuScreen {
 
     // ----------------------------------------------------------------- input --
 
-    private void beginCapture(KeyBinding binding) {
+    private void beginCapture(KeyMapping binding) {
         this.capturing = binding;
     }
 
-    private void applyKey(int code) {
+    private void applyKey(InputConstants.Key key) {
         if (this.capturing == null) {
             return;
         }
-        this.settings.setOptionKeyBinding(this.capturing, code);
+        // Whatever modifier is held goes with the key, as NeoForge's own screen has it.
+        this.capturing.setKeyModifierAndCode(
+                key == InputConstants.UNKNOWN ? net.neoforged.neoforge.client.settings.KeyModifier.NONE
+                        : net.neoforged.neoforge.client.settings.KeyModifier.getActiveModifier(), key);
+        this.settings.setKey(this.capturing, key);
         this.capturing = null;
         // Rebuilds the lookup the game uses at runtime; without it the change does
         // not take effect until a restart.
-        KeyBinding.resetKeyBindingArrayAndHash();
+        KeyMapping.resetMapping();
         rebuildRows();
     }
 
@@ -420,7 +428,7 @@ public class GuiControlsScreen extends MenuScreen {
         // While capturing, any click is the binding — including a mouse button, which
         // is a legitimate thing to bind.
         if (this.capturing != null) {
-            applyKey(-100 + button);
+            applyKey(InputConstants.Type.MOUSE.getOrCreate(button));
             return;
         }
 
@@ -431,12 +439,13 @@ public class GuiControlsScreen extends MenuScreen {
         int hit = rowAt(mouseX, mouseY);
         if (hit >= 0) {
             Object row = this.rows.get(hit);
-            if (row instanceof KeyBinding) {
-                KeyBinding binding = (KeyBinding) row;
-                if (binding.getKeyCode() != binding.getKeyCodeDefault()
+            if (row instanceof KeyMapping) {
+                KeyMapping binding = (KeyMapping) row;
+                if (!binding.isDefault()
                         && mouseX >= this.list.rowRight() - 16) {
-                    this.settings.setOptionKeyBinding(binding, binding.getKeyCodeDefault());
-                    KeyBinding.resetKeyBindingArrayAndHash();
+                    binding.setToDefault();
+                    this.settings.setKey(binding, binding.getDefaultKey());
+                    KeyMapping.resetMapping();
                     rebuildRows();
                     return;
                 }
@@ -469,7 +478,7 @@ public class GuiControlsScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0) {
             this.list.mouseWheel(wheel > 0 ? 1 : -1);
         }
@@ -479,7 +488,7 @@ public class GuiControlsScreen extends MenuScreen {
     protected void keyTyped(char typedChar, int keyCode) {
         if (this.capturing != null) {
             // Escape clears the binding rather than leaving capture, matching vanilla.
-            applyKey(keyCode == Keyboard.KEY_ESCAPE ? 0 : keyCode);
+            // Taken in keyPressed, which still has GLFW's code; nothing to do here.
             return;
         }
         if (keyCode == Keyboard.KEY_ESCAPE) {
@@ -492,6 +501,21 @@ public class GuiControlsScreen extends MenuScreen {
             return;
         }
         super.keyTyped(typedChar, keyCode);
+    }
+
+    /**
+     * The key being bound, straight from GLFW: the LWJGL 2 codes the rest of this screen
+     * reads have no number for half the keys a binding can sit on. Escape unbinds,
+     * matching vanilla.
+     */
+    @Override
+    public boolean keyPressed(int key, int scanCode, int modifiers) {
+        if (this.capturing != null) {
+            applyKey(key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE
+                    ? InputConstants.UNKNOWN : InputConstants.getKey(key, scanCode));
+            return true;
+        }
+        return super.keyPressed(key, scanCode, modifiers);
     }
 
     /** A key being bound is a key being bound, arrows and Enter included. */
@@ -509,11 +533,12 @@ public class GuiControlsScreen extends MenuScreen {
     @Override
     protected void onAction(GuiButton button) {
         if (button.id == ID_RESET_ALL) {
-            KeyBinding[] all = this.settings.keyBindings;
+            KeyMapping[] all = this.settings.keyMappings;
             for (int i = 0; i < all.length; i++) {
-                this.settings.setOptionKeyBinding(all[i], all[i].getKeyCodeDefault());
+                all[i].setToDefault();
+                this.settings.setKey(all[i], all[i].getDefaultKey());
             }
-            KeyBinding.resetKeyBindingArrayAndHash();
+            KeyMapping.resetMapping();
             rebuildRows();
             return;
         }

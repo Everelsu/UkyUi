@@ -9,10 +9,15 @@ import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import com.console.uky.compat.FontRenderer;
 import com.console.uky.compat.ScaledResolution;
-import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.stats.Achievement;
+import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.advancements.AdvancementType;
+import net.minecraft.advancements.DisplayInfo;
+import net.minecraft.client.gui.components.toasts.AdvancementToast;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.ToastAddEvent;
 import com.console.uky.compat.GL11;
 
 import java.util.ArrayList;
@@ -40,7 +45,7 @@ import java.util.List;
  * also shortens the one on screen — the queue drains at pace rather than making the
  * player watch four full dwells.
  *
- * @see com.console.uky.mixins.MixinGuiAchievement the hook that hands the popup over
+ * @see Handler the hook that hands the popup over
  * @see AchievementLinks the chat line the same event produces
  */
 public final class AchievementToast {
@@ -124,33 +129,51 @@ public final class AchievementToast {
      * @return whether we took it — false leaves vanilla's own popup to appear, which
      *         is what the config switch turns back on
      */
-    public static boolean show(Achievement achievement) {
-        if (!UiConfig.achievementToast || achievement == null) {
+    public static boolean show(AdvancementHolder advancement) {
+        DisplayInfo display = advancement == null ? null : advancement.value().display().orElse(null);
+        if (!UiConfig.achievementToast || display == null) {
             return false;
         }
-        enqueue(new Toast(achievement, achievement.theItemStack,
-                I18n.get("uky.achievement.unlocked", new Object[0]),
-                nameOf(achievement), false));
+        // Goals and challenges say so, in vanilla's words; a plain task is an unlock.
+        String kicker = display.getType() == AdvancementType.TASK
+                ? I18n.get("uky.achievement.unlocked")
+                : I18n.get("advancements.toast." + display.getType().getSerializedName());
+        enqueue(new Toast(advancement.id(), display.getIcon(), kicker,
+                display.getTitle().getString(), false));
         return true;
     }
 
     /**
-     * Queues the inventory hint — vanilla's second use of the same popup, which
-     * describes an achievement rather than announcing one.
+     * Hands vanilla's advancement toast to this panel as the game queues it, and draws
+     * the panel at the end of every frame, over the world and any screen alike — which
+     * is where vanilla's toasts are drawn too.
      */
-    public static boolean showHint(Achievement achievement) {
-        if (!UiConfig.achievementToast || achievement == null) {
-            return false;
+    public static final class Handler {
+
+        private static java.lang.reflect.Field advancementField;
+
+        @SubscribeEvent
+        public void onToast(ToastAddEvent event) {
+            if (!(event.getToast() instanceof AdvancementToast) || !UiConfig.achievementToast) {
+                return;
+            }
+            try {
+                if (advancementField == null) {
+                    advancementField = AdvancementToast.class.getDeclaredField("advancement");
+                    advancementField.setAccessible(true);
+                }
+                if (show((AdvancementHolder) advancementField.get(event.getToast()))) {
+                    event.setCanceled(true);
+                }
+            } catch (Throwable t) {
+                // Vanilla's toast is still a toast; better that than none.
+            }
         }
-        String description;
-        try {
-            description = achievement.getDescription();
-        } catch (Throwable t) {
-            description = "";
+
+        @SubscribeEvent
+        public void onFrame(RenderFrameEvent.Post event) {
+            draw();
         }
-        enqueue(new Toast(achievement, achievement.theItemStack,
-                nameOf(achievement), description, true));
-        return true;
     }
 
     /**
@@ -178,7 +201,7 @@ public final class AchievementToast {
     private static void enqueue(Toast toast) {
         if (current == null) {
             current = toast;
-            shownAt = Minecraft.getSystemTime();
+            shownAt = net.minecraft.Util.getMillis();
             announce(toast);
             return;
         }
@@ -234,7 +257,7 @@ public final class AchievementToast {
             return true;
         }
 
-        float elapsed = (Minecraft.getSystemTime() - shownAt) / 1000.0F;
+        float elapsed = (net.minecraft.Util.getMillis() - shownAt) / 1000.0F;
         float dwell = queue.isEmpty() ? current.dwell() : Math.min(current.dwell(), DWELL_QUEUED);
         if (elapsed > dwell + OUT_SECONDS) {
             advance();
@@ -260,7 +283,7 @@ public final class AchievementToast {
             return;
         }
         current = queue.remove(0);
-        shownAt = Minecraft.getSystemTime();
+        shownAt = net.minecraft.Util.getMillis();
         announce(current);
     }
 
@@ -295,7 +318,6 @@ public final class AchievementToast {
         // identical panel inside a screen looks right because the screen pass turned
         // lighting off first. Vanilla's own popup has the same line for the same
         // reason, one call earlier than this one.
-        RenderHelper.disableStandardItemLighting();
         GL11.glDisable(GL11.GL_LIGHTING);
         // Off by the time the world is done with it, in vanilla. A renderer
         // replacement is under no obligation to leave it that way, and fog over a
@@ -599,14 +621,5 @@ public final class AchievementToast {
             return text;
         }
         return font.trimStringToWidth(text, maxWidth);
-    }
-
-    private static String nameOf(Achievement achievement) {
-        try {
-            return achievement.func_150951_e().getUnformattedText();
-        } catch (Throwable t) {
-            // A modded achievement with a broken name must not cost the popup.
-            return achievement.statId;
-        }
     }
 }

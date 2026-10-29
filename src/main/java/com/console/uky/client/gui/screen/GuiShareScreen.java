@@ -6,21 +6,19 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.Theme;
-import cpw.mods.fml.common.ObfuscationReflectionHelper;
 import com.console.uky.compat.GuiButton;
 import com.console.uky.compat.GuiScreen;
 import com.console.uky.compat.GuiTextField;
-import net.minecraft.client.multiplayer.ThreadLanServerPing;
 import net.minecraft.client.resources.language.I18n;
-import net.minecraft.server.integrated.IntegratedServer;
+import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.util.HttpUtil;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.util.List;
-import net.minecraft.util.ChatComponentText;
-import net.minecraft.world.WorldSettings;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.GameType;
 
 /**
  * Opening a world to the local network.
@@ -73,7 +71,7 @@ public class GuiShareScreen extends MenuScreen {
     private int mouseY;
     private boolean started;
 
-    public GuiShareScreen(GuiScreen parent) {
+    public GuiShareScreen(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
     }
 
@@ -91,8 +89,8 @@ public class GuiShareScreen extends MenuScreen {
         // what the guests should get. Read off the integrated server rather than the
         // player controller: 1.7.10 has a setter for the client's game type but no
         // getter, and the server's is the authoritative one anyway.
-        if (this.mc.getIntegratedServer() != null) {
-            WorldSettings.GameType current = this.mc.getIntegratedServer().getGameType();
+        if (this.mc.getSingleplayerServer() != null) {
+            GameType current = this.mc.getSingleplayerServer().getDefaultGameType();
             if (current != null) {
                 for (int i = 0; i < MODES.length; i++) {
                     if (MODES[i].equals(current.getName())) {
@@ -135,9 +133,9 @@ public class GuiShareScreen extends MenuScreen {
     /** A free port, picked the way vanilla's shareToLAN picks one. */
     private static int freePort() {
         try {
-            int port = HttpUtil.func_76181_a();
+            int port = HttpUtil.getAvailablePort();
             return port > 0 ? port : 25564;
-        } catch (IOException e) {
+        } catch (Exception e) {
             return 25564;
         }
     }
@@ -468,7 +466,7 @@ public class GuiShareScreen extends MenuScreen {
      * screen worse than the one it replaces.
      */
     private void start() {
-        IntegratedServer server = this.mc.getIntegratedServer();
+        IntegratedServer server = this.mc.getSingleplayerServer();
         if (this.started || server == null || !portUsable()) {
             return;
         }
@@ -477,45 +475,12 @@ public class GuiShareScreen extends MenuScreen {
 
         String text = this.portField == null ? "" : this.portField.getText().trim();
         int port = text.isEmpty() ? freePort() : Integer.parseInt(text);
-        boolean ok = share(server, port, WorldSettings.GameType.getByName(MODES[this.selectedMode]),
-                this.allowCheats);
-        String message = ok
-                ? I18n.get("commands.publish.started", new Object[]{String.valueOf(port)})
-                : I18n.get("commands.publish.failed", new Object[0]);
-        this.mc.ingameGUI.getChatGUI().printChatMessage(new ChatComponentText(message));
-    }
-
-    /**
-     * Vanilla's {@code IntegratedServer.shareToLAN}, step for step, on the port chosen
-     * here rather than one it picks: listen on it, mark the world public, announce it on
-     * the network, set the guests' game mode and whether they may cheat.
-     *
-     * <p>The two private fields go by both their names, the workspace's and the built
-     * game's. If they can't be reached the world is still open; it just isn't announced,
-     * and is joined by address instead of turning up in the list.
-     */
-    private static boolean share(IntegratedServer server, int port, WorldSettings.GameType type,
-                                 boolean cheats) {
-        try {
-            server.func_147137_ag().addLanEndpoint((InetAddress) null, port);
-        } catch (IOException e) {
-            UkyUI.LOGGER.warn("Could not open the world to LAN on port " + port, e);
-            return false;
-        }
-        UkyUI.LOGGER.info("Started on " + port);
-        try {
-            ObfuscationReflectionHelper.setPrivateValue(IntegratedServer.class, server, Boolean.TRUE,
-                    "isPublic", "field_71346_p");
-            ThreadLanServerPing ping = new ThreadLanServerPing(server.getMOTD(), String.valueOf(port));
-            ObfuscationReflectionHelper.setPrivateValue(IntegratedServer.class, server, ping,
-                    "lanServerPing", "field_71345_q");
-            ping.start();
-        } catch (Exception e) {
-            UkyUI.LOGGER.warn("The world is open on " + port + " but not announced on the network", e);
-        }
-        server.getConfigurationManager().func_152604_a(type);
-        server.getConfigurationManager().setCommandsAllowedForAll(cheats);
-        return true;
+        boolean ok = server.publishServer(GameType.byName(MODES[this.selectedMode]), this.allowCheats, port);
+        Component message = ok
+                ? Component.translatable("commands.publish.started", port)
+                : Component.translatable("commands.publish.failed");
+        this.mc.gui.getChat().addMessage(message);
+        this.mc.updateTitle();
     }
 
     @Override

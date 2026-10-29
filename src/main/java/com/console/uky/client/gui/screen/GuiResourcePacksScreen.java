@@ -10,9 +10,10 @@ import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
 import com.console.uky.compat.GuiButton;
 import com.console.uky.compat.GuiScreen;
-import net.minecraft.client.resources.ResourcePackRepository;
+import net.minecraft.server.packs.repository.Pack;
+import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.client.resources.language.I18n;
-import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.ChatFormatting;
 import com.console.uky.compat.GL11;
 
 import java.util.ArrayList;
@@ -38,11 +39,11 @@ public class GuiResourcePacksScreen extends MenuScreen {
     private static final int ID_FOLDER = 201;
 
     /** Packs not in use, in repository order. */
-    private final List<ResourcePackRepository.Entry> available =
-            new ArrayList<ResourcePackRepository.Entry>();
+    private final List<Pack> available =
+            new ArrayList<Pack>();
     /** Packs in use, highest priority first — the order shown, top-down. */
-    private final List<ResourcePackRepository.Entry> selected =
-            new ArrayList<ResourcePackRepository.Entry>();
+    private final List<Pack> selected =
+            new ArrayList<Pack>();
 
     private PackList availableList;
     private PackList selectedList;
@@ -60,7 +61,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
     private int mouseX;
     private int mouseY;
 
-    public GuiResourcePacksScreen(GuiScreen parent) {
+    public GuiResourcePacksScreen(net.minecraft.client.gui.screens.Screen parent) {
         super(parent);
     }
 
@@ -106,7 +107,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
 
         int half = (panelWidth - padding * 2 - gap) / 2;
         MenuButton folder = new MenuButton(ID_FOLDER, this.leftColumn, buttonY, half,
-                buttonHeight, I18n.get("resourcePack.openFolder", new Object[0]),
+                buttonHeight, I18n.get("pack.openFolder", new Object[0]),
                 MenuButton.Style.NORMAL);
         folder.entrance(0.05F);
         this.buttonList.add(folder);
@@ -128,13 +129,23 @@ public class GuiResourcePacksScreen extends MenuScreen {
      */
     @SuppressWarnings("unchecked")
     private void loadPacks() {
-        ResourcePackRepository repository = this.mc.getResourcePackRepository();
-        repository.updateRepositoryEntriesAll();
+        PackRepository repository = this.mc.getResourcePackRepository();
+        repository.reload();
 
-        List<ResourcePackRepository.Entry> inUse =
-                new ArrayList<ResourcePackRepository.Entry>(repository.getRepositoryEntries());
-        List<ResourcePackRepository.Entry> all =
-                new ArrayList<ResourcePackRepository.Entry>(repository.getRepositoryEntriesAll());
+        // The game's own and the mods' resources are always on and cannot be moved;
+        // they are left out here and put back by the repository on apply.
+        List<Pack> inUse = new ArrayList<Pack>();
+        for (Pack pack : repository.getSelectedPacks()) {
+            if (!pack.isRequired() && !pack.isHidden()) {
+                inUse.add(pack);
+            }
+        }
+        List<Pack> all = new ArrayList<Pack>();
+        for (Pack pack : repository.getAvailablePacks()) {
+            if (!pack.isRequired() && !pack.isHidden()) {
+                all.add(pack);
+            }
+        }
         all.removeAll(inUse);
 
         this.available.clear();
@@ -143,24 +154,6 @@ public class GuiResourcePacksScreen extends MenuScreen {
         this.selected.clear();
         this.selected.addAll(inUse);
         Collections.reverse(this.selected);
-
-        // Loads each pack's metadata and icon. A pack with a broken pack.mcmeta still
-        // gets a row — it just shows the error as its description, which is more use
-        // than silently vanishing.
-        for (ResourcePackRepository.Entry entry : this.available) {
-            prepare(entry);
-        }
-        for (ResourcePackRepository.Entry entry : this.selected) {
-            prepare(entry);
-        }
-    }
-
-    private void prepare(ResourcePackRepository.Entry entry) {
-        try {
-            entry.updateResourcePack();
-        } catch (Exception e) {
-            UkyUI.LOGGER.warn("Could not read resource pack {}", entry.getResourcePackName(), e);
-        }
     }
 
     // --------------------------------------------------------------- drawing --
@@ -209,9 +202,9 @@ public class GuiResourcePacksScreen extends MenuScreen {
                 this.panelX1 + 16, this.panelY1 + 14,
                 Draw.withAlpha(Theme.text, this.fadeAlpha));
 
-        drawColumnHeading(I18n.get("resourcePack.available.title", new Object[0]),
+        drawColumnHeading(I18n.get("pack.available.title", new Object[0]),
                 this.leftColumn);
-        drawColumnHeading(I18n.get("resourcePack.selected.title", new Object[0]),
+        drawColumnHeading(I18n.get("pack.selected.title", new Object[0]),
                 this.rightColumn);
 
         // Says which end of the selected column wins, which vanilla never does.
@@ -277,7 +270,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
             this.inUse = inUse;
         }
 
-        private List<ResourcePackRepository.Entry> entries() {
+        private List<Pack> entries() {
             return this.inUse ? GuiResourcePacksScreen.this.selected
                     : GuiResourcePacksScreen.this.available;
         }
@@ -290,7 +283,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
         @Override
         protected void drawRow(int index, int rowX, int rowY, int rowWidth, int rowHeight,
                                boolean isHovered, boolean isSelected, float alpha) {
-            ResourcePackRepository.Entry entry = entries().get(index);
+            Pack entry = entries().get(index);
 
             if (isHovered) {
                 Draw.rect(rowX, rowY, rowX + rowWidth, rowY + rowHeight,
@@ -309,11 +302,11 @@ public class GuiResourcePacksScreen extends MenuScreen {
             int textX = rowX + 30;
             int controls = this.inUse ? 40 : 16;
             String name = GuiResourcePacksScreen.this.fit(
-                    entry.getResourcePackName(), rowWidth - 34 - controls);
+                    entry.getTitle().getString(), rowWidth - 34 - controls);
             this.fontRendererObj().drawString(name, textX, rowY + 5,
                     Draw.withAlpha(Theme.text, alpha));
 
-            String description = stripFormatting(entry.getTexturePackDescription());
+            String description = stripFormatting(entry.getDescription().getString());
             this.fontRendererObj().drawString(
                     GuiResourcePacksScreen.this.fit(description,
                             rowWidth - 34 - controls),
@@ -322,7 +315,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
             drawRowControls(index, rowX, rowY, rowWidth, rowHeight, alpha);
         }
 
-        private net.minecraft.client.gui.FontRenderer fontRendererObj() {
+        private com.console.uky.compat.FontRenderer fontRendererObj() {
             return GuiResourcePacksScreen.this.fontRendererObj;
         }
 
@@ -356,7 +349,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
 
     /** Descriptions may carry colour codes; they would render as literal glyphs here. */
     private static String stripFormatting(String text) {
-        return text == null ? "" : EnumChatFormatting.getTextWithoutFormattingCodes(text);
+        return text == null ? "" : ChatFormatting.stripFormatting(text);
     }
 
     /**
@@ -365,11 +358,16 @@ public class GuiResourcePacksScreen extends MenuScreen {
      * {@code bindTexturePackIcon} falls back to the default pack image when the pack
      * ships no {@code pack.png}, so this never draws a missing-texture checkerboard.
      */
-    private void drawIcon(ResourcePackRepository.Entry entry, int x, int y, float alpha) {
+    private void drawIcon(Pack entry, int x, int y, float alpha) {
         try {
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             GL11.glColor4f(1.0F, 1.0F, 1.0F, alpha);
-            entry.bindTexturePackIcon(this.mc.getTextureManager());
+            net.minecraft.resources.ResourceLocation icon = iconOf(entry);
+            if (icon == null) {
+                GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+                return;
+            }
+            GL11.bindTexture(icon);
             GL11.glEnable(GL11.GL_BLEND);
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             // The icon is a 64x64 texture drawn into a 20px box.
@@ -388,6 +386,33 @@ public class GuiResourcePacksScreen extends MenuScreen {
         } catch (Throwable t) {
             GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
         }
+    }
+
+    /** Icons by pack id; a null value means the pack has none. */
+    private final java.util.Map<String, net.minecraft.resources.ResourceLocation> icons =
+            new java.util.HashMap<String, net.minecraft.resources.ResourceLocation>();
+
+    /** The pack's pack.png, read once, the way vanilla's own list reads it. */
+    private net.minecraft.resources.ResourceLocation iconOf(Pack pack) {
+        if (this.icons.containsKey(pack.getId())) {
+            return this.icons.get(pack.getId());
+        }
+        net.minecraft.resources.ResourceLocation location = null;
+        try (net.minecraft.server.packs.PackResources resources = pack.open()) {
+            net.minecraft.server.packs.resources.IoSupplier<java.io.InputStream> png =
+                    resources.getRootResource("pack.png");
+            if (png != null) {
+                try (java.io.InputStream in = png.get()) {
+                    location = this.mc.getTextureManager().register("uky_pack_icon",
+                            new net.minecraft.client.renderer.texture.DynamicTexture(
+                                    com.mojang.blaze3d.platform.NativeImage.read(in)));
+                }
+            }
+        } catch (Exception e) {
+            UkyUI.LOGGER.warn("Could not read the icon of pack {}", pack.getId(), e);
+        }
+        this.icons.put(pack.getId(), location);
+        return location;
     }
 
     // ----------------------------------------------------------------- input --
@@ -417,7 +442,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
         if (index < 0) {
             return false;
         }
-        List<ResourcePackRepository.Entry> source = inUse ? this.selected : this.available;
+        List<Pack> source = inUse ? this.selected : this.available;
         if (index >= source.size()) {
             return false;
         }
@@ -471,7 +496,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel == 0) {
             return;
         }
@@ -508,10 +533,7 @@ public class GuiResourcePacksScreen extends MenuScreen {
 
     private void openFolder() {
         try {
-            java.io.File dir = this.mc.getResourcePackRepository().getDirResourcepacks();
-            // Same call vanilla uses; on the platforms where it is unsupported the
-            // catch below keeps the screen alive.
-            java.awt.Desktop.getDesktop().open(dir);
+            net.minecraft.Util.getPlatform().openPath(this.mc.getResourcePackDirectory());
         } catch (Throwable t) {
             UkyUI.LOGGER.warn("Could not open the resource pack folder", t);
         }
@@ -527,19 +549,18 @@ public class GuiResourcePacksScreen extends MenuScreen {
      */
     @SuppressWarnings("unchecked")
     private void apply() {
-        ResourcePackRepository repository = this.mc.getResourcePackRepository();
+        PackRepository repository = this.mc.getResourcePackRepository();
 
-        List<ResourcePackRepository.Entry> ordered =
-                new ArrayList<ResourcePackRepository.Entry>(this.selected);
-        Collections.reverse(ordered);
-        repository.func_148527_a(ordered);
-
-        this.mc.options.resourcePacks.clear();
-        for (ResourcePackRepository.Entry entry : ordered) {
-            this.mc.options.resourcePacks.add(entry.getResourcePackName());
+        List<String> ordered = new ArrayList<String>();
+        for (Pack entry : this.selected) {
+            ordered.add(entry.getId());
         }
-        this.mc.options.save();
-        this.mc.refreshResources();
+        Collections.reverse(ordered);
+        // The repository puts the required packs back where they belong.
+        repository.setSelected(ordered);
+        // Vanilla's own bookkeeping: the options list, the save, and a reload only
+        // if something actually changed.
+        this.mc.options.updateResourcePacks(repository);
         switchBack();
     }
 

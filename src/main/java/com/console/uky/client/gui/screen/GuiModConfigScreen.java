@@ -9,17 +9,18 @@ import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.Icons;
 import com.console.uky.client.render.LensLibrary;
 import com.console.uky.client.render.Theme;
-import cpw.mods.fml.client.config.ConfigGuiType;
-import cpw.mods.fml.client.config.IConfigElement;
-import cpw.mods.fml.client.event.ConfigChangedEvent;
-import cpw.mods.fml.common.FMLCommonHandler;
-import cpw.mods.fml.common.Loader;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.config.ModConfigs;
+import net.neoforged.neoforge.common.ModConfigSpec;
+import com.electronwill.nightconfig.core.UnmodifiableConfig;
 import com.console.uky.compat.GuiButton;
-import com.console.uky.compat.GuiScreen;
 import com.console.uky.compat.GuiTextField;
 import net.minecraft.client.resources.language.I18n;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.List;
 
 /**
@@ -40,12 +41,270 @@ import java.util.List;
  */
 public class GuiModConfigScreen extends MenuScreen {
 
+    /** What kind of value a row edits; the names 1.7.10's FML gave them. */
+    enum ConfigGuiType { BOOLEAN, INTEGER, DOUBLE, STRING }
+
+    /**
+     * One row: a section to open or a value to edit. The questions are the ones FML's
+     * IConfigElement answered on 1.7.10, so the screen below is unchanged by where the
+     * answers come from — now a {@link ModConfigSpec}, which describes every value it
+     * holds: its type, its range, its default, its comment and whether it needs a restart.
+     */
+    interface IConfigElement {
+        boolean isProperty();
+
+        List<IConfigElement> getChildElements();
+
+        String getName();
+
+        String getLanguageKey();
+
+        default boolean showInGui() {
+            return true;
+        }
+
+        default ConfigGuiType getType() {
+            return ConfigGuiType.STRING;
+        }
+
+        default boolean isList() {
+            return false;
+        }
+
+        default Object get() {
+            return null;
+        }
+
+        default void set(Object value) {
+        }
+
+        default String[] getValidValues() {
+            return null;
+        }
+
+        default Object getList() {
+            return null;
+        }
+
+        default Object getDefaults() {
+            return null;
+        }
+
+        default boolean isListLengthFixed() {
+            return false;
+        }
+
+        default boolean isDefault() {
+            return true;
+        }
+
+        default void setToDefault() {
+        }
+
+        default boolean requiresMcRestart() {
+            return false;
+        }
+    }
+
+    /** A section of a config: the tree under one key, or a whole config file. */
+    private static final class Section implements IConfigElement {
+        private final String name;
+        private final String key;
+        private final List<IConfigElement> children;
+
+        Section(String name, String key, List<IConfigElement> children) {
+            this.name = name;
+            this.key = key;
+            this.children = children;
+        }
+
+        @Override
+        public boolean isProperty() {
+            return false;
+        }
+
+        @Override
+        public List<IConfigElement> getChildElements() {
+            return this.children;
+        }
+
+        @Override
+        public String getName() {
+            return this.name;
+        }
+
+        @Override
+        public String getLanguageKey() {
+            return this.key;
+        }
+    }
+
+    /** One value of a spec. */
+    private static final class Value implements IConfigElement {
+        private final ModConfigSpec owner;
+        private final ModConfigSpec.ConfigValue<Object> value;
+        private final ModConfigSpec.ValueSpec spec;
+        private final Set<ModConfigSpec> touched;
+
+        @SuppressWarnings("unchecked")
+        Value(ModConfigSpec owner, ModConfigSpec.ConfigValue<?> value, Set<ModConfigSpec> touched) {
+            this.owner = owner;
+            this.value = (ModConfigSpec.ConfigValue<Object>) value;
+            this.spec = value.getSpec();
+            this.touched = touched;
+        }
+
+        @Override
+        public boolean isProperty() {
+            return true;
+        }
+
+        @Override
+        public List<IConfigElement> getChildElements() {
+            return new ArrayList<IConfigElement>();
+        }
+
+        @Override
+        public String getName() {
+            List<String> path = this.value.getPath();
+            return path.get(path.size() - 1);
+        }
+
+        @Override
+        public String getLanguageKey() {
+            return this.spec.getTranslationKey();
+        }
+
+        @Override
+        public ConfigGuiType getType() {
+            Object current = this.value.get();
+            if (current instanceof Boolean) {
+                return ConfigGuiType.BOOLEAN;
+            }
+            if (current instanceof Integer || current instanceof Long) {
+                return ConfigGuiType.INTEGER;
+            }
+            if (current instanceof Number) {
+                return ConfigGuiType.DOUBLE;
+            }
+            return ConfigGuiType.STRING;
+        }
+
+        @Override
+        public boolean isList() {
+            return this.value.get() instanceof List;
+        }
+
+        @Override
+        public Object get() {
+            Object current = this.value.get();
+            return current instanceof Enum ? ((Enum<?>) current).name() : current;
+        }
+
+        @Override
+        public String[] getValidValues() {
+            Object current = this.value.get();
+            if (!(current instanceof Enum)) {
+                return null;
+            }
+            Object[] constants = ((Enum<?>) current).getDeclaringClass().getEnumConstants();
+            List<String> valid = new ArrayList<String>();
+            for (Object constant : constants) {
+                if (this.spec.test(constant)) {
+                    valid.add(((Enum<?>) constant).name());
+                }
+            }
+            return valid.toArray(new String[0]);
+        }
+
+        @Override
+        public Object getList() {
+            return this.value.get();
+        }
+
+        @Override
+        public Object getDefaults() {
+            return this.value.getDefault();
+        }
+
+        @Override
+        public boolean isDefault() {
+            Object current = this.value.get();
+            Object fallback = this.value.getDefault();
+            return current == null ? fallback == null : current.equals(fallback);
+        }
+
+        @Override
+        public void setToDefault() {
+            store(this.value.getDefault());
+        }
+
+        @Override
+        public boolean requiresMcRestart() {
+            return this.spec.restartType() != ModConfigSpec.RestartType.NONE;
+        }
+
+        /** Converts what the screen hands over to the type the value holds, then stores it. */
+        @Override
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        public void set(Object raw) {
+            Object current = this.value.get();
+            Object converted = raw;
+            if (current instanceof Enum && raw instanceof String) {
+                converted = Enum.valueOf(((Enum) current).getDeclaringClass(), (String) raw);
+            } else if (current instanceof Long && raw instanceof Number) {
+                converted = Long.valueOf(((Number) raw).longValue());
+            } else if (current instanceof Integer && raw instanceof Number) {
+                converted = Integer.valueOf(((Number) raw).intValue());
+            } else if (current instanceof Double && raw instanceof Number) {
+                converted = Double.valueOf(((Number) raw).doubleValue());
+            } else if (current instanceof List && raw instanceof Object[]) {
+                converted = new ArrayList<Object>(java.util.Arrays.asList((Object[]) raw));
+            }
+            store(converted);
+        }
+
+        private void store(Object converted) {
+            // The spec says what it accepts — a range, a pattern, an element check — and a
+            // value it would correct on load is not written in the first place.
+            if (converted != null && this.spec.test(converted)) {
+                this.value.set(converted);
+                this.touched.add(this.owner);
+            }
+        }
+    }
+
+    /** The rows under one level of a spec, sections first as NeoForge's own screen has them. */
+    @SuppressWarnings("unchecked")
+    private static List<IConfigElement> level(ModConfigSpec owner, UnmodifiableConfig values,
+                                              String prefix, Set<ModConfigSpec> touched) {
+        List<IConfigElement> sections = new ArrayList<IConfigElement>();
+        List<IConfigElement> rows = new ArrayList<IConfigElement>();
+        for (Map.Entry<String, Object> entry : values.valueMap().entrySet()) {
+            Object child = entry.getValue();
+            if (child instanceof ModConfigSpec.ConfigValue) {
+                rows.add(new Value(owner, (ModConfigSpec.ConfigValue<?>) child, touched));
+            } else if (child instanceof UnmodifiableConfig) {
+                List<String> path = new ArrayList<String>(java.util.Arrays.asList(
+                        prefix.isEmpty() ? new String[0] : prefix.split("\\.")));
+                path.add(entry.getKey());
+                sections.add(new Section(entry.getKey(), owner.getLevelTranslationKey(path),
+                        level(owner, (UnmodifiableConfig) child, String.join(".", path), touched)));
+            }
+        }
+        sections.addAll(rows);
+        return sections;
+    }
+
+
     private static final int ID_DONE = 200;
     private static final int ID_DEFAULTS = 201;
 
     private final String modId;
     private final String heading;
     private final List<IConfigElement> elements;
+    /** Specs edited on this screen or any section opened from it; saved on the way out. */
+    private final Set<ModConfigSpec> touched;
 
     /** Set once anything is edited, so an untouched visit posts no event. */
     private boolean edited;
@@ -60,12 +319,13 @@ public class GuiModConfigScreen extends MenuScreen {
     private int panelX2;
     private int panelY2;
 
-    private GuiModConfigScreen(GuiScreen parent, String modId, String heading,
-                               List<IConfigElement> elements) {
+    private GuiModConfigScreen(net.minecraft.client.gui.screens.Screen parent, String modId, String heading,
+                               List<IConfigElement> elements, Set<ModConfigSpec> touched) {
         super(parent);
         this.modId = modId;
         this.heading = heading;
         this.elements = elements;
+        this.touched = touched;
     }
 
     /**
@@ -74,25 +334,53 @@ public class GuiModConfigScreen extends MenuScreen {
      * A null here is not a failure — it means the mod drew its own screen instead of
      * describing one, and the caller should open that.
      */
-    public static GuiModConfigScreen forEntry(ModConfigCatalog.Entry entry, GuiScreen parent) {
+    /**
+     * This mod's settings in this screen, or null if it has none to redraw.
+     *
+     * Every config file the mod registered with a loaded spec — client, common, and the
+     * server one only in a world of the player's own, as vanilla allows. One file opens
+     * straight into its values; several become a section each.
+     */
+    public static GuiModConfigScreen forEntry(ModConfigCatalog.Entry entry,
+                                              net.minecraft.client.gui.screens.Screen parent) {
         try {
-            List<IConfigElement> elements = ModConfigCatalog.harvest(entry, parent);
-            if (elements == null) {
+            Set<ModConfigSpec> touched = new LinkedHashSet<ModConfigSpec>();
+            List<IConfigElement> files = new ArrayList<IConfigElement>();
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            for (ModConfig.Type type : ModConfig.Type.values()) {
+                if (type == ModConfig.Type.STARTUP
+                        || (type == ModConfig.Type.SERVER && !mc.hasSingleplayerServer())) {
+                    continue;
+                }
+                for (ModConfig config : ModConfigs.getConfigSet(type)) {
+                    if (!config.getModId().equals(entry.modId())
+                            || !(config.getSpec() instanceof ModConfigSpec)) {
+                        continue;
+                    }
+                    ModConfigSpec spec = (ModConfigSpec) config.getSpec();
+                    if (!spec.isLoaded()) {
+                        continue;
+                    }
+                    files.add(new Section(type.name().toLowerCase(java.util.Locale.ROOT),
+                            "neoforge.configuration.uitext.type." + type.name().toLowerCase(java.util.Locale.ROOT),
+                            level(spec, spec.getValues(), "", touched)));
+                }
+            }
+            if (files.isEmpty()) {
                 return null;
             }
-            return new GuiModConfigScreen(parent, entry.modId(), entry.displayName(),
-                    visible(elements));
+            List<IConfigElement> top = files.size() == 1 ? files.get(0).getChildElements() : files;
+            return new GuiModConfigScreen(parent, entry.modId(), entry.displayName(), visible(top), touched);
         } catch (Throwable t) {
             UkyUI.LOGGER.warn("Could not read the settings of mod {}", entry.modId(), t);
             return null;
         }
     }
 
-    /** A category one level down, keeping the same mod id so saving still targets it. */
     private GuiModConfigScreen child(IConfigElement category) {
         String name = label(category);
         return new GuiModConfigScreen(this, this.modId, this.heading + "  ·  " + name,
-                visible(category.getChildElements()));
+                visible(category.getChildElements()), this.touched);
     }
 
     @SuppressWarnings("unchecked")
@@ -248,7 +536,7 @@ public class GuiModConfigScreen extends MenuScreen {
     @Override
     public void handleMouseInput() {
         super.handleMouseInput();
-        int wheel = org.lwjgl.input.Mouse.getEventDWheel();
+        int wheel = com.console.uky.compat.Mouse.getEventDWheel();
         if (wheel != 0) {
             this.list.mouseWheel(wheel > 0 ? 1 : -1);
         }
@@ -447,18 +735,17 @@ public class GuiModConfigScreen extends MenuScreen {
      * only thing that knows when and where to write it.
      */
     private void applyAndClose() {
-        if (this.edited && Loader.isModLoaded(this.modId)) {
-            try {
-                boolean worldRunning = this.mc.level != null;
-                FMLCommonHandler.instance().bus().post(
-                        new ConfigChangedEvent.OnConfigChangedEvent(this.modId, null,
-                                worldRunning, this.requiresMcRestart));
-                FMLCommonHandler.instance().bus().post(
-                        new ConfigChangedEvent.PostConfigChangedEvent(this.modId, null,
-                                worldRunning, this.requiresMcRestart));
-            } catch (Throwable t) {
-                UkyUI.LOGGER.warn("Mod {} threw while saving its config", this.modId, t);
+        // Only the outermost screen saves: a section is part of the same files, and
+        // saving is what tells the mod to reload, which it should hear once.
+        if (!(this.parent instanceof GuiModConfigScreen)) {
+            for (ModConfigSpec spec : this.touched) {
+                try {
+                    spec.save();
+                } catch (Throwable t) {
+                    UkyUI.LOGGER.warn("Mod {} threw while saving its config", this.modId, t);
+                }
             }
+            this.touched.clear();
         }
         switchBack();
     }

@@ -4,7 +4,6 @@ import com.console.uky.client.death.DeathTracker;
 import com.console.uky.client.render.BlackHole;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkyMusicTicker;
-import com.console.uky.client.splash.UkySplash;
 import com.console.uky.client.world.WorldEntryFade;
 import com.console.uky.config.Quality;
 import com.console.uky.config.UiConfig;
@@ -47,9 +46,11 @@ public class UkyUI {
         modBus.addListener(this::clientSetup);
 
         NeoForge.EVENT_BUS.register(new GuiEventHandler());
-        // The loading screen, from the first frame the game window has one.
-        NeoForge.EVENT_BUS.register(new UkySplash.Installer());
         NeoForge.EVENT_BUS.register(new UkyMusicTicker());
+        // Every tooltip, as one of this mod's panels.
+        NeoForge.EVENT_BUS.register(new com.console.uky.client.gui.UkyTooltip());
+        NeoForge.EVENT_BUS.register(new com.console.uky.client.gui.PlayerListOverlay.Handler());
+        NeoForge.EVENT_BUS.register(new com.console.uky.client.gui.AchievementToast.Handler());
         // Watches for what killed the player, and for the respawn that ends the scene.
         NeoForge.EVENT_BUS.register(new DeathTracker());
         // Quitting a world waits for one clean frame of it.

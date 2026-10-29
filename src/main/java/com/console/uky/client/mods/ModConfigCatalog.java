@@ -4,6 +4,9 @@ import com.console.uky.UkyUI;
 import net.minecraft.client.gui.screens.Screen;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.config.ModConfigs;
+import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
 import java.util.ArrayList;
@@ -23,17 +26,18 @@ public final class ModConfigCatalog {
     public static final class Entry {
 
         public final ModContainer mod;
+        /** The mod's own settings screen, or null if it registered none. */
         private final IConfigScreenFactory factory;
         /**
-         * Whether this mod's settings can be redrawn in this mod's own widgets. None yet:
-         * on 1.7.10 that was every mod built on FML's GuiConfig, whose element list is
-         * public. Kept so the screens that badge such rows need not change.
+         * Whether this mod's settings can be redrawn in this mod's own widgets: it keeps
+         * them in a NeoForge config spec, which describes every value as data.
          */
-        public final boolean redrawable = false;
+        public final boolean redrawable;
 
-        Entry(ModContainer mod, IConfigScreenFactory factory) {
+        Entry(ModContainer mod, IConfigScreenFactory factory, boolean redrawable) {
             this.mod = mod;
             this.factory = factory;
+            this.redrawable = redrawable;
         }
 
         public String modId() {
@@ -59,14 +63,34 @@ public final class ModConfigCatalog {
         if (entries == null) {
             List<Entry> found = new ArrayList<Entry>();
             ModList.get().forEachModContainer((id, container) -> {
-                container.getCustomExtension(IConfigScreenFactory.class)
-                        .ifPresent(factory -> found.add(new Entry(container, factory)));
+                IConfigScreenFactory factory =
+                        container.getCustomExtension(IConfigScreenFactory.class).orElse(null);
+                boolean redrawable = hasSpec(id);
+                // A spec is enough on its own: this mod can draw those settings even for
+                // a mod that never wrote a screen for them.
+                if (factory != null || redrawable) {
+                    found.add(new Entry(container, factory, redrawable));
+                }
             });
             found.sort((a, b) -> a.displayName().toLowerCase(Locale.ROOT)
                     .compareTo(b.displayName().toLowerCase(Locale.ROOT)));
             entries = Collections.unmodifiableList(found);
         }
         return entries;
+    }
+
+    private static boolean hasSpec(String modId) {
+        for (ModConfig.Type type : ModConfig.Type.values()) {
+            if (type == ModConfig.Type.STARTUP) {
+                continue;
+            }
+            for (ModConfig config : ModConfigs.getConfigSet(type)) {
+                if (config.getModId().equals(modId) && config.getSpec() instanceof ModConfigSpec) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static Entry entryFor(String modId) {
@@ -84,6 +108,9 @@ public final class ModConfigCatalog {
 
     /** The mod's own settings screen, or null if building it failed. */
     public static Screen instantiate(Entry entry, Screen parent) {
+        if (entry.factory == null) {
+            return null;
+        }
         try {
             return entry.factory.createScreen(entry.mod, parent);
         } catch (Throwable t) {

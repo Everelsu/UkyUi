@@ -17,8 +17,6 @@ import com.console.uky.compat.GuiScreen;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.OptionInstance;
 import net.minecraft.client.Options;
-import net.minecraft.client.gui.screens.options.controls.ControlsScreen;
-import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
 import net.minecraft.client.gui.screens.telemetry.TelemetryInfoScreen;
 import net.minecraft.network.chat.Component;
 
@@ -46,7 +44,8 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int ID_DONE = 200;
 
     private static final String[] TABS = {
-        "uky.settings.general", "uky.settings.video", "uky.settings.audio", "uky.settings.other"
+        "uky.settings.general", "uky.settings.video", "uky.settings.audio",
+        "uky.settings.accessibility", "uky.settings.other"
     };
 
     private static final int PADDING = 20;
@@ -57,7 +56,7 @@ public class GuiSettingsScreen extends MenuScreen {
     private static final int COLUMN_GAP = 22;
 
     /** Rows each tab lays out, used to size the whole grid so it always fits. */
-    private static final int[] TAB_ROWS = {5, 7, 7, 9};
+    private static final int[] TAB_ROWS = {6, 7, 7, 7, 9};
 
     private final Options settings;
     /** Remembered across openings: coming back to the tab you left is the least surprising. */
@@ -317,13 +316,24 @@ public class GuiSettingsScreen extends MenuScreen {
                 // GUI Scale is back, and it now only affects the game's own HUD and
                 // vanilla screens — these menus lay themselves out independently of
                 // it. See MenuScreen.setWorldAndResolution.
-                y = flow(y,
-                        this.settings.fov(), this.settings.simulationDistance(),
-                        this.settings.sensitivity(), this.settings.guiScale(),
-                        this.settings.invertYMouse(), this.settings.bobView(),
-                        this.settings.touchscreen(), this.settings.autoJump());
                 addLink(ID_CONTROLS, this.leftColumn, y, "options.controls");
                 addLink(ID_LANGUAGE, this.rightColumn, y, "options.language");
+                y += this.rowHeight + this.rowGap;
+                if (addDifficulty(this.leftColumn, y)) {
+                    y += this.rowHeight + this.rowGap;
+                }
+                y = flow(y,
+                        this.settings.fov(), this.settings.guiScale(),
+                        this.settings.sensitivity(), this.settings.mouseWheelSensitivity(),
+                        this.settings.invertYMouse(), this.settings.rawMouseInput(),
+                        this.settings.discreteMouseScroll(), this.settings.touchscreen(),
+                        this.settings.autoJump(), this.settings.toggleCrouch(),
+                        this.settings.toggleSprint(), this.settings.attackIndicator(),
+                        this.settings.mainHand(), this.settings.operatorItemsTab());
+                // The skin's layers are one switch each, as vanilla's own screen for them
+                // has; a screen of seven switches is not worth leaving this one for.
+                y = heading(I18n.get("options.skinCustomisation.title"), y, false, false);
+                y = flowModelParts(y);
                 break;
             case 1:
                 // First on the tab, above the game's own. It is the setting somebody
@@ -334,11 +344,19 @@ public class GuiSettingsScreen extends MenuScreen {
                 y += this.rowHeight + this.rowGap;
                 y = flow(y,
                         this.settings.graphicsMode(), this.settings.renderDistance(),
-                        this.settings.framerateLimit(), this.settings.ambientOcclusion(),
-                        this.settings.cloudStatus(), this.settings.particles(),
-                        this.settings.fullscreen(), this.settings.enableVsync(),
+                        this.settings.simulationDistance(), this.settings.prioritizeChunkUpdates(),
+                        this.settings.framerateLimit(), this.settings.enableVsync(),
+                        this.settings.ambientOcclusion(), this.settings.cloudStatus(),
+                        this.settings.particles(), this.settings.fullscreen(),
                         this.settings.gamma(), this.settings.mipmapLevels(),
-                        this.settings.entityDistanceScaling());
+                        this.settings.biomeBlendRadius(), this.settings.entityShadows(),
+                        this.settings.entityDistanceScaling(), this.settings.menuBackgroundBlurriness(),
+                        this.settings.bobView(), this.settings.showAutosaveIndicator());
+                y = heading(I18n.get("uky.settings.effects.screen"), y, false, false);
+                y = flow(y,
+                        this.settings.fovEffectScale(), this.settings.screenEffectScale(),
+                        this.settings.damageTiltStrength(), this.settings.darknessEffectScale(),
+                        this.settings.glintSpeed(), this.settings.glintStrength());
                 // FBO_ENABLE is deliberately absent. Everything this mod draws goes
                 // through the framebuffer — the menus, the loading screen, the world
                 // preview that is read back out of it — so turning it off does not read
@@ -352,10 +370,25 @@ public class GuiSettingsScreen extends MenuScreen {
                 addLink(ID_CHAT, this.rightColumn, y, "options.chat.title");
                 y += this.rowHeight + this.rowGap;
                 y = flow(y,
-                        this.settings.chatScale(), this.settings.chatOpacity(),
+                        this.settings.showSubtitles(), this.settings.directionalAudio());
+                y = heading(I18n.get("options.chat.title"), y, false, false);
+                y = flow(y,
                         this.settings.chatVisibility(), this.settings.chatColors(),
-                        this.settings.chatLinks(), this.settings.chatWidth());
+                        this.settings.chatLinks(), this.settings.chatLinksPrompt(),
+                        this.settings.chatScale(), this.settings.chatOpacity(),
+                        this.settings.chatWidth(), this.settings.chatLineSpacing(),
+                        this.settings.chatHeightFocused(), this.settings.chatHeightUnfocused(),
+                        this.settings.chatDelay(), this.settings.textBackgroundOpacity(),
+                        this.settings.backgroundForChatOnly(), this.settings.autoSuggestions(),
+                        this.settings.onlyShowSecureChat(), this.settings.hideMatchedNames());
                 buildUkyChatContent(y);
+                break;
+            case 3:
+                y = flow(y,
+                        this.settings.narrator(), this.settings.narratorHotkey(),
+                        this.settings.highContrast(), this.settings.darkMojangStudiosBackground(),
+                        this.settings.hideLightningFlash(), this.settings.hideSplashTexts(),
+                        this.settings.panoramaSpeed(), this.settings.notificationDisplayTime());
                 break;
             default:
                 addLink(ID_RESOURCE_PACKS, this.leftColumn, y, "options.resourcepack");
@@ -369,7 +402,10 @@ public class GuiSettingsScreen extends MenuScreen {
                 }
                 y += this.rowHeight + this.rowGap;
                 y = flow(y, this.settings.forceUnicodeFont(),
-                        this.settings.narrator());
+                        this.settings.japaneseGlyphVariants(),
+                        this.settings.realmsNotifications(),
+                        this.settings.allowServerListing(),
+                        this.settings.reducedDebugInfo());
                 // The tooltip switch lives here rather than beside the chat ones: it
                 // is neither chat nor graphics, and this is the tab for everything
                 // that is neither.
@@ -433,6 +469,108 @@ public class GuiSettingsScreen extends MenuScreen {
             }
         }
         return column == 0 ? y : y + this.rowHeight + this.rowGap;
+    }
+
+    /** One switch per skin layer, flowed across the columns like any option. */
+    private int flowModelParts(int y) {
+        int column = 0;
+        for (final net.minecraft.world.entity.player.PlayerModelPart part
+                : net.minecraft.world.entity.player.PlayerModelPart.values()) {
+            addSourceRow(ID_OPTION_BASE + 200 + part.ordinal(), columnX(column), y,
+                    new MenuOptionButton.Source() {
+                        @Override
+                        public String label() {
+                            return part.getName().getString();
+                        }
+
+                        @Override
+                        public String value() {
+                            return "";
+                        }
+
+                        @Override
+                        public boolean toggle() {
+                            return true;
+                        }
+
+                        @Override
+                        public boolean on() {
+                            return GuiSettingsScreen.this.settings.isModelPartEnabled(part);
+                        }
+
+                        @Override
+                        public void cycle() {
+                            GuiSettingsScreen.this.settings.toggleModelPart(part, !on());
+                        }
+
+                        @Override
+                        public boolean available() {
+                            return true;
+                        }
+                    });
+            if (++column == this.columns) {
+                column = 0;
+                y += this.rowHeight + this.rowGap;
+            }
+        }
+        return column == 0 ? y : y + this.rowHeight + this.rowGap;
+    }
+
+    /**
+     * The world's difficulty, in a world whose owner this is — vanilla offers it only
+     * there too. Locked in hardcore and once locked; the lock itself stays vanilla's.
+     *
+     * @return whether a row was added
+     */
+    private boolean addDifficulty(int x, int y) {
+        final net.minecraft.client.Minecraft mc = this.mc;
+        if (mc.level == null || !mc.hasSingleplayerServer() || mc.player == null) {
+            return false;
+        }
+        addSourceRow(ID_OPTION_BASE + 300, x, y, new MenuOptionButton.Source() {
+            @Override
+            public String label() {
+                return I18n.get("options.difficulty");
+            }
+
+            @Override
+            public String value() {
+                return mc.level.getDifficulty().getDisplayName().getString();
+            }
+
+            @Override
+            public boolean toggle() {
+                return false;
+            }
+
+            @Override
+            public boolean on() {
+                return false;
+            }
+
+            @Override
+            public void cycle() {
+                net.minecraft.world.Difficulty next = net.minecraft.world.Difficulty.byId(
+                        (mc.level.getDifficulty().getId() + 1) % 4);
+                mc.getConnection().send(
+                        new net.minecraft.network.protocol.game.ServerboundChangeDifficultyPacket(next));
+            }
+
+            @Override
+            public boolean available() {
+                return !mc.level.getLevelData().isHardcore()
+                        && !mc.level.getLevelData().isDifficultyLocked()
+                        && mc.player.hasPermissions(2);
+            }
+        });
+        return true;
+    }
+
+    private void addSourceRow(int id, int x, int y, MenuOptionButton.Source source) {
+        MenuButton widget = new MenuOptionButton(id, x, y, rowWidth(), this.rowHeight, source);
+        widget.entrance(stagger());
+        this.buttonList.add(widget);
+        this.contentRows.add(widget);
     }
 
     private int columnX(int column) {
@@ -1137,7 +1275,7 @@ public class GuiSettingsScreen extends MenuScreen {
 
         switch (button.id) {
             case ID_CONTROLS:
-                openSub(new ControlsScreen(this, this.settings));
+                openSub(new GuiControlsScreen(this, this.settings));
                 break;
             case ID_SOUNDS:
                 openSub(new GuiAudioScreen(this, this.settings, GuiAudioScreen.soundTab()));
@@ -1149,13 +1287,7 @@ public class GuiSettingsScreen extends MenuScreen {
                 openSub(new GuiLanguageScreen(this));
                 break;
             case ID_RESOURCE_PACKS:
-                openSub(new PackSelectionScreen(this.mc.getResourcePackRepository(),
-                        repository -> {
-                            this.settings.updateResourcePacks(repository);
-                            this.mc.setScreen(this);
-                        },
-                        this.mc.getResourcePackDirectory(),
-                        Component.translatable("resourcePack.title")));
+                openSub(new GuiResourcePacksScreen(this));
                 break;
             case ID_SNOOPER:
                 openSub(new TelemetryInfoScreen(this, this.settings));

@@ -6,6 +6,8 @@ import com.console.uky.client.gui.screen.GuiCreateWorldScreen;
 import com.console.uky.client.gui.screen.GuiDeathScreen;
 import com.console.uky.client.gui.screen.GuiDisconnectedScreen;
 import com.console.uky.client.gui.screen.GuiPauseScreen;
+import com.console.uky.client.gui.screen.GuiServersScreen;
+import com.console.uky.client.gui.screen.GuiShareScreen;
 import com.console.uky.client.gui.screen.GuiSettingsScreen;
 import com.console.uky.client.gui.screen.GuiTitleScreen;
 import com.console.uky.client.gui.screen.GuiWorldLoadingScreen;
@@ -14,6 +16,8 @@ import com.console.uky.client.sound.UkySounds;
 import com.console.uky.config.UiConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.ShareToLanScreen;
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.GenericMessageScreen;
@@ -91,6 +95,17 @@ public class GuiEventHandler {
             if (ours != null) {
                 event.setNewScreen(ours);
             }
+            return;
+        }
+
+        // Leaving a server comes back to the list it was joined from.
+        if (type == JoinMultiplayerScreen.class) {
+            event.setNewScreen(new GuiServersScreen(parentOf(gui)));
+            return;
+        }
+
+        if (type == ShareToLanScreen.class) {
+            event.setNewScreen(new GuiShareScreen(parentOf(gui)));
             return;
         }
 
