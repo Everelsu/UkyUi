@@ -51,6 +51,8 @@ public class UkyUI {
         NeoForge.EVENT_BUS.register(new com.console.uky.client.gui.UkyTooltip());
         NeoForge.EVENT_BUS.register(new com.console.uky.client.gui.PlayerListOverlay.Handler());
         NeoForge.EVENT_BUS.register(new com.console.uky.client.gui.AchievementToast.Handler());
+        // The advancement chat line, shortened and turned into a link to the list.
+        NeoForge.EVENT_BUS.register(new com.console.uky.client.gui.AchievementLinks());
         // Watches for what killed the player, and for the respawn that ends the scene.
         NeoForge.EVENT_BUS.register(new DeathTracker());
         // Quitting a world waits for one clean frame of it.

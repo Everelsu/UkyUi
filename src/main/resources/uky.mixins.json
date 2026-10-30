@@ -4,6 +4,8 @@
   "compatibilityLevel": "JAVA_21",
   "package": "com.console.uky.mixins",
   "client": [
+    "MixinChatComponent",
+    "MixinChatScreen",
     "MixinMinecraftOverlay"
   ],
   "injectors": {

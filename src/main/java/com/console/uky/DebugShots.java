@@ -32,25 +32,27 @@ public final class DebugShots {
 
         Screen title = mc.screen instanceof GuiTitleScreen ? mc.screen : new GuiTitleScreen();
         switch (shot) {
-            case 2: com.console.uky.compat.Saves.create(title); break;
-            case 4:
+            case 2: mc.setScreen(new GuiSettingsScreen(title, mc.options)); break;
+            case 3: com.console.uky.compat.Saves.create(new GuiTitleScreen()); break;
+            case 5:
                 if (mc.screen != null) {
                     mc.screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, 0, 0);
                 }
                 break;
             case 12:
-            case 13:
-                if (mc.level != null && mc.player != null) {
-                    net.minecraft.advancements.AdvancementHolder root = mc.player.connection.getAdvancements()
-                            .get(net.minecraft.resources.ResourceLocation.withDefaultNamespace("story/root"));
-                    if (root != null) {
-                        com.console.uky.client.gui.AchievementToast.show(root);
-                    }
+                if (mc.level != null && mc.getSingleplayerServer() != null && mc.player != null) {
+                    net.minecraft.server.MinecraftServer server = mc.getSingleplayerServer();
+                    String player = mc.player.getGameProfile().getName();
+                    server.execute(() -> server.getCommands().performPrefixedCommand(
+                            server.createCommandSourceStack(),
+                            "advancement grant " + player + " only minecraft:story/mine_stone"));
                 }
                 break;
-            case 15:
-                if (mc.level != null) {
-                    mc.setScreen(new com.console.uky.client.gui.screen.GuiShareScreen(null));
+            case 13: mc.setScreen(new net.minecraft.client.gui.screens.ChatScreen("")); break;
+            case 14:
+                if (mc.player != null) {
+                    mc.setScreen(null);
+                    mc.player.connection.sendCommand("ukyach minecraft:story/mine_stone");
                 }
                 break;
             default: break;

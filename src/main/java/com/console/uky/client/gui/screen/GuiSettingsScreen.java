@@ -257,7 +257,6 @@ public class GuiSettingsScreen extends MenuScreen {
      */
     private void buildTabs() {
         int usable = this.panelX2 - this.panelX1 - PADDING * 2;
-        int between = 18;
         int labelPad = 12;
 
         int total = 0;
@@ -269,20 +268,14 @@ public class GuiSettingsScreen extends MenuScreen {
                     + labelPad * 2;
             total += this.tabWidth[i];
         }
-        total += between * (TABS.length - 1);
 
-        // Long translations can overflow the panel. Fall back to sharing the space
-        // out proportionally rather than letting a tab run off the edge.
-        if (total > usable) {
-            int slack = usable - between * (TABS.length - 1);
-            int sum = 0;
-            for (int i = 0; i < TABS.length; i++) {
-                sum += this.tabWidth[i];
-            }
-            for (int i = 0; i < TABS.length; i++) {
-                this.tabWidth[i] = Math.max(20, this.tabWidth[i] * slack / Math.max(1, sum));
-            }
-        }
+        // A tab is never narrower than its label: the label is drawn at a fixed inset,
+        // so a squeezed tab left its text hanging past the marker under it. The gaps
+        // give way instead, down to where the padding of neighbours overlaps — the
+        // labels themselves still stand apart by a padding's width.
+        int between = TABS.length > 1
+                ? Math.max(-labelPad, Math.min(18, (usable - total) / (TABS.length - 1)))
+                : 0;
 
         int x = this.panelX1 + PADDING;
         for (int i = 0; i < TABS.length; i++) {

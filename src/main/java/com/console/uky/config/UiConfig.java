@@ -93,7 +93,7 @@ public final class UiConfig {
      * Off by default and deliberately so: the chat is the one HUD element people
      * read rather than glance at, and a pack author should opt into changing it.
      */
-    public static boolean redesignChat = false;
+    public static boolean redesignChat = true;
     /**
      * Draw item tooltips as one of our panels, and make them fit the screen.
      *
@@ -539,13 +539,11 @@ public final class UiConfig {
                         + "what vanilla does.\n"
                         + "Needs restyleTooltips on.");
         redesignChat = bool(CAT_HUD, "redesignChat", redesignChat,
-                "Draw the chat in this mod's style: each line on its own dark panel "
-                        + "with a rail down the left, new lines sliding in from the "
-                        + "left, and the input box below drawn as one of our fields.\n"
-                        + "Off by default. The chat is read rather than glanced at, "
-                        + "and every setting the game already has for it — scale, "
-                        + "width, height, opacity, visibility — is still obeyed either "
-                        + "way.");
+                "Draw the chat in this mod's colours: each line on the backdrop colour "
+                        + "with the accent rail down the left, and the input box as one "
+                        + "of our fields.\n"
+                        + "Only the look. Which lines show, how they fade, scrolling and "
+                        + "every chat setting the game has stay exactly as they are.");
 
         restyleWaila = bool(CAT_MODS, "restyleWaila", restyleWaila,
                 "Draw Waila's block tooltip — the box naming whatever you are looking "

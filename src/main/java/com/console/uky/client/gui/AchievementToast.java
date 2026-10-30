@@ -16,7 +16,8 @@ import net.minecraft.advancements.AdvancementType;
 import net.minecraft.advancements.DisplayInfo;
 import net.minecraft.client.gui.components.toasts.AdvancementToast;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.event.ToastAddEvent;
 import com.console.uky.compat.GL11;
 
@@ -170,8 +171,22 @@ public final class AchievementToast {
             }
         }
 
+        /**
+         * Drawn in the GUI pass, so the item in the frame gets the lighting and depth a
+         * GUI item is drawn with — drawn at the end of the frame it came out as a
+         * wireframe. Over the HUD while playing; over the screen while one is open.
+         */
         @SubscribeEvent
-        public void onFrame(RenderFrameEvent.Post event) {
+        public void onHud(RenderGuiEvent.Post event) {
+            if (Minecraft.getInstance().screen == null) {
+                event.getGuiGraphics().flush();
+                draw();
+            }
+        }
+
+        @SubscribeEvent
+        public void onScreen(ScreenEvent.Render.Post event) {
+            event.getGuiGraphics().flush();
             draw();
         }
     }
@@ -264,15 +279,12 @@ public final class AchievementToast {
             return true;
         }
 
-        beginOverlay(mc);
         try {
             drawToast(mc, current, elapsed, dwell);
         } catch (Throwable t) {
             // A modded achievement carrying an item whose renderer throws must not
             // take the game's frame with it. Drop the panel and carry on.
             clear();
-        } finally {
-            endOverlay();
         }
         return true;
     }
@@ -285,54 +297,6 @@ public final class AchievementToast {
         current = queue.remove(0);
         shownAt = net.minecraft.Util.getMillis();
         announce(current);
-    }
-
-    /**
-     * The projection vanilla's own popup sets up, because this is drawn from the same
-     * place in the frame: after the world, after any screen, with nothing else having
-     * arranged a GUI-space matrix for us.
-     */
-    private static void beginOverlay(Minecraft mc) {
-        ScaledResolution res = new ScaledResolution(mc, mc.getWindow().getWidth(), mc.getWindow().getHeight());
-        GL11.glViewport(0, 0, mc.getWindow().getWidth(), mc.getWindow().getHeight());
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPushMatrix();
-        GL11.glLoadIdentity();
-        GL11.glOrtho(0.0D, res.getScaledWidth(), res.getScaledHeight(), 0.0D, 1000.0D, 3000.0D);
-        GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glPushMatrix();
-        GL11.glLoadIdentity();
-        GL11.glTranslatef(0.0F, 0.0F, -2000.0F);
-        GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(false);
-
-        // Lighting off, and this is not optional.
-        //
-        // This is the one thing this mod draws that is not inside a screen and not
-        // inside the HUD: it happens at the very end of the frame, after everything
-        // else has had its turn and left the state however it liked. The last things
-        // to render before it are the hotbar's items and the held item, both of which
-        // turn item lighting on — so a panel drawn here with lighting still enabled is
-        // multiplied by an ambient of 0.4 and comes out grey, text and all, while the
-        // identical panel inside a screen looks right because the screen pass turned
-        // lighting off first. Vanilla's own popup has the same line for the same
-        // reason, one call earlier than this one.
-        GL11.glDisable(GL11.GL_LIGHTING);
-        // Off by the time the world is done with it, in vanilla. A renderer
-        // replacement is under no obligation to leave it that way, and fog over a
-        // panel two thousand units from the camera is total.
-        GL11.glDisable(GL11.GL_FOG);
-    }
-
-    private static void endOverlay() {
-        GL11.glDepthMask(true);
-        GL11.glEnable(GL11.GL_DEPTH_TEST);
-        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-        GL11.glMatrixMode(GL11.GL_PROJECTION);
-        GL11.glPopMatrix();
-        GL11.glMatrixMode(GL11.GL_MODELVIEW);
-        GL11.glPopMatrix();
     }
 
     private static void drawToast(Minecraft mc, Toast toast, float elapsed, float dwell) {
@@ -349,7 +313,9 @@ public final class AchievementToast {
         // which reaches furthest right — clears the screen rather than the bottom one.
         float x2 = screenWidth - MARGIN - SKEW;
         float x1 = x2 - width;
-        float y1 = MARGIN;
+        // Below whatever vanilla toasts are up — tutorial hints, recipe unlocks — which
+        // share the corner and are drawn after this.
+        float y1 = MARGIN + vanillaToastHeight(mc);
         float y2 = y1 + PANEL_HEIGHT;
 
         // ---- the arrival, and the departure, as one pair of numbers ----
@@ -609,6 +575,22 @@ public final class AchievementToast {
             }
             font.drawString(glyph, (int) cursor, (int) y, colour);
             cursor += w;
+        }
+    }
+
+    private static java.lang.reflect.Field occupiedSlots;
+
+    /** Height of the corner vanilla's toasts are using, in GUI units. */
+    private static float vanillaToastHeight(Minecraft mc) {
+        try {
+            if (occupiedSlots == null) {
+                occupiedSlots = net.minecraft.client.gui.components.toasts.ToastComponent.class
+                        .getDeclaredField("occupiedSlots");
+                occupiedSlots.setAccessible(true);
+            }
+            return ((java.util.BitSet) occupiedSlots.get(mc.getToasts())).length() * 32.0F;
+        } catch (Throwable t) {
+            return 0.0F;
         }
     }
 

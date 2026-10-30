@@ -93,6 +93,8 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     private float scroll;
     private float scrollTarget;
 
+    /** The card the arrow keys are on; see {@link GridKeys}. */
+    private final com.console.uky.client.gui.GridKeys keys = new com.console.uky.client.gui.GridKeys();
     private int hoveredCard = -2;
     private int hoveredAction = HIT_JOIN;
     private int lastMouseX;
@@ -490,6 +492,7 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     private void updateHover(int mouseX, int mouseY) {
+        this.keys.pointer(mouseX, mouseY);
         this.lastMouseX = mouseX;
         this.lastMouseY = mouseY;
         this.hoveredCard = -2;
@@ -511,6 +514,11 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
                     break;
                 }
             }
+        }
+
+        if (this.keys.active()) {
+            this.keys.clamp(cardCount());
+            this.hoveredCard = this.keys.slot() - 1;
         }
 
         this.addHover = Ease.approach(this.addHover,
@@ -1182,6 +1190,17 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
         }
     }
 
+    /** Scrolls just far enough that the card in {@code slot} is wholly in view. */
+    private void showSlot(int slot) {
+        float y = slotY(slot);
+        if (y < this.gridY) {
+            this.scrollTarget -= this.gridY - y;
+        } else if (y + this.tileHeight > this.gridY + this.gridHeight) {
+            this.scrollTarget += y + this.tileHeight - (this.gridY + this.gridHeight);
+        }
+        clampScroll();
+    }
+
     @Override
     protected void onAction(GuiButton button) {
         // Every control on this screen is drawn, not a GuiButton.
@@ -1193,6 +1212,29 @@ public class GuiServersScreen extends MenuScreen implements GuiYesNoCallback {
             back();
             return;
         }
+        if (this.keys.move(keyCode, cardCount(), this.columns, this.hoveredCard + 1)) {
+            this.hoveredCard = this.keys.slot() - 1;
+            showSlot(this.keys.slot());
+            return;
+        }
+        if (this.keys.active() && (keyCode == 28 || keyCode == 156 || keyCode == 57)) {
+            // Enter presses the card the way a click on its face does.
+            int slot = this.keys.slot();
+            mouseClicked(slotX(slot) + this.tileWidth / 2, (int) (slotY(slot) + this.tileHeight / 2), 0);
+            return;
+        }
+        if (this.keys.active() && this.hoveredCard >= 0 && this.hoveredCard < this.servers.size()) {
+            if (keyCode == 211 && isShiftKeyDown()) {
+                // Shift+Delete, as Shift stands in for the bin's hold on a click.
+                destroyServer(this.hoveredCard);
+                return;
+            }
+            if (keyCode == 60 || keyCode == 18) {
+                beginEditServer(this.hoveredCard, this.servers.get(this.hoveredCard));
+                return;
+            }
+        }
+
         super.keyTyped(typedChar, keyCode);
     }
 
