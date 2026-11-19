@@ -5,6 +5,13 @@ build sends to Modrinth, to CurseForge and to the GitHub release for it — see
 [RELEASING.md](RELEASING.md) — so it is written to be read by a player rather than by
 whoever wrote the commit.
 
+## 0.6.2
+
+**Death screen**
+
+- With UkyCorpses installed, the death screen lets you see where your body falls through
+  the VHS effects. Set `death.showCorpseCamera` to `false` to keep the original blackout.
+
 ## 0.6.1
 
 **Multiplayer**

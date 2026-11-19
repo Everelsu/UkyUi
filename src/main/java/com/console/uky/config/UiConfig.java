@@ -220,6 +220,7 @@ public final class UiConfig {
     public static boolean deathAutoRespawn = true;
     public static double deathAutoRespawnSeconds = 6.5D;
     public static double deathIntensity = 1.0D;
+    public static boolean deathShowCorpseCamera = true;
     public static boolean deathSounds = true;
     public static double deathVolume = 0.85D;
 
@@ -703,6 +704,8 @@ public final class UiConfig {
         deathAutoRespawnSeconds = dbl(CAT_DEATH, "autoRespawnSeconds", deathAutoRespawnSeconds, 0.5D, 120.0D,
                 "Seconds from the death to that automatic return. Values below "
                         + "sceneSeconds simply return as soon as the scene ends.");
+        deathShowCorpseCamera = bool(CAT_DEATH, "showCorpseCamera", deathShowCorpseCamera,
+                "Leave the world visible behind the death screen when UkyCorpses is installed.");
         deathIntensity = dbl(CAT_DEATH, "intensity", deathIntensity, 0.0D, 2.0D,
                 "How damaged the picture gets: scanlines, tape band, dropouts, grain. "
                         + "Zero leaves the fade and the text and nothing else.");

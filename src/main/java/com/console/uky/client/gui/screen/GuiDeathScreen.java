@@ -151,7 +151,9 @@ public class GuiDeathScreen extends GuiGameOver {
         float intensity = (float) UiConfig.deathIntensity * Quality.deathIntensity();
         float exit = advanceExit();
 
-        drawBlackout(theme, t);
+        boolean worldVisible = UiConfig.deathShowCorpseCamera
+                && cpw.mods.fml.common.Loader.isModLoaded("ukycorpses");
+        drawBlackout(theme, t, worldVisible);
         drawTape(theme, t, intensity, exit);
         drawTitle(theme, t, intensity, exit);
         drawMessage(t, exit);
@@ -159,7 +161,8 @@ public class GuiDeathScreen extends GuiGameOver {
 
         // Over everything, including the tape: this is the eye closing, not a filter.
         Draw.vignette(this.width, this.height,
-                (0.72F + 0.24F * this.pulse) * (1.0F - exit * 0.85F), 0xFF000000);
+                (worldVisible ? 0.38F + 0.12F * this.pulse : 0.72F + 0.24F * this.pulse)
+                        * (1.0F - exit * 0.85F), 0xFF000000);
 
         drawExit(exit);
     }
@@ -258,15 +261,18 @@ public class GuiDeathScreen extends GuiGameOver {
      * bleeding through the black, which is the only thing that distinguishes drowning
      * from burning once the picture has stopped.
      */
-    private void drawBlackout(DeathTheme theme, float t) {
-        float closed = Ease.outCubic(t / BLACKOUT);
-        Draw.rect(0, 0, this.width, this.height,
-                Draw.withAlpha(Theme.background, 0.88F + 0.12F * closed));
+    private void drawBlackout(DeathTheme theme, float t, boolean worldVisible) {
+        if (!worldVisible) {
+            float closed = Ease.outCubic(t / BLACKOUT);
+            Draw.rect(0, 0, this.width, this.height,
+                    Draw.withAlpha(Theme.background, 0.88F + 0.12F * closed));
+        }
 
         // A cast of the cause's colour over the black, strongest at the hit and never
         // quite gone. These colours are dark by design — this is meant to read as
         // black that is slightly the wrong colour, not as a coloured screen.
         float wash = 0.55F + 0.35F * Ease.clamp01(1.0F - t / 0.8F);
+        if (worldVisible) wash *= 0.20F;
         Draw.gradientV(0, 0, this.width, this.height,
                 Draw.withAlpha(theme.bleed, wash),
                 Draw.withAlpha(theme.bleed, wash * 0.35F));
