@@ -22,6 +22,7 @@ public final class UkySounds {
     /** The build-up under the intro's gather; ends in silence right where the impact lands. */
     public static final ResourceLocation INTRO_RISER = ResourceLocation.fromNamespaceAndPath("uky", "intro_riser");
     public static final ResourceLocation MENU_MUSIC = ResourceLocation.fromNamespaceAndPath("uky", "menu_music");
+    public static final ResourceLocation MENU_MUSIC_SECRET = ResourceLocation.fromNamespaceAndPath("uky", "menu_music_secret");
     public static final ResourceLocation BUTTON = ResourceLocation.fromNamespaceAndPath("uky", "button");
     public static final ResourceLocation DELETE_HOLD = ResourceLocation.fromNamespaceAndPath("uky", "delete_hold");
     public static final ResourceLocation DELETE_BREAK = ResourceLocation.fromNamespaceAndPath("uky", "delete_break");
@@ -44,6 +45,8 @@ public final class UkySounds {
 
     /** The looping menu track, kept so it can be stopped when leaving the menus. */
     private static LoopingSound music;
+    /** Which menu track {@link #music} is currently playing, so toggling config swaps it live. */
+    private static ResourceLocation playingMusicTrack;
     /** The hold take, kept so letting go early can cut it off. */
     private static UiSound deleteHold;
     /**
@@ -146,8 +149,16 @@ public final class UkySounds {
         if (mc.getSoundManager() == null) {
             return;
         }
+        ResourceLocation wanted = com.console.uky.config.UiConfig.secretMenuMusic
+                ? MENU_MUSIC_SECRET : MENU_MUSIC;
         if (music != null && mc.getSoundManager().isActive(music)) {
-            return;
+            if (wanted.equals(playingMusicTrack)) {
+                return;
+            }
+            mc.getSoundManager().stop(music);
+            music = null;
+            playingMusicTrack = null;
+            nextRestartAttempt = 0L;
         }
         long now = System.currentTimeMillis();
         if (now < nextRestartAttempt) {
@@ -155,7 +166,8 @@ public final class UkySounds {
         }
         nextRestartAttempt = now + RESTART_INTERVAL_MS;
 
-        music = new LoopingSound(MENU_MUSIC, volume);
+        playingMusicTrack = wanted;
+        music = new LoopingSound(wanted, volume);
         mc.getSoundManager().play(music);
     }
 
@@ -166,6 +178,7 @@ public final class UkySounds {
         }
         mc.getSoundManager().stop(music);
         music = null;
+        playingMusicTrack = null;
     }
 
     /**
@@ -210,6 +223,7 @@ public final class UkySounds {
      */
     public static void onSoundSystemReloaded() {
         music = null;
+        playingMusicTrack = null;
         deleteHold = null;
         nextRestartAttempt = 0L;
     }

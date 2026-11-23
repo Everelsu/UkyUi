@@ -6,6 +6,7 @@ import com.console.uky.client.render.BlackHole;
 import com.console.uky.client.render.Comets;
 import com.console.uky.client.render.Draw;
 import com.console.uky.client.render.LensLibrary;
+import com.console.uky.client.render.OrbitScene;
 import com.console.uky.client.render.Ease;
 import com.console.uky.client.render.Theme;
 import com.console.uky.client.sound.UkySounds;
@@ -52,6 +53,13 @@ public abstract class MenuScreen extends GuiScreen {
     private final Random grainRandom = new Random();
     /** Shared so the starfield keeps its position when moving between screens. */
     protected static final BlackHole blackHole = new BlackHole();
+    /** The orbit backdrop; shared for the same reason as the hole. */
+    protected static final OrbitScene orbit = new OrbitScene();
+
+    /** Shared orbital backdrop instance so {@code UkySplash} and every menu screen render one continuous orbit. */
+    public static OrbitScene sharedOrbit() {
+        return orbit;
+    }
 
     // Smoothed camera on the hole. Static because it has to survive the screen
     // swap: that is precisely what makes moving between screens read as one
@@ -290,7 +298,7 @@ public abstract class MenuScreen extends GuiScreen {
      * land within a few units of {@link #TARGET_UNIT_WIDTH}, so the interface looks
      * the same at every size and only the physical pixel size of the text changes.
      */
-    private static int autoScaleFactor(Minecraft mc) {
+    public static int autoScaleFactor(Minecraft mc) {
         int factor = Math.round(mc.getWindow().getWidth() / (float) TARGET_UNIT_WIDTH);
         factor = Math.max(1, Math.min(MAX_SCALE_FACTOR, factor));
 
@@ -563,11 +571,15 @@ public abstract class MenuScreen extends GuiScreen {
         // screen overrides when it wants its own sky — the title screen does, for the
         // parallax and the intro — and a comet that only crossed the screens nobody was
         // looking at would be a strange thing to have built.
-        drawComets();
+        // In orbit the horizon and planet occupy the bottom half of the screen, so
+        // 2D comets flying down into the ground read wrong; orbit has no wish star either.
+        if (!isOrbitBackground()) {
+            drawComets();
+        }
         drawBackgroundTint();
         // Dust drifting up from the floor makes sense in a room, not in space —
         // the black hole supplies its own moving matter, and so does the bare sky.
-        if (!isBlackHoleBackground() && !isStarfieldOnly()) {
+        if (!isBlackHoleBackground() && !isStarfieldOnly() && !isOrbitBackground()) {
             particles.render(this.fadeAlpha * 0.85F);
         }
     }
@@ -673,6 +685,10 @@ public abstract class MenuScreen extends GuiScreen {
     }
 
     protected void drawBackgroundArt() {
+        if (isOrbitBackground()) {
+            drawOrbit(0.0F, 0.0F);
+            return;
+        }
         if (isBlackHoleBackground() || isStarfieldOnly()) {
             blackHole.update(this.delta);
             advanceCamera(blackHoleCenterX(), blackHoleCenterY(), blackHoleRadius());
@@ -777,6 +793,67 @@ public abstract class MenuScreen extends GuiScreen {
         return "blackhole".equals(UiConfig.background) && Quality.blackHole();
     }
 
+    /**
+     * The 1.21.1 backdrop: low orbit over a blocky planet with a station coming in.
+     * Cheap — projected on the CPU, no shader — so no preset takes it away.
+     */
+    protected boolean isOrbitBackground() {
+        return "orbit".equals(UiConfig.background);
+    }
+
+    /** Advances and draws the orbit. Shared, so every screen sees the same moment of it. */
+    protected void drawOrbit(float lookX, float lookY) {
+        orbit.update(this.delta);
+        orbit.anchor(orbitAnchorX(), orbitAnchorY(), orbitCameraYaw(), orbitCameraPitch(),
+                orbitStationScale(), this.width, this.height, this.delta);
+        // When handing off from the orbital splash screen, the planet is already fully
+        // visible — drawing it at full alpha avoids a dark blink while the UI fades in.
+        float sceneAlpha = (com.console.uky.client.splash.UkySplash.isOrbitTransitionActive()
+                || com.console.uky.client.splash.UkySplash.orbitArrivedFromSplash())
+                ? this.closeFade() : this.fadeAlpha;
+        orbit.render(this.width, this.height, lookX, lookY, sceneAlpha,
+                Transitions.travel(), Theme.background);
+    }
+
+    /**
+     * Where on this screen the station comes to rest.
+     *
+     * Defaults to the screen's {@link #blackHoleCenterX()}/{@link #blackHoleCenterY()},
+     * so every settings/sub-screen that already frames the black hole into its open
+     * right-hand pane frames the station into that same open space instead of leaving
+     * it behind the controls.
+     */
+    protected float orbitAnchorX() {
+        return blackHoleCenterX();
+    }
+
+    protected float orbitAnchorY() {
+        return blackHoleCenterY();
+    }
+
+    /**
+     * Extra camera yaw (radians) for this screen in orbit mode.
+     *
+     * Turning the camera toward the open side of a settings screen swings the sun,
+     * stars, and planet horizon with it, so opening a sub-screen feels like turning
+     * your head inside the cockpit rather than sliding a flat 2D card in front.
+     */
+    protected float orbitCameraYaw() {
+        float offset = (orbitAnchorX() / Math.max(1.0F, (float) this.width)) - 0.5F;
+        return -offset * 0.24F;
+    }
+
+    /** Extra camera pitch (radians) for this screen in orbit mode. */
+    protected float orbitCameraPitch() {
+        float offset = (orbitAnchorY() / Math.max(1.0F, (float) this.height)) - 0.37F;
+        return offset * 0.14F;
+    }
+
+    /** Relative station scale on this screen (1 on the title screen, slightly smaller on sub-screens). */
+    protected float orbitStationScale() {
+        return 0.78F;
+    }
+
     /** Cached across screens: probing the resource manager every frame is wasteful. */
     private static Boolean backgroundImagePresent;
 
@@ -823,6 +900,10 @@ public abstract class MenuScreen extends GuiScreen {
         // The black hole is already mostly black and its own light is the subject —
         // washing it out with a scrim would defeat the point.
         float strength = isBlackHoleBackground() ? 0.35F : 1.0F;
+        if (isOrbitBackground()) {
+            // Lighter on the title, where the planet is the picture; heavier behind panels.
+            strength = 0.3F + (1.0F - blackHoleIntensity()) * 0.55F;
+        }
         int top = Draw.withAlpha(Theme.background, 0.75F * strength * this.fadeAlpha);
         int mid = Draw.withAlpha(Theme.background, 0.25F * strength * this.fadeAlpha);
         int bottom = Draw.withAlpha(Theme.background, 0.85F * strength * this.fadeAlpha);
@@ -839,7 +920,7 @@ public abstract class MenuScreen extends GuiScreen {
         }
         // Grain over the starfield just turns it to mush — the black hole already
         // supplies all the texture the backdrop needs.
-        if (Quality.filmGrain() && !isBlackHoleBackground()) {
+        if (Quality.filmGrain() && !isBlackHoleBackground() && !isOrbitBackground()) {
             drawFilmGrain();
         }
         if (Quality.scanlines()) {
@@ -1198,7 +1279,7 @@ public abstract class MenuScreen extends GuiScreen {
      * @return true when the click was taken by the backdrop
      */
     protected boolean clickedBackdrop(int mouseX, int mouseY) {
-        if (!UiConfig.comets || isVoid()
+        if (!UiConfig.comets || isVoid() || isOrbitBackground()
                 || (!isBlackHoleBackground() && !isStarfieldOnly())) {
             return false;
         }

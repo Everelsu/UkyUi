@@ -437,7 +437,6 @@ public class GuiSettingsScreen extends MenuScreen {
                     // the half worth having on a screen.
                 }
                 y += this.rowHeight + this.rowGap;
-                addPackMode(y);
                 break;
         }
     }
@@ -1063,6 +1062,37 @@ public class GuiSettingsScreen extends MenuScreen {
         return 0.72F;
     }
 
+    /**
+     * In orbit mode, frame the station in the upper-right sky clear of the left-hand
+     * settings glass panel and above the planet's horizon, shifting gently per tab.
+     */
+    private static final float[][] ORBIT_TAB_FRAMES = {
+            {0.85F, 0.36F, 0.80F},  // general
+            {0.88F, 0.28F, 0.88F},  // graphics
+            {0.84F, 0.44F, 0.74F},  // sound and chat
+            {0.86F, 0.34F, 0.68F},  // accessibility
+            {0.89F, 0.38F, 0.62F},  // other
+    };
+
+    private static float[] orbitFrame() {
+        return ORBIT_TAB_FRAMES[Math.max(0, Math.min(ORBIT_TAB_FRAMES.length - 1, activeTab))];
+    }
+
+    @Override
+    protected float orbitAnchorX() {
+        return this.width * orbitFrame()[0];
+    }
+
+    @Override
+    protected float orbitAnchorY() {
+        return this.height * orbitFrame()[1];
+    }
+
+    @Override
+    protected float orbitStationScale() {
+        return orbitFrame()[2];
+    }
+
     @Override
     protected int blackHolePose() {
         // Never the title screen's edge-on view: this should not read as the title
@@ -1188,12 +1218,14 @@ public class GuiSettingsScreen extends MenuScreen {
      */
     private void drawGlassPanel() {
         float a = this.fadeAlpha;
+        boolean orbitMode = isOrbitBackground();
 
         // Slightly denser at the top, where the title and tabs sit, thinning toward
-        // the bottom. A flat wash reads as a rectangle; a gradient reads as glass.
+        // the bottom. In orbit mode the sunlit planet sits directly under the lower
+        // half of the panel, so the glass is held a little denser to keep controls crisp.
         Draw.gradientV(panelX1, panelY1, panelX2, panelY2,
-                Draw.withAlpha(Theme.background, 0.52F * a),
-                Draw.withAlpha(Theme.background, 0.30F * a));
+                Draw.withAlpha(Theme.background, (orbitMode ? 0.68F : 0.52F) * a),
+                Draw.withAlpha(Theme.background, (orbitMode ? 0.54F : 0.30F) * a));
 
         // Light catching the top edge, and the accent rail down the left.
         Draw.rect(panelX1, panelY1, panelX2, panelY1 + 1, Draw.withAlpha(0xFFFFFF, 0.07F * a));

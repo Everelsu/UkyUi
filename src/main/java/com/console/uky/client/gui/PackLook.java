@@ -52,9 +52,10 @@ public final class PackLook {
             return;
         }
         initialised = true;
-        available = PackMode.current(gameDir()) != null;
-        shown = available && PackMode.EASY.equals(chosen()) ? 1.0F : 0.0F;
-        Theme.setEasy(shown);
+        // Easy/Standard pack-mode switching is disabled on 1.21.1.
+        available = false;
+        shown = 0.0F;
+        Theme.setEasy(0.0F);
     }
 
     /** Whether this pack has an Easy mode at all. */

@@ -77,18 +77,27 @@ final class SplashFont {
     }
 
     int width(String text) {
-        if (!ready()) {
+        return width(text, 0);
+    }
+
+    int width(String text, int tracking) {
+        if (!ready() || text == null || text.isEmpty()) {
             return 0;
         }
         int w = 0;
         for (int i = 0; i < text.length(); i++) {
-            w += this.widths[text.charAt(i) & 0xFF];
+            w += this.widths[text.charAt(i) & 0xFF] + tracking;
         }
-        return w;
+        return w - tracking;
     }
 
     /** Draws {@code text} with its top left at (x, y), in ARGB. */
     void draw(String text, float x, float y, int argb) {
+        draw(text, x, y, 0, argb);
+    }
+
+    /** Draws {@code text} with extra {@code tracking} pixels between glyphs, matching GuiTitleScreen. */
+    void draw(String text, float x, float y, int tracking, int argb) {
         if (text == null || text.isEmpty() || (argb >>> 24) == 0 || !ready()) {
             return;
         }
@@ -111,7 +120,7 @@ final class SplashFont {
             GL11.glVertex2f(x + 8, y + 8);
             GL11.glTexCoord2f(u + s, v);
             GL11.glVertex2f(x + 8, y);
-            x += this.widths[c];
+            x += this.widths[c] + tracking;
         }
         GL11.glEnd();
         GL11.vertexColour(0xFFFFFFFF);

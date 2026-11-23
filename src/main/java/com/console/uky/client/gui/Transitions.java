@@ -85,6 +85,20 @@ public final class Transitions {
         return 1.0F;
     }
 
+    /**
+     * How far along the fall the camera is, 0..1 — for backdrops with no hole to
+     * grow, which move the camera instead. The orbit dives at the ground.
+     */
+    public static float travel() {
+        if (diveTime >= 0.0F) {
+            return Ease.inCubic(diveTime / DIVE_SECONDS);
+        }
+        if (emergeTime >= 0.0F) {
+            return 1.0F - Ease.outCubic(emergeTime / EMERGE_SECONDS);
+        }
+        return 0.0F;
+    }
+
     /** Opacity of the black covering everything, 0..1. */
     public static float blackout() {
         if (diveTime >= 0.0F) {

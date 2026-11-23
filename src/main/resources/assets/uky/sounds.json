@@ -23,6 +23,14 @@
       }
     ]
   },
+  "menu_music_secret": {
+    "sounds": [
+      {
+        "name": "uky:music_secret",
+        "stream": true
+      }
+    ]
+  },
   "button": {
     "sounds": [
       {

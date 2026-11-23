@@ -411,8 +411,28 @@ public class MenuButton extends GuiButton {
         }
 
         // Centred label drifts right a touch on hover, following the accent rail.
-        float cx = (x1 + x2) / 2.0F + this.hover * 2.0F;
+        float cx = (x1 + x2) / 2.0F + (style == Style.GHOST ? 0.0F : this.hover * 2.0F);
         float room = (x2 - x1) - 16.0F;
+        if (style == Style.GHOST) {
+            int accent = accentColor();
+            int trackedWidth = 0;
+            for (int i = 0; i < this.displayString.length(); i++) {
+                trackedWidth += font.getCharWidth(this.displayString.charAt(i)) + 1;
+            }
+            if (trackedWidth > 0) {
+                trackedWidth -= 1;
+            }
+            float startX = cx - trackedWidth / 2.0F;
+            drawTracked(font, this.displayString, startX, textY, 1, color);
+            if (this.hover > 0.02F && this.enabled && !this.plain) {
+                float halfW = (trackedWidth * 0.55F + 10.0F) * this.hover;
+                Draw.gradientH(cx - halfW, textY + 10.0F, cx, textY + 11.0F,
+                        Draw.withAlpha(accent, 0.0F), Draw.fade(accent, 0.75F * this.hover * alpha));
+                Draw.gradientH(cx, textY + 10.0F, cx + halfW, textY + 11.0F,
+                        Draw.fade(accent, 0.75F * this.hover * alpha), Draw.withAlpha(accent, 0.0F));
+            }
+            return;
+        }
         if (labelWidth <= room) {
             font.drawString(this.displayString, (int) (cx - labelWidth / 2.0F), textY, color);
         } else {

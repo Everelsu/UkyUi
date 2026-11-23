@@ -63,8 +63,8 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     private float holeDrawY;
 
     /** Pointer from the previous frame; the backdrop draws before drawContent runs. */
-    private int lastMouseX;
-    private int lastMouseY;
+    private int lastMouseX = -1;
+    private int lastMouseY = -1;
 
     /** Resolved once per screen: whether the optional logo texture is present. */
     private boolean hasLogo;
@@ -100,7 +100,11 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     @Override
     public void initGui() {
         super.initGui();
-        this.intro.begin();
+        // The intro is the hole being born; there is no hole in orbit. The station's
+        // approach is that backdrop's opening instead.
+        if (!isOrbitBackground()) {
+            this.intro.begin();
+        }
     }
 
     @Override
@@ -108,11 +112,83 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         this.linkTargets.clear();
         this.railTop = Integer.MAX_VALUE;
         this.railBottom = Integer.MIN_VALUE;
-        if (isLeftLayout()) {
+        if (isOrbitBackground()) {
+            buildOrbitLayout();
+        } else if (isLeftLayout()) {
             buildLeftLayout();
         } else {
             buildCenteredLayout();
         }
+    }
+
+    /**
+     * Orbit layout, patterned after the reference main menu:
+     * wordmark at the top, open sky in the middle where the station rises from behind
+     * the planet's horizon and hovers above the buttons, centred text buttons over the
+     * rolling blocky Earth below, and links tucked into the bottom-right corner.
+     */
+    private void buildOrbitLayout() {
+        int centerX = this.width / 2;
+        int rowHeight = 18;
+        int rowGap = 3;
+        int count = menuEntryCount();
+        int stackHeight = count * rowHeight + (count - 1) * rowGap;
+
+        this.hasLogo = resourceExists(LOGO);
+        this.logoSize = this.hasLogo ? clamp((int) (this.height * 0.20F), 40, 110) : 0;
+
+        int headerTop = (int) (this.height * 0.05F);
+        this.logoCenterY = headerTop + this.logoSize / 2;
+        this.captionY = headerTop + this.logoSize + 4;
+
+        // The station hovers in the upper-middle sky, directly above the horizon and
+        // the centred button column.
+        this.holeCenterX = this.width * 0.50F;
+        this.holeCenterY = this.height * 0.37F;
+        this.holeBlock = (int) (this.height * 0.34F);
+        this.holeRadius = this.holeBlock * 0.21F;
+
+        int columnWidth = 170;
+        int columnX = centerX - columnWidth / 2;
+        // Sit over the lower planet half (horizon is at ~0.64 of height).
+        int y = (int) (this.height * 0.63F);
+        y = Math.max(y, this.captionY + (com.console.uky.client.gui.PackLook.available() ? 42 : 30));
+        y = Math.min(y, this.height - stackHeight - 20);
+
+        int index = 0;
+        if (UiConfig.showSingleplayer) {
+            addOrbitRow(ID_SINGLEPLAYER, columnX, y, columnWidth, rowHeight, index++,
+                    I18n.get("menu.singleplayer", new Object[0]));
+            y += rowHeight + rowGap;
+        }
+        if (UiConfig.showMultiplayer) {
+            addOrbitRow(ID_MULTIPLAYER, columnX, y, columnWidth, rowHeight, index++,
+                    I18n.get("menu.multiplayer", new Object[0]));
+            y += rowHeight + rowGap;
+        }
+        addOrbitRow(ID_OPTIONS, columnX, y, columnWidth, rowHeight, index++,
+                I18n.get("menu.options", new Object[0]));
+        y += rowHeight + rowGap;
+        if (UiConfig.showModList) {
+            addOrbitRow(ID_MODS, columnX, y, columnWidth, rowHeight, index++,
+                    I18n.get("uky.menu.mods", new Object[0]));
+            y += rowHeight + rowGap;
+        }
+        addOrbitRow(ID_QUIT, columnX, y, columnWidth, rowHeight, index++,
+                I18n.get("menu.quit", new Object[0])).destructive();
+
+        // Links in the bottom-right area, above the version footer, like the reference.
+        int linkRowWidth = Math.max(120, (int) (this.width * 0.30F));
+        int linkCenterX = this.width - 14 - linkRowWidth / 2;
+        buildLinkRow(linkCenterX, this.height - 46, index, linkRowWidth, true);
+    }
+
+    private MenuButton addOrbitRow(int id, int x, int y, int width, int height, int index, String label) {
+        MenuButton button = new MenuButton(id, x, y, width, height, label, MenuButton.Style.GHOST);
+        button.align(MenuButton.Align.CENTER);
+        button.entrance(0.12F + index * 0.055F);
+        this.buttonList.add(button);
+        return button;
     }
 
     private boolean isLeftLayout() {
@@ -362,7 +438,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
         // With the black hole backdrop the hole takes the logo's place in the
         // vertical flow, so the wordmark and buttons sit under it rather than on it.
-        this.holeBlock = isBlackHoleBackground()
+        this.holeBlock = isBlackHoleBackground() || isOrbitBackground()
                 ? clamp(Math.min((int) (this.height * 0.34F), headerBudget), 0, 190)
                 : 0;
         int headerBlock = Math.max(this.logoSize, this.holeBlock);
@@ -445,10 +521,30 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         return 1.0F;
     }
 
+    /** In orbit the station always rises dead-centre over the horizon, above the menu stack. */
+    @Override
+    protected float orbitAnchorX() {
+        return isOrbitBackground() ? this.width * 0.50F : (isLeftLayout() ? this.width * 0.68F : this.holeCenterX);
+    }
+
+    @Override
+    protected float orbitAnchorY() {
+        return isOrbitBackground() ? this.height * 0.37F : (isLeftLayout() ? this.height * 0.36F : this.holeCenterY);
+    }
+
+    @Override
+    protected float orbitStationScale() {
+        return 1.0F;
+    }
+
     @Override
     protected float widgetFade() {
-        // The menu goes with the light as the hole closes in.
-        return this.fadeAlpha * this.intro.uiAlpha() * (1.0F - Transitions.blackout());
+        float base = this.fadeAlpha * this.intro.uiAlpha() * (1.0F - Transitions.blackout());
+        if (isOrbitBackground() && UkySplash.isOrbitTransitionActive()) {
+            float reveal = Ease.outCubic(Ease.clamp01((UkySplash.orbitTransitionProgress() - 0.45F) / 0.55F));
+            return reveal * (1.0F - Transitions.blackout());
+        }
+        return base;
     }
 
     /**
@@ -494,6 +590,12 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         long splashEnd = UkySplash.finishedAtNanos();
         if (splashEnd == 0L) {
             // No splash ran; there is nothing to continue from.
+            arrived = true;
+            return;
+        }
+        if (isOrbitBackground()) {
+            // In orbit mode the splash screen already faded smoothly over the live 3D
+            // orbital scene and slid the wordmark into its resting title-screen position.
             arrived = true;
             return;
         }
@@ -577,6 +679,18 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         this.parallaxX = Ease.approach(this.parallaxX, targetX, 0.25F, this.delta);
         this.parallaxY = Ease.approach(this.parallaxY, targetY, 0.25F, this.delta);
 
+        if (isOrbitBackground()) {
+            this.intro.update(this.delta);
+            this.holeDrawX = orbitAnchorX();
+            this.holeDrawY = orbitAnchorY();
+            drawOrbit(this.parallaxX, this.parallaxY);
+            // Soft central glow/scrim behind the centred menu stack over the planet.
+            Draw.radialGlow(this.width * 0.5F, this.height * 0.73F, this.height * 0.34F,
+                    Draw.withAlpha(Theme.background, 0.52F * this.fadeAlpha),
+                    Draw.withAlpha(Theme.background, 0.0F));
+            return;
+        }
+
         if (isBlackHoleBackground()) {
             this.intro.update(this.delta);
             blackHole.update(this.delta);
@@ -632,11 +746,13 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     private float mouseXNormalized() {
-        return this.width == 0 ? 0.5F : lastMouseX / (float) this.width;
+        return (this.width == 0 || this.lastMouseX < 0) ? 0.5F
+                : Ease.clamp01(this.lastMouseX / (float) this.width);
     }
 
     private float mouseYNormalized() {
-        return this.height == 0 ? 0.5F : lastMouseY / (float) this.height;
+        return (this.height == 0 || this.lastMouseY < 0) ? 0.5F
+                : Ease.clamp01(this.lastMouseY / (float) this.height);
     }
 
     @Override
@@ -659,13 +775,19 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
         // Everything below the backdrop shares one opacity: the screen's entrance
         // fade multiplied by however far the intro has got.
-        this.contentAlpha = this.fadeAlpha * this.intro.uiAlpha();
-        if (this.contentAlpha > 0.01F) {
+        if (isOrbitBackground() && UkySplash.isOrbitTransitionActive()) {
+            this.contentAlpha = Ease.outCubic(Ease.clamp01((UkySplash.orbitTransitionProgress() - 0.45F) / 0.55F));
+        } else {
+            this.contentAlpha = this.fadeAlpha * this.intro.uiAlpha();
+        }
+        if (this.contentAlpha > 0.01F || (isOrbitBackground() && UkySplash.isOrbitTransitionActive())) {
             drawLogo();
-            if (isLeftLayout()) {
+            if (isLeftLayout() && !isOrbitBackground()) {
                 drawMenuRail();
             }
-            drawCorners();
+            if (this.contentAlpha > 0.01F) {
+                drawCorners();
+            }
         }
     }
 
@@ -723,16 +845,19 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
     private void drawLogo() {
         int centerX = this.width / 2;
+        boolean orbitFromSplash = isOrbitBackground()
+                && (UkySplash.isOrbitTransitionActive() || UkySplash.orbitArrivedFromSplash());
 
-        // The mark eases up into place slightly ahead of the buttons.
-        float rise = (1.0F - Ease.outCubic(this.elapsed / 0.7F)) * 12.0F;
+        // The mark eases up into place slightly ahead of the buttons, except when the
+        // orbital splash already glided the wordmark straight into its resting header spot.
+        float rise = orbitFromSplash ? 0.0F : (1.0F - Ease.outCubic(this.elapsed / 0.7F)) * 12.0F;
         float breathe = (float) Math.sin(this.elapsed * 0.9F) * 0.015F + 1.0F;
 
         float cy = this.logoCenterY - rise;
         float lx = centerX - this.logoSize / 2.0F;
         float ly = cy - this.logoSize / 2.0F;
 
-        if (this.hasLogo) {
+        if (this.hasLogo && this.contentAlpha > 0.01F) {
             Draw.radialGlow(centerX, cy, this.logoSize * 0.95F,
                     Draw.withAlpha(Theme.accent, 0.16F * this.contentAlpha),
                     Draw.withAlpha(Theme.accent, 0.0F));
@@ -749,16 +874,23 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         int textY = (int) (this.captionY - rise);
 
         if (UiConfig.title != null && !UiConfig.title.isEmpty()) {
-            drawWordmark(UiConfig.title, centerX, textY);
+            float wordmarkAlpha = (isOrbitBackground() && UkySplash.isOrbitTransitionActive())
+                    ? Ease.clamp01((UkySplash.orbitTransitionProgress() - 0.82F) / 0.18F)
+                    : this.contentAlpha;
+            if (wordmarkAlpha > 0.01F) {
+                drawWordmark(UiConfig.title, centerX, textY, wordmarkAlpha, orbitFromSplash);
+            }
             textY += 22;
         }
-        if (UiConfig.tagline != null && !UiConfig.tagline.isEmpty()) {
-            this.drawCenteredString(this.fontRendererObj, UiConfig.tagline, centerX, textY,
-                    Draw.withAlpha(Theme.textDim, 0.9F * this.contentAlpha));
-            textY += 12;
+        if (this.contentAlpha > 0.01F) {
+            if (UiConfig.tagline != null && !UiConfig.tagline.isEmpty()) {
+                this.drawCenteredString(this.fontRendererObj, UiConfig.tagline, centerX, textY,
+                        Draw.withAlpha(Theme.textDim, 0.9F * this.contentAlpha));
+                textY += 12;
+            }
+            // Clear of the accent rule, which sits four units under the wordmark.
+            drawModeCaption(centerX, textY + 5);
         }
-        // Clear of the accent rule, which sits four units under the wordmark.
-        drawModeCaption(centerX, textY + 5);
     }
 
     /**
@@ -821,7 +953,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
     }
 
     /** Title text at 2x with a letter-spaced, shadowed look. */
-    private void drawWordmark(String text, int centerX, int y) {
+    private void drawWordmark(String text, int centerX, int y, float alpha, boolean settledRule) {
         final float scale = 2.0F;
         final int tracking = 2; // extra pixels between glyphs, in unscaled units
 
@@ -835,7 +967,7 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
         // the halo the logo would otherwise have provided.
         if (!this.hasLogo) {
             Draw.radialGlow(centerX, y + 8 * scale / 2.0F, totalWidth * scale * 0.7F,
-                    Draw.withAlpha(Theme.accent, 0.14F * this.contentAlpha),
+                    Draw.withAlpha(Theme.accent, 0.14F * alpha),
                     Draw.withAlpha(Theme.accent, 0.0F));
         }
 
@@ -844,8 +976,8 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
 
         float cursor = centerX / scale - totalWidth / 2.0F;
         float baseY = y / scale;
-        int shadow = Draw.withAlpha(0x000000, 0.6F * this.contentAlpha);
-        int color = Draw.withAlpha(Theme.text, this.contentAlpha);
+        int shadow = Draw.withAlpha(0x000000, 0.6F * alpha);
+        int color = Draw.withAlpha(Theme.text, alpha);
 
         FallingLetters loose = letters();
         if (this.glyphX.length != text.length()) {
@@ -889,16 +1021,17 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
             // up on it first, and gives the letters back once it has calmed down.
             this.quasar.start();
         }
-        loose.draw(this.fontRendererObj, this.contentAlpha);
+        loose.draw(this.fontRendererObj, alpha);
 
-        // Accent rule under the wordmark, growing outwards from the centre.
-        float grow = Ease.outCubic((this.elapsed - 0.25F) / 0.8F);
+        // Accent rule under the wordmark, growing outwards from the centre (already full width
+        // when arriving from the orbital splash, so it does not shrink and re-grow on handoff).
+        float grow = settledRule ? 1.0F : Ease.outCubic((this.elapsed - 0.25F) / 0.8F);
         float ruleHalf = totalWidth * scale * 0.5F * grow;
         float ruleY = y + 8 * scale + 4;
         Draw.gradientH(centerX - ruleHalf, ruleY, centerX, ruleY + 1,
-                Draw.withAlpha(Theme.accent, 0.0F), Draw.withAlpha(Theme.accent, 0.75F * this.contentAlpha));
+                Draw.withAlpha(Theme.accent, 0.0F), Draw.withAlpha(Theme.accent, 0.75F * alpha));
         Draw.gradientH(centerX, ruleY, centerX + ruleHalf, ruleY + 1,
-                Draw.withAlpha(Theme.accent, 0.75F * this.contentAlpha), Draw.withAlpha(Theme.accent, 0.0F));
+                Draw.withAlpha(Theme.accent, 0.75F * alpha), Draw.withAlpha(Theme.accent, 0.0F));
     }
 
     private void drawCorners() {
@@ -997,6 +1130,10 @@ public class GuiTitleScreen extends MenuScreen implements GuiYesNoCallback {
      * @return true when a letter was hit, so the click goes no further
      */
     private boolean knockOutLetter(int mouseX, int mouseY) {
+        // Letters fall into the hole; in orbit there is nothing for them to fall into.
+        if (isOrbitBackground()) {
+            return false;
+        }
         if (mouseY < this.glyphTop || mouseY > this.glyphBottom) {
             return false;
         }

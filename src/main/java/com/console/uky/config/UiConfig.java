@@ -256,8 +256,11 @@ public final class UiConfig {
      * compared — see {@code UkyFontRenderer}.
      */
     public static boolean textShadow = true;
-    /** One of {@code blackhole}, {@code image}, {@code solid}. */
-    public static String background = "blackhole";
+    /**
+     * One of {@code orbit}, {@code blackhole}, {@code image}, {@code solid}.
+     * The 1.21.1 build opens on the orbit so it cannot be mistaken for the 1.7.10 one.
+     */
+    public static String background = "orbit";
     /**
      * Integration steps per pixel for the black hole. This is the single knob that
      * decides what the menu costs to draw — the shader traces a light path for
@@ -280,6 +283,7 @@ public final class UiConfig {
     public static double introVolume = 0.45D;
     public static boolean menuMusic = true;
     public static double menuMusicVolume = 0.55D;
+    public static boolean secretMenuMusic = false;
 
     // ---- main menu ----
     public static boolean showSingleplayer = true;
@@ -711,8 +715,9 @@ public final class UiConfig {
                         + "are being drawn. It also needs this mod's font renderer, so a "
                         + "pack whose renderer has already been replaced by something "
                         + "else — OptiFine installs its own — will not see a difference.");
-        background = str(CAT_EFFECTS, "background", background,
-                "Menu backdrop: 'blackhole' (rendered in code), 'image' "
+        background = str(CAT_EFFECTS, "background", "orbit",
+                "Menu backdrop: 'orbit' (low orbit over a blocky planet, a station "
+                        + "flying in), 'blackhole' (rendered in code), 'image' "
                         + "(assets/uky/textures/gui/background.png) or 'solid'.");
         // The floor is 200 and not lower on purpose. Near the photon sphere a step is
         // about 0.11 long and the circuit about 19, so one turn costs some 165 steps,
@@ -746,6 +751,8 @@ public final class UiConfig {
         menuMusic = bool(CAT_MENU, "music", menuMusic, "Loop the menu track on the title screen.");
         menuMusicVolume = dbl(CAT_MENU, "musicVolume", menuMusicVolume, 0.0D, 1.0D,
                 "Volume of the menu track, on top of the game's music slider.");
+        secretMenuMusic = bool(CAT_MENU, "secretMusic", secretMenuMusic,
+                "Play the alternate hidden menu track instead of the default one.");
 
         showSingleplayer = bool(CAT_MENU, "showSingleplayer", showSingleplayer, "Show the singleplayer entry.");
         showMultiplayer = bool(CAT_MENU, "showMultiplayer", showMultiplayer, "Show the multiplayer entry.");

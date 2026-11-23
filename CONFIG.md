@@ -285,7 +285,7 @@ S:tips <
 
 | Ключ | По умолчанию | Что делает |
 |---|---|---|
-| `background` | blackhole | `blackhole` — чёрная дыра кодом. `image` — картинка `assets/uky/textures/gui/background.png` из ресурспака. `solid` — заливка цветом темы |
+| `background` | orbit | `orbit` — орбита над пиксельной планетой со станцией (по умолчанию на 1.21.1). `blackhole` — чёрная дыра кодом. `image` — картинка `assets/uky/textures/gui/background.png` из ресурспака. `solid` — заливка цветом темы |
 | `ambientParticles` | true | Пыль и угли на фоне (только не в режиме дыры) |
 | `ambientParticleBudget` | 40 | Сколько их максимум. Меньше — дешевле |
 | `vignette` | true | Затемнение по краям |
